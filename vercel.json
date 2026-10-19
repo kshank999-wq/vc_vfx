@@ -1,0 +1,4 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "echo 'VC VFX: this Vercel project is building from the repository root. Set Settings -> General -> Root Directory to apps/web (see docs/deployment.md).' && exit 1"
+}

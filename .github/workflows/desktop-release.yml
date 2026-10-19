@@ -1,0 +1,273 @@
+name: Desktop release
+
+# Publishing a Windows build must never replace the Mac artifact and vice
+# versa (spec §17), so each platform is packaged in its own matrix leg and
+# uploaded independently.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: Release channel
+        type: choice
+        options: [internal, beta, stable]
+        default: internal
+
+jobs:
+  package:
+    name: Package for ${{ matrix.platform }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: windows
+            script: package:win
+          - os: macos-latest
+            platform: macos
+            script: package:mac
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared packages
+        run: pnpm --filter @vcvfx/domain build
+
+      # Notarization is only requested when the Apple credentials are actually
+      # present. Asking for it without them fails the build, and a fork or a
+      # dry run should still be able to produce an unsigned installer.
+      - name: Decide whether to notarize
+        id: notarize
+        if: matrix.platform == 'macos'
+        shell: bash
+        run: |
+          if [ -n "${{ secrets.APPLE_ID }}" ] && [ -n "${{ secrets.APPLE_TEAM_ID }}" ]; then
+            echo "flag=-c.mac.notarize=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "flag=" >> "$GITHUB_OUTPUT"
+            echo "::warning::Apple credentials absent — producing an unsigned, un-notarized build. Do not publish it as stable."
+          fi
+
+      # electron-builder reports every problem with the Apple certificate as
+      # "MAC verification failed during PKCS12 import (wrong password?)", which
+      # is also what a bundle in a format macOS cannot read looks like. Open the
+      # bundle two ways first, so the log says which of the two it is. Nothing
+      # printed is secret: OpenSSL's -info -noout gives only the algorithms.
+      - name: Check the macOS signing certificate and load the keychain
+        if: matrix.platform == 'macos'
+        shell: bash
+        env:
+          MAC_CERTIFICATE: ${{ secrets.CSC_LINK }}
+          MAC_CERTIFICATE_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+        run: |
+          if [ -z "$MAC_CERTIFICATE" ]; then
+            echo "No CSC_LINK secret; nothing to check."
+            exit 0
+          fi
+          # `security import` reads the format off the file *extension* and has
+          # no sniffing to fall back on, so a bare mktemp path fails with
+          # "Unknown format in import" however good the bundle is. Name it .p12
+          # and say -f pkcs12 as well; either alone would do, and a check step
+          # that fails for its own reasons is worse than no check step.
+          bundle="$(mktemp -u).p12"
+          printf '%s' "$MAC_CERTIFICATE" | tr -d '\r\n ' | openssl base64 -d -A > "$bundle" || true
+          if [ ! -s "$bundle" ]; then
+            echo "::error::CSC_LINK does not decode as base64. Recreate it from the .p12 with [Convert]::ToBase64String."
+            exit 1
+          fi
+          # Two bundles built from the same certificate are the same size, so
+          # bytes alone cannot say whether CSC_LINK is the file on the operator's
+          # disk or the one before it. The digest can, and it is safe to print:
+          # it identifies the bundle without revealing anything inside it. Ken
+          # compares it with `(Get-FileHash vcvfx-mac.p12 -Algorithm
+          # SHA256).Hash`, and a mismatch means the secret was never updated —
+          # which is not the same failure as a wrong password and must not be
+          # diagnosed as one.
+          echo "Certificate bundle: $(wc -c < "$bundle" | tr -d ' ') bytes"
+          echo "Certificate bundle SHA-256: $(shasum -a 256 "$bundle" | cut -d' ' -f1)"
+          if [ -z "$MAC_CERTIFICATE_PASSWORD" ]; then
+            echo "::error::CSC_KEY_PASSWORD is empty."
+            exit 1
+          fi
+          echo "CSC_KEY_PASSWORD: ${#MAC_CERTIFICATE_PASSWORD} characters"
+          if ! openssl pkcs12 -in "$bundle" -info -noout -passin env:MAC_CERTIFICATE_PASSWORD 2>&1 | sed 's/^/  /'; then
+            echo "::error::OpenSSL cannot open the CSC_LINK bundle with CSC_KEY_PASSWORD (its output is above). Check the digest above against the .p12 on disk before suspecting the password: if it differs, CSC_LINK is a stale bundle. If it matches, the password secret differs from the export password — see docs/code-signing.md."
+            exit 1
+          fi
+          echo "OpenSSL opens the bundle with CSC_KEY_PASSWORD."
+          # The keychain is built here and kept, rather than tested and thrown
+          # away, because electron-builder 25 cannot be trusted to build its
+          # own. `createKeychain` makes one with a random password and then
+          # calls `set-key-partition-list -k <the *certificate* password>` —
+          # two different passwords, and macOS answers "SecKeychainUnlock: the
+          # user name or passphrase you entered is not correct". It went
+          # unnoticed for years because an unlocked keychain used not to check
+          # that argument; current macOS does.
+          #
+          # electron-builder only takes that path when CSC_LINK is set. Left
+          # unset, it signs with whatever identity CSC_KEYCHAIN holds — so the
+          # keychain below is the whole of the macOS signing material, and the
+          # Package step deliberately passes no certificate at all.
+          keychain="$RUNNER_TEMP/vcvfx-signing.keychain-db"
+          keychain_password=$(openssl rand -base64 24)
+          security delete-keychain "$keychain" 2>/dev/null || true
+          security create-keychain -p "$keychain_password" "$keychain"
+          # No flags is what turns both locks off (-l is lock-on-sleep, -u is
+          # lock-after-timeout). A keychain that relocks halfway through a
+          # twenty-minute universal build takes the identity with it.
+          security set-keychain-settings "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+          if ! security import "$bundle" -f pkcs12 -k "$keychain" -P "$MAC_CERTIFICATE_PASSWORD" -T /usr/bin/codesign -T /usr/bin/productbuild >/dev/null; then
+            echo "::error::OpenSSL opens the bundle but macOS cannot import it: re-export the .p12 with '-certpbe PBE-SHA1-3DES -keypbe PBE-SHA1-3DES -macalg sha1' as docs/code-signing.md describes, and update CSC_LINK. (Not -legacy: Git for Windows ships no legacy provider.)"
+            exit 1
+          fi
+          # Without this codesign stops to ask for the key, and a runner has
+          # nobody to ask; it hangs until the job times out.
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$keychain_password" "$keychain" >/dev/null
+          # Keep the login keychain in the search list: Apple's intermediates
+          # and roots live there, and a chain that cannot be built is a
+          # certificate that cannot sign.
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          echo "macOS imports the bundle. Identities:"
+          security find-identity -v -p codesigning "$keychain" | sed 's/^/  /'
+          if ! security find-identity -v -p codesigning "$keychain" | grep -q "Developer ID Application"; then
+            echo "::error::The keychain imported but holds no Developer ID Application identity. A Development or Mac App Distribution certificate cannot sign a build for distribution; see docs/code-signing.md."
+            exit 1
+          fi
+          echo "CSC_KEYCHAIN=$keychain" >> "$GITHUB_ENV"
+          rm -f "$bundle"
+
+      # Signing material per platform (spec §3.3, docs/code-signing.md):
+      # Windows Authenticode from WINDOWS_CERTIFICATE, still as a certificate
+      # and a password. macOS is different: the identity is already in the
+      # keychain the step above built, and CSC_LINK must stay unset, because
+      # setting it is what sends electron-builder down its own broken
+      # keychain-creation path. Absent either way on a fork or a dry run, in
+      # which case the artifact is unsigned and must not ship as stable.
+      #
+      # The variables are exported inside the script rather than declared in
+      # `env:` because a secret that is not set arrives as an empty string, and
+      # electron-builder treats a present-but-empty CSC_LINK as a certificate
+      # *path* — the macOS packager tried to open "" and failed with
+      # "<appDir> not a file" before the unsigned fallback could apply.
+      - name: Package
+        shell: bash
+        env:
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+          # Azure Artifact Signing (formerly Trusted Signing). Since June 2023 a
+          # newly issued Windows certificate must keep its private key in an HSM,
+          # so there is no .pfx to put in a secret and the signing happens in
+          # Azure. electron-builder reads the first three itself; the last three
+          # only name the account, so they are secrets for one reason — one
+          # place to set everything beats two, which is how an evening goes.
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_SIGNING_ENDPOINT: ${{ secrets.AZURE_SIGNING_ENDPOINT }}
+          AZURE_SIGNING_ACCOUNT: ${{ secrets.AZURE_SIGNING_ACCOUNT }}
+          AZURE_SIGNING_PROFILE: ${{ secrets.AZURE_SIGNING_PROFILE }}
+          # Apple notarization; read only when the notarize flag is passed.
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # Public values baked into the build so the app can sign in and
+          # activate. Repository variables, not secrets: the anon key is public.
+          MAIN_VITE_SUPABASE_URL: ${{ vars.MAIN_VITE_SUPABASE_URL }}
+          MAIN_VITE_SUPABASE_ANON_KEY: ${{ vars.MAIN_VITE_SUPABASE_ANON_KEY }}
+          MAIN_VITE_SITE_URL: ${{ vars.MAIN_VITE_SITE_URL || 'https://vc-vfx.com' }}
+        run: |
+          windows_flags=""
+          if [ "${{ matrix.platform }}" = "windows" ]; then
+            if [ -n "$AZURE_CLIENT_ID" ] && [ -n "$AZURE_TENANT_ID" ] && [ -n "$AZURE_CLIENT_SECRET" ] && [ -n "$AZURE_SIGNING_PROFILE" ]; then
+              # Passed on the command line rather than written into
+              # electron-builder.yml for the same reason as -c.mac.notarize: a
+              # machine without the credentials must still be able to produce an
+              # unsigned build, and a config file naming an account it cannot
+              # reach fails instead of falling back.
+              #
+              # All four are checked together because three of them are useless
+              # alone: a half-configured Azure is the one case that would sign
+              # nothing and say nothing.
+              windows_flags="-c.win.azureSignOptions.endpoint=${AZURE_SIGNING_ENDPOINT:-https://wus2.codesigning.azure.net} -c.win.azureSignOptions.codeSigningAccountName=${AZURE_SIGNING_ACCOUNT:-vcvfx} -c.win.azureSignOptions.certificateProfileName=$AZURE_SIGNING_PROFILE"
+              echo "Signing with Azure Artifact Signing profile $AZURE_SIGNING_PROFILE."
+            elif [ -n "$WINDOWS_CERTIFICATE" ]; then
+              export CSC_LINK="$WINDOWS_CERTIFICATE"
+              export CSC_KEY_PASSWORD="$WINDOWS_CERTIFICATE_PASSWORD"
+              echo "Signing with the WINDOWS_CERTIFICATE bundle."
+            else
+              # Nothing to sign with: say so, rather than letting
+              # electron-builder go looking for an identity.
+              export CSC_IDENTITY_AUTO_DISCOVERY=false
+              echo "::warning::No windows signing certificate — building unsigned. SmartScreen will warn on first run."
+            fi
+          elif [ -z "$CSC_KEYCHAIN" ]; then
+            export CSC_IDENTITY_AUTO_DISCOVERY=false
+            echo "::warning::No macOS signing identity — building unsigned."
+          else
+            echo "Signing with the identity in $CSC_KEYCHAIN."
+          fi
+          pnpm --filter @vcvfx/desktop ${{ matrix.script }} ${{ steps.notarize.outputs.flag }} $windows_flags
+
+      # The admin release form asks for a checksum, and the updater refuses an
+      # installer that does not match one. Computing it here is the only place
+      # it can be trusted — after this the file is just bytes on a disk.
+      - name: Checksum the installers
+        shell: bash
+        run: |
+          cd apps/desktop/release
+          : > SHA256SUMS.txt
+          for file in *.exe *.dmg *.zip; do
+            [ -e "$file" ] || continue
+            if command -v sha256sum >/dev/null; then
+              sha256sum "$file" >> SHA256SUMS.txt
+            else
+              shasum -a 256 "$file" >> SHA256SUMS.txt
+            fi
+          done
+          echo "--- checksums to paste into /admin/releases ---"
+          cat SHA256SUMS.txt
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: vcvfx-${{ matrix.platform }}
+          path: |
+            apps/desktop/release/*.exe
+            apps/desktop/release/*.dmg
+            apps/desktop/release/*.zip
+            apps/desktop/release/SHA256SUMS.txt
+          if-no-files-found: error
+
+  # Uploading to the private release bucket and flipping `active` on the
+  # release_builds row is a deliberate, separate step: an artifact exists as
+  # soon as it is packaged, but customers only ever receive a build an operator
+  # has published.
+  publish:
+    name: Publish to the release catalogue
+    needs: package
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    environment: release
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Upload to the private releases bucket
+        run: |
+          echo "Publish step is intentionally manual until signing credentials are in place."
+          echo "It uploads each artifact to the 'releases' bucket and inserts a release_builds"
+          echo "row per platform, then activates it. Downloads are always signed URLs."
+          ls -R artifacts
