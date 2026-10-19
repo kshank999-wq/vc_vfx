@@ -57,11 +57,11 @@ export function shotListHtml(p: Project, generatedAt: Date, filter: QueueFilter 
     .map(
       (r) => `<tr>
 <td class="shot">${escapeHtml(r.shot)}${r.circled ? ' <span class="circ" title="Circle take">●</span>' : ''}</td>
-<td>${escapeHtml(r.sceneSetup)}</td>
+<td class="nw">${escapeHtml(r.sceneSetup)}</td>
 <td class="num">${escapeHtml(r.frames)}</td>
 <td>${escapeHtml(r.requiredPrep)}</td>
 <td class="notes">${escapeHtml(r.notes)}</td>
-<td>${escapeHtml(r.status)}</td>
+<td class="nw">${escapeHtml(r.status)}</td>
 <td>${escapeHtml(r.approval)}</td>
 <td class="box"></td>
 </tr>`,
@@ -80,6 +80,7 @@ th { background: #eee; font-size: 8.5pt; text-transform: uppercase; letter-spaci
 tr { page-break-inside: avoid; }
 .num { white-space: nowrap; font-variant-numeric: tabular-nums; }
 .shot { font-weight: 600; white-space: nowrap; }
+.nw { white-space: nowrap; }
 .notes { width: 28%; }
 .box { width: 14mm; }
 .circ { color: #b00; font-size: 8pt; }

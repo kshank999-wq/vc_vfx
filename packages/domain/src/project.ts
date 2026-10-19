@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { HandoffSchema, type Handoff, type HandoffShot } from './handoff.js';
-import { PREP_TASK_KINDS, TASK_STATES, sortTaskKinds, type PrepTaskKind, type TaskState } from './tasks.js';
+import { PREP_TASK_KINDS, PREP_TASKS, TASK_STATE_LABELS, TASK_STATES, sortTaskKinds, type PrepTaskKind, type TaskState } from './tasks.js';
 import { SHOT_STATUSES, type ShotStatus } from './status.js';
 
 /**
@@ -186,7 +186,7 @@ export function approveTask(p: Project, shotId: string, kind: PrepTaskKind, appr
     const task = s.tasks.find((t) => t.kind === kind);
     if (!task) return `${shotId} has no ${kind} task`;
     if (task.state === 'approved') return s;
-    if (task.state !== 'needs_review') return `${kind} is ${task.state.replace('_', ' ')}; only work in review can be approved`;
+    if (task.state !== 'needs_review') return `${PREP_TASKS[kind].label} is ${TASK_STATE_LABELS[task.state].toLowerCase()}; only work in review can be approved`;
     return { ...s, tasks: s.tasks.map((t) => (t.kind === kind ? { ...t, state: 'approved' as const, approval: { by: approver.trim(), at } } : t)) };
   });
   return chain(r, (proj) => log(proj, { at, actor: approver.trim(), shotId, action: 'task.approved', detail: kind }));
@@ -200,7 +200,7 @@ export function approveShot(p: Project, shotId: string, approver: string, now: D
     if (s.approval) return s;
     if (s.tasks.length === 0) return `${shotId} has no prep tasks to approve`;
     const open = s.tasks.filter((t) => t.state !== 'approved');
-    if (open.length > 0) return `Approve every task first: ${open.map((t) => t.kind).join(', ')}`;
+    if (open.length > 0) return `Approve every task first: ${open.map((t) => PREP_TASKS[t.kind].label).join(', ')}`;
     return { ...s, approval: { by: approver.trim(), at } };
   });
   return chain(r, (proj) => log(proj, { at, actor: approver.trim(), shotId, action: 'shot.approved' }));
