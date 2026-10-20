@@ -30,6 +30,11 @@ jobs:
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
 
+      - name: Fetch the bundled ffmpeg
+        # The colour-pipeline tests (apps/desktop/src/main/__tests__/colour-pipeline.test.ts)
+        # write and read back real plates with the exact ffmpeg the installer ships.
+        run: pnpm --filter @vcvfx/desktop fetch:ffmpeg
+
       - name: Typecheck
         run: pnpm -r typecheck
 

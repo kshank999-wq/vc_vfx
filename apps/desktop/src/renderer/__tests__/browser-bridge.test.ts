@@ -82,3 +82,38 @@ describe('the browser preview bridge', () => {
     set.mockRestore();
   });
 });
+
+describe('the viewer in the browser preview', () => {
+  const sample = () => {
+    const parsed = parseHandoff(JSON.stringify(SAMPLE_HANDOFF));
+    if (!parsed.ok) throw new Error('sample did not parse');
+    return serializeProject(createProject(parsed.handoff, 'sample', 'Tester', new Date('2026-01-01T00:00:00Z')));
+  };
+
+  it('offers the sample project’s stand-in source and plates, labelled as samples', async () => {
+    const api = createBrowserBridge();
+    const r = await api.viewerSources({ text: sample(), shotId: '010_020', projectKey: 'k' });
+    if (!r.ok) throw new Error(r.error);
+    expect(r.data).toMatchObject({ sample: true, source: { available: true, encoding: 'arri_logc4_awg4' }, plates: [{ version: 1, first: 1009, last: 1128, encoding: 'acescg' }] });
+  });
+
+  it('returns a bundled frame for any frame of the shot, with the view’s label', async () => {
+    const api = createBrowserBridge();
+    const base = { text: sample(), shotId: '010_020', projectKey: 'k', layer: 'source' as const, maxWidth: 960 };
+    const first = await api.viewerFrame({ ...base, frame: 900, view: 'rec709' });
+    const last = await api.viewerFrame({ ...base, frame: 1128, view: 'raw' });
+    if (!first.ok || !last.ok) throw new Error('no frame');
+    expect(first.data).toMatchObject({ frame: 1009, viewLabel: 'ARRI LogC4 → Rec.709 (approx.)' });
+    expect(first.data.url).toMatch(/source-rec709-1/);
+    expect(last.data.url).toMatch(/source-raw-5/);
+    const plate = await api.viewerFrame({ ...base, layer: 'plates', version: 1, frame: 1060, view: 'rec709' });
+    expect(plate.ok && plate.data.viewLabel).toBe('ACEScg → Rec.709 (approx.)');
+  });
+
+  it('says frames of a real project need the desktop app', async () => {
+    const api = createBrowserBridge();
+    const r = await api.viewerSources({ text: sampleText(), shotId: '010_020', projectKey: 'k' });
+    expect(r.ok && r.data.source.reason).toMatch(new RegExp(`^${DESKTOP_ONLY}`));
+    expect((await api.viewerFrame({ text: sampleText(), shotId: '010_020', projectKey: 'k', layer: 'source', frame: 1010, view: 'raw', maxWidth: 480 })).ok).toBe(false);
+  });
+});

@@ -108,8 +108,10 @@ unknown range.
 - No ffprobe: a notice says so, ranges stay "—", and plate generation
   refuses with the install hint.
 - Camera raw ffmpeg cannot decode (R3D, BRAW, Canon RAW, ARRIRAW `.ari`)
-  is flagged on open: make those plates in the vendor's tool and record the
-  task here. Plates from image-sequence sources are not generated yet.
+  is flagged on open, and plate generation and the viewer refuse it with the
+  instruction to transcode in VCDIT or the vendor's tool first. Image-sequence
+  sources are read as sequences from their first frame
+  ([addendum 03](addendum-03-plates-colour-viewer.md) §3).
 
 ### VFX shot numbers
 

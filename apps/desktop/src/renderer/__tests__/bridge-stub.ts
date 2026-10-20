@@ -19,6 +19,8 @@ export function stubBridge(overrides: Partial<VcvfxApi> = {}, standing: LicenceS
     packageShot: async () => ({ ok: false, error: 'not in tests' }),
     detectFfmpeg: async () => ({ found: false, path: null, version: null }),
     generateSequence: async () => ({ ok: false, error: 'not in tests' }),
+    viewerSources: async () => ({ ok: true, data: { source: { available: false, reason: 'The sample project has no media on disk.', encoding: null }, plates: [] } }),
+    viewerFrame: async () => ({ ok: false, error: 'not in tests' }),
     cancelJob: async () => undefined,
     onProgress: noop,
     revealPath: async () => undefined,

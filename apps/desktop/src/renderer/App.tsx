@@ -12,9 +12,12 @@ import {
   parseHandoff,
   parseProject,
   queueRows,
+  recordPlates,
   reopenShot,
   serializeProject,
+  setPlateColorDefault,
   setProbedMedia,
+  setShotPlateColor,
   setShotNotes,
   setSourceVerified,
   setVfxShotId,
@@ -22,6 +25,7 @@ import {
   setTaskState,
   shotState,
   shotTiming,
+  toggleReviewMark,
   type HandoffIssue,
   type PrepTaskKind,
   type Project,
@@ -33,6 +37,7 @@ import type { AccountStatus, AppInfo, JobProgress, LicenceStanding, MenuCommand,
 import { projectKey } from '../shared/queue';
 import { BulkBar, QueueFilters, QueueTable, type SelectGesture } from './components/Queue';
 import { ShotDetail } from './components/ShotDetail';
+import { Viewer } from './components/Viewer';
 import { AccountDialog, IssuesDialog, PromptDialog, SettingsDialog } from './components/Dialogs';
 
 interface Doc {
@@ -86,6 +91,9 @@ export function App({ api, now = () => new Date() }: { api: VcvfxApi; now?: () =
   const [standing, setStanding] = useState<LicenceStanding | null>(null);
   const [settings, setSettings] = useState<Settings>(EMPTY_SETTINGS);
   const [job, setJob] = useState<JobProgress | null>(null);
+  /** The frame viewer is open on the selected shot. */
+  const [viewing, setViewing] = useState(false);
+  const [queueCollapsed, setQueueCollapsed] = useState(false);
 
   const capability = capabilityFrom(standing, now());
   const canEdit = capability === 'full';
@@ -149,6 +157,7 @@ export function App({ api, now = () => new Date() }: { api: VcvfxApi; now?: () =
       setDoc({ project, path, dirty });
       setFilter({});
       setMarked([]);
+      setViewing(false);
       setSelected(queueRows(project)[0]?.shot.shotId ?? null);
     },
     [setDoc],
@@ -362,7 +371,7 @@ export function App({ api, now = () => new Date() }: { api: VcvfxApi; now?: () =
     if (!ffmpeg.found) {
       notify(
         'error',
-        'ffmpeg was not found, so no plates were written and the task is unchanged. Install it (macOS: brew install ffmpeg · Windows: winget install Gyan.FFmpeg) or set its path in Settings.',
+        `${ffmpeg.problem ?? 'ffmpeg was not found.'} No plates were written and the task is unchanged.`,
         { label: 'ffmpeg.org', run: () => void api.openExternal('ffmpeg') },
       );
       return;
@@ -381,10 +390,12 @@ export function App({ api, now = () => new Date() }: { api: VcvfxApi; now?: () =
     }
     const probed = r.data.probed;
     if (probed) apply((p) => setProbedMedia(p, shotId, probed, actor, now()));
+    // What was applied to the plates, exactly, goes into the project and its log (§19).
+    const record = r.data.record;
+    if (record) apply((p) => recordPlates(p, shotId, record, actor, now()));
     // Processing finishing never approves anything (§15.6): it goes to review.
     apply((p) => setTaskState(p, shotId, 'sequence_conversion', 'needs_review', actor, now()));
-    const folder = r.data.folder;
-    notify('ok', `${r.data.frames} frames written as ${r.data.pattern}. Review them, then approve the task.`, { label: 'Reveal', run: () => void api.revealPath(folder) });
+    notify('ok', `${r.data.frames} frames written as ${r.data.pattern}. Review them, then approve the task.`, { label: 'View', run: () => setViewing(true) });
   };
 
   // --- menu and keyboard ----------------------------------------------------
@@ -568,15 +579,44 @@ export function App({ api, now = () => new Date() }: { api: VcvfxApi; now?: () =
 
       {project && doc ? (
         <>
-          <QueueFilters project={project} filter={filter} onChange={setFilter} />
-          <main className="workspace">
+          {viewing && selected ? null : <QueueFilters project={project} filter={filter} onChange={setFilter} />}
+          <main className={`workspace${viewing && selected ? ` viewing${queueCollapsed ? ' queue-collapsed' : ''}` : ''}`}>
             <section className="queue-pane" aria-label="Queue">
-              {visibleMarked.length > 1 ? (
+              {viewing && selected ? (
+                <button type="button" className="queue-toggle" onClick={() => setQueueCollapsed((c) => !c)} aria-expanded={!queueCollapsed} title={queueCollapsed ? 'Show the queue' : 'Hide the queue'}>
+                  {queueCollapsed ? '»' : '« Queue'}
+                </button>
+              ) : null}
+              {visibleMarked.length > 1 && !viewing ? (
                 <BulkBar project={project} shotIds={visibleMarked} canEdit={canEdit} busy={busy} onAddTask={addTaskToMarked} onClear={() => setMarked([])} />
               ) : null}
-              <QueueTable project={project} rows={rows} selected={selected} marked={visibleMarked} onSelect={selectShot} />
+              {viewing && selected && queueCollapsed ? null : (
+                <QueueTable
+                  project={project}
+                  rows={rows}
+                  selected={selected}
+                  marked={visibleMarked}
+                  onSelect={selectShot}
+                  onOpen={(id) => {
+                    setSelected(id);
+                    setMarked([]);
+                    setViewing(true);
+                  }}
+                  compact={viewing}
+                />
+              )}
             </section>
-            {selected ? (
+            {viewing && selected && key ? (
+              <Viewer
+                api={api}
+                project={project}
+                shotId={selected}
+                projectKey={key}
+                canEdit={canEdit}
+                onClose={() => setViewing(false)}
+                onToggleMark={(frame, seen, note) => apply((p) => toggleReviewMark(p, selected, { frame, viewing: seen, note }, actor, now()))}
+              />
+            ) : selected ? (
               <ShotDetail
                 project={project}
                 shotId={selected}
@@ -608,6 +648,8 @@ export function App({ api, now = () => new Date() }: { api: VcvfxApi; now?: () =
                 onGeneratePlates={() => void generatePlates(selected)}
                 onChangeOutputRoot={() => void chooseOutputRoot()}
                 onRevealOutput={() => outputRoot && void api.revealPath(outputRoot)}
+                onPlateColor={(change) => apply((p) => setShotPlateColor(p, selected, change, actor, now()))}
+                onView={() => setViewing(true)}
               />
             ) : (
               <aside className="detail empty">Select a shot.</aside>
@@ -671,6 +713,8 @@ export function App({ api, now = () => new Date() }: { api: VcvfxApi; now?: () =
           settings={settings}
           outputRoot={outputRoot}
           hasProject={Boolean(project)}
+          plateColorDefault={project?.plateColorDefault ?? null}
+          onPlateColorDefault={(value) => apply((p) => setPlateColorDefault(p, value, actor, now()))}
           onSaved={(s) => {
             setSettings(s);
             notify('ok', 'Settings saved');

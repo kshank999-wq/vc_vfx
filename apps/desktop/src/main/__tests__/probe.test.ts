@@ -33,6 +33,12 @@ const MOV = {
 };
 
 describe('parseFfprobe', () => {
+  it('keeps the pixel format and colour tags, dropping “unknown”', () => {
+    const doc = { streams: [{ codec_type: 'video', codec_name: 'prores', pix_fmt: 'yuv444p12le', color_space: 'bt709', color_range: 'tv', color_transfer: 'unknown', color_primaries: 'bt709', width: 4096, height: 2160, avg_frame_rate: '24/1', nb_frames: '48' }] };
+    expect(parseFfprobe(doc, 'c.mov')).toMatchObject({ pixelFormat: 'yuv444p12le', colorSpace: 'bt709', colorRange: 'tv', colorPrimaries: 'bt709' });
+    expect(parseFfprobe(doc, 'c.mov')).not.toHaveProperty('colorTransfer');
+  });
+
   it('reads an MXF: frame count from duration × rate, timecode from the container', () => {
     expect(parseFfprobe(MXF, 'SCENE_014/a.mxf')).toEqual({
       file: 'SCENE_014/a.mxf',

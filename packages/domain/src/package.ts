@@ -1,6 +1,6 @@
 import { outputFor, type ChecksumRecord } from './handoff.js';
 import { framePattern, versionTag } from './frames.js';
-import { handoffShot, planFor, shotState, shotStatus, shotTiming, type Project } from './project.js';
+import { handoffShot, planFor, plateColorFor, shotState, shotStatus, shotTiming, type Project } from './project.js';
 
 /**
  * The per-shot output package (master spec §17) and its manifest (§18).
@@ -62,6 +62,9 @@ export function buildManifest(p: Project, shotId: string, input: ManifestInput) 
   const timing = shotTiming(p, shot);
   const name = state.vfxShotId ?? shot.shotId;
   const sourceChecksums: ChecksumRecord[] = shot.checksums;
+  const plateVersion = state.tasks.find((t) => t.kind === 'sequence_conversion')?.version ?? 1;
+  const written = state.plates.find((r) => r.version === plateVersion) ?? null;
+  const planned = plateColorFor(p, shotId);
   return {
     manifestSchemaVersion: MANIFEST_SCHEMA_VERSION,
     generator: `VC VFX ${input.appVersion}`,
@@ -109,10 +112,26 @@ export function buildManifest(p: Project, shotId: string, input: ManifestInput) 
       frameCount: plan?.frameCount ?? null,
       format: output.format,
       bitDepth: output.bitDepth,
-      pattern: framePattern(name, 'plate', state.tasks.find((t) => t.kind === 'sequence_conversion')?.version ?? 1, output.format),
+      pattern: framePattern(name, 'plate', plateVersion, output.format),
       /** Display looks are never baked into plates (§4). */
       colorBaked: false,
+      /**
+       * Exactly what was applied to the plates of this version (written: true),
+       * or what will be (written: false) when none have been made yet.
+       */
+      color: written
+        ? { written: true, ...written.color, writtenAt: written.writtenAt, by: written.by, frames: written.frames }
+        : {
+            written: false,
+            policy: planned.policy,
+            sourceEncoding: planned.sourceEncoding,
+            plateEncoding: planned.plateEncoding,
+            summary: planned.summary,
+            warnings: planned.warnings,
+            lookApplied: false as const,
+          },
     },
+    review: { marks: state.reviewMarks },
     status: shotStatus(state),
     tasks: state.tasks.map((t) => ({ kind: t.kind, state: t.state, version: versionTag(t.version), notes: t.notes, approval: t.approval })),
     approval: state.approval,

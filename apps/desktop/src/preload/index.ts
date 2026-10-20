@@ -23,6 +23,8 @@ const api: VcvfxApi = {
   detectFfmpeg: () => ipcRenderer.invoke('ffmpeg:detect'),
   generateSequence: (input) => ipcRenderer.invoke('job:sequence', input),
   probeSources: (input) => ipcRenderer.invoke('job:probe', input),
+  viewerSources: (input) => ipcRenderer.invoke('viewer:sources', input),
+  viewerFrame: (input) => ipcRenderer.invoke('viewer:frame', input),
   cancelJob: (jobId) => ipcRenderer.invoke('job:cancel', jobId),
   onProgress: (listener) => {
     const wrapped = (_event: IpcRendererEvent, progress: JobProgress) => listener(progress);

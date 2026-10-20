@@ -3,6 +3,19 @@ import { HandoffSchema, TimecodeSchema, outputFor, type Handoff, type HandoffSho
 import { sequencePlan, type SequencePlan } from './frames.js';
 import { PREP_TASK_KINDS, PREP_TASKS, TASK_STATE_LABELS, TASK_STATES, sortTaskKinds, type PrepTaskKind, type TaskState } from './tasks.js';
 import { SHOT_STATUSES, type ShotStatus } from './status.js';
+import {
+  COLOR_ENCODINGS,
+  PLATE_COLOR_LABELS,
+  PLATE_TARGETS,
+  PROJECT_EXR_COLOR,
+  SHOT_PLATE_COLOR,
+  decidePlateColor,
+  encodingLabel,
+  type ColorEncodingId,
+  type PlateColorDecision,
+  type ProjectExrColor,
+  type ShotPlateColor,
+} from './color.js';
 
 /**
  * A VCVFX project: the handoff it was built from plus VCVFX's own working
@@ -47,10 +60,65 @@ export const ProbedMediaSchema = z.object({
   frameRate: z.number().positive().optional(),
   resolution: z.object({ width: z.number().int().positive(), height: z.number().int().positive() }).optional(),
   codec: z.string().optional(),
+  /** ffmpeg's pixel format, e.g. "yuv422p10le", "gbrp10le". */
+  pixelFormat: z.string().optional(),
+  /** The file's colour tags as ffprobe reports them ("bt709", "tv"…); absent when untagged. */
+  colorSpace: z.string().optional(),
+  colorRange: z.string().optional(),
+  colorTransfer: z.string().optional(),
+  colorPrimaries: z.string().optional(),
   probedAt: z.string(),
 });
 export type ProbedMedia = z.infer<typeof ProbedMediaSchema>;
 export type ProbedMediaInput = Omit<ProbedMedia, 'probedAt'>;
+
+/** What was applied to a set of plates, exactly, so they can be made again from source + settings (§19). */
+export const PlateColorRecordSchema = z.object({
+  policy: z.union([
+    z.object({ mode: z.literal('as_shot') }),
+    z.object({ mode: z.literal('convert'), from: z.enum(COLOR_ENCODINGS), to: z.enum(PLATE_TARGETS) }),
+  ]),
+  sourceEncoding: z.enum(COLOR_ENCODINGS).nullable(),
+  plateEncoding: z.enum(COLOR_ENCODINGS).nullable(),
+  summary: z.string(),
+  /** The transform in words and numbers; null when nothing was applied. */
+  transform: z.string().nullable(),
+  /** The ffmpeg filter graph that was run, verbatim. */
+  filter: z.string(),
+  /** Package-relative paths of the files that describe the transform (09_PROJECT_DATA). */
+  files: z.array(z.string()).default([]),
+  /** Always false: a display look is never baked into plates (§4). */
+  lookApplied: z.literal(false).default(false),
+});
+export type PlateColorRecord = z.infer<typeof PlateColorRecordSchema>;
+
+export const PlateRecordSchema = z.object({
+  version: z.number().int().positive(),
+  pattern: z.string(),
+  format: z.string(),
+  bitDepth: z.number().int().positive(),
+  frames: z.number().int().nonnegative(),
+  firstFrame: z.number().int().nonnegative(),
+  lastFrame: z.number().int().nonnegative(),
+  color: PlateColorRecordSchema,
+  notes: z.array(z.string()).default([]),
+  writtenAt: z.string(),
+  by: z.string(),
+});
+export type PlateRecord = z.infer<typeof PlateRecordSchema>;
+export type PlateRecordInput = Omit<PlateRecord, 'writtenAt' | 'by'>;
+
+/** A frame marked in review as needing correction (groundwork for roto review, §5.2). */
+export const ReviewMarkSchema = z.object({
+  /** Delivered frame number. */
+  frame: z.number().int().nonnegative(),
+  /** What was being looked at: "source" or "plates v001". */
+  viewing: z.string().default('source'),
+  note: z.string().default(''),
+  by: z.string(),
+  at: z.string(),
+});
+export type ReviewMark = z.infer<typeof ReviewMarkSchema>;
 
 export const ShotStateSchema = z.object({
   shotId: z.string(),
@@ -67,6 +135,13 @@ export const ShotStateSchema = z.object({
   packageVersion: z.number().int().nonnegative().default(0),
   notes: z.string().default(''),
   sourceVerified: z.enum(['unchecked', 'verified', 'mismatch', 'missing']).default('unchecked'),
+  /** The operator's reading of the source encoding, overriding the handoff's text. Null: from the handoff. */
+  sourceEncoding: z.enum(COLOR_ENCODINGS).nullable().default(null),
+  /** The plate colour choice for this shot; `auto` follows the project default. */
+  plateColor: z.enum(SHOT_PLATE_COLOR).default('auto'),
+  /** Plates written, one record per version. */
+  plates: z.array(PlateRecordSchema).default([]),
+  reviewMarks: z.array(ReviewMarkSchema).default([]),
 });
 export type ShotState = z.infer<typeof ShotStateSchema>;
 
@@ -87,6 +162,8 @@ export const ProjectSchema = z.object({
   /** Absolute path of the handoff file on the drive when the project was made. */
   handoffPath: z.string(),
   handoff: HandoffSchema,
+  /** What EXR plates are converted to unless a shot says otherwise. DPX/TIFF keep the camera encoding. */
+  plateColorDefault: z.enum(PROJECT_EXR_COLOR).default('acescg'),
   shots: z.array(ShotStateSchema),
   log: z.array(LogEntrySchema),
 });
@@ -116,9 +193,13 @@ export function createProject(handoff: Handoff, handoffPath: string, actor: stri
     packageVersion: 0,
     notes: '',
     sourceVerified: 'unchecked' as const,
+    sourceEncoding: null,
+    plateColor: 'auto' as const,
+    plates: [],
+    reviewMarks: [],
   }));
   return log(
-    { format: PROJECT_FORMAT, version: PROJECT_VERSION, createdAt: at, updatedAt: at, handoffPath, handoff, shots, log: [] },
+    { format: PROJECT_FORMAT, version: PROJECT_VERSION, createdAt: at, updatedAt: at, handoffPath, handoff, plateColorDefault: 'acescg', shots, log: [] },
     { at, actor, shotId: null, action: 'project.created', detail: `${shots.length} shots from ${handoffPath}` },
   );
 }
@@ -366,10 +447,124 @@ export function setProbedMedia(p: Project, shotId: string, media: ProbedMediaInp
     m.timecodeIn ? `TC ${m.timecodeIn}` : null,
     m.resolution ? `${m.resolution.width}×${m.resolution.height}` : null,
     m.codec ?? null,
+    m.pixelFormat ?? null,
+    m.colorSpace || m.colorTransfer || m.colorPrimaries ? `tags ${[m.colorSpace, m.colorRange, m.colorTransfer, m.colorPrimaries].filter(Boolean).join('/')}` : null,
   ]
     .filter(Boolean)
     .join(', ');
   return chain(r, (proj) => log(proj, { at, actor, shotId, action: 'source.probed', detail: `${m.file}: ${detail}` }));
+}
+
+// ---------------------------------------------------------------------------
+// Plate colour (§4) and review marks (§5.2)
+// ---------------------------------------------------------------------------
+
+/** The colour decision for a shot's plates: what will be applied, from what, and in one sentence. */
+export function plateColorFor(p: Project, shotId: string): PlateColorDecision {
+  const shot = handoffShot(p, shotId);
+  const state = shotState(p, shotId);
+  if (!shot || !state) throw new Error(`No shot ${shotId}`);
+  const output = outputFor(p.handoff, shot);
+  return decidePlateColor({
+    format: output.format,
+    bitDepth: output.bitDepth,
+    shotChoice: state.plateColor,
+    projectExr: p.plateColorDefault,
+    operatorEncoding: state.sourceEncoding,
+    handoffText: [shot.color.sourceColorSpace, shot.color.gamma],
+  });
+}
+
+function platesLocked(s: ShotState, shotId: string): string | null {
+  if (s.stage !== 'prep') return `${shotId} is ${s.stage}; reopen it before changing how its plates are made`;
+  const task = s.tasks.find((t) => t.kind === 'sequence_conversion');
+  if (task?.state === 'approved') return 'These plates are approved. Reopen the image-sequence task first; the change applies to the new version.';
+  return null;
+}
+
+/**
+ * Set a shot's plate colour choice and/or the operator's reading of its
+ * source encoding (null: back to the handoff's text). Refused once its plates
+ * are approved: the next version takes the change.
+ */
+export function setShotPlateColor(
+  p: Project,
+  shotId: string,
+  change: { choice?: ShotPlateColor; encoding?: ColorEncodingId | null },
+  actor: string,
+  now: Date,
+): Result {
+  const details: string[] = [];
+  const r = updateShot(p, shotId, (s) => {
+    const locked = platesLocked(s, shotId);
+    if (locked) return locked;
+    let next = s;
+    if (change.choice !== undefined && change.choice !== s.plateColor) {
+      details.push(`plate colour ${PLATE_COLOR_LABELS[s.plateColor]} → ${PLATE_COLOR_LABELS[change.choice]}`);
+      next = { ...next, plateColor: change.choice };
+    }
+    if (change.encoding !== undefined && change.encoding !== s.sourceEncoding) {
+      details.push(`source encoding ${s.sourceEncoding ? encodingLabel(s.sourceEncoding) : 'from handoff'} → ${change.encoding ? encodingLabel(change.encoding) : 'from handoff'}`);
+      next = { ...next, sourceEncoding: change.encoding };
+    }
+    return next;
+  });
+  if (r.ok && details.length === 0) return { ok: true, project: p };
+  return chain(r, (proj) => {
+    const decision = plateColorFor(proj, shotId);
+    return log(proj, { at: now.toISOString(), actor, shotId, action: 'plates.colour', detail: `${details.join('; ')}. ${decision.summary}` });
+  });
+}
+
+/** The project's default for EXR plates. Plates already written keep the record of what was applied. */
+export function setPlateColorDefault(p: Project, value: ProjectExrColor, actor: string, now: Date): Result {
+  if (p.plateColorDefault === value) return { ok: true, project: p };
+  const before = p.plateColorDefault;
+  const label = (v: ProjectExrColor) => (v === 'as_shot' ? 'as shot' : `convert to ${encodingLabel(v)}`);
+  return { ok: true, project: log({ ...p, plateColorDefault: value }, { at: now.toISOString(), actor, shotId: null, action: 'project.plate_colour', detail: `EXR plates: ${label(before)} → ${label(value)}` }) };
+}
+
+/** Record plates that were written, with exactly what was applied to them. Replaces a record of the same version. */
+export function recordPlates(p: Project, shotId: string, record: PlateRecordInput, actor: string, now: Date): Result {
+  const at = now.toISOString();
+  const parsed = PlateRecordSchema.safeParse({ ...record, writtenAt: at, by: actor });
+  if (!parsed.success) return { ok: false, reason: `The plate record for ${shotId} is not usable: ${parsed.error.issues[0]?.message ?? 'bad data'}` };
+  const rec = parsed.data;
+  const r = updateShot(p, shotId, (s) => (s.stage !== 'prep' ? `${shotId} is ${s.stage}` : { ...s, plates: [...s.plates.filter((x) => x.version !== rec.version), rec].sort((a, b) => a.version - b.version) }));
+  const detail = [`${rec.pattern}: ${rec.frames} frames ${rec.firstFrame}–${rec.lastFrame}`, rec.color.summary, rec.color.transform, `ffmpeg -vf ${rec.color.filter}`].filter(Boolean).join(' · ');
+  return chain(r, (proj) => log(proj, { at, actor, shotId, action: 'plates.written', detail }));
+}
+
+/**
+ * Mark a frame as needing correction, or clear its mark. Each mark carries a
+ * note and who made it; both acts are logged. Groundwork for roto review.
+ */
+export function toggleReviewMark(p: Project, shotId: string, mark: { frame: number; viewing: string; note?: string }, actor: string, now: Date): Result {
+  const at = now.toISOString();
+  let removed = false;
+  const r = updateShot(p, shotId, (s) => {
+    if (s.stage !== 'prep') return `${shotId} is ${s.stage}; reopen it to mark frames`;
+    if (!Number.isInteger(mark.frame) || mark.frame < 0) return 'Not a frame number';
+    removed = s.reviewMarks.some((m) => m.frame === mark.frame);
+    const marks = removed
+      ? s.reviewMarks.filter((m) => m.frame !== mark.frame)
+      : [...s.reviewMarks, { frame: mark.frame, viewing: mark.viewing, note: mark.note?.trim() ?? '', by: actor, at }].sort((a, b) => a.frame - b.frame);
+    return { ...s, reviewMarks: marks };
+  });
+  return chain(r, (proj) =>
+    log(proj, { at, actor, shotId, action: removed ? 'review.unmarked' : 'review.marked', detail: `frame ${mark.frame} (${mark.viewing})${!removed && mark.note?.trim() ? `: ${mark.note.trim()}` : ''}` }),
+  );
+}
+
+/**
+ * Frames for a contact sheet (§5.2, §15.4): the first and last, and `count`
+ * more spread evenly between them. Sorted, no repeats.
+ */
+export function contactSheetFrames(first: number, last: number, count = 12): number[] {
+  if (last < first) return [];
+  const frames = new Set<number>([first, last]);
+  for (let i = 1; i <= count; i += 1) frames.add(Math.round(first + ((last - first) * i) / (count + 1)));
+  return [...frames].sort((a, b) => a - b);
 }
 
 const VFX_SHOT_ID = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/;

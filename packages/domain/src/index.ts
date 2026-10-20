@@ -8,3 +8,4 @@ export * from './package.js';
 export * from './commerce.js';
 export { SAMPLE_HANDOFF } from './sample.js';
 export * from './vcdit.js';
+export * from './color.js';

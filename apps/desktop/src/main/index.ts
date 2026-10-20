@@ -1,10 +1,17 @@
-import { app, BrowserWindow, shell } from 'electron';
+import { app, BrowserWindow, net, protocol, shell } from 'electron';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { PROJECT_EXTENSION } from '@vcvfx/domain';
 import { restoreSession } from './cloud';
 import { registerIpcHandlers } from './ipc';
 import { startStandingRefresh } from './license';
 import { buildMenu } from './menu';
+import { FRAME_SCHEME, FrameCache, resolveFrameUrl } from './frame-cache';
+
+// The viewer's frames come from the frame cache through this scheme, never
+// file:// (addendum 03). Privileged: treated as secure and standard, so the
+// renderer's CSP can name it in img-src. Must be registered before ready.
+protocol.registerSchemesAsPrivileged([{ scheme: FRAME_SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true } }]);
 
 /**
  * Electron main process. Windows and macOS run the same shell; only window
@@ -85,7 +92,15 @@ if (!app.requestSingleInstanceLock()) {
   app.setAboutPanelOptions({ applicationName: 'VC VFX', applicationVersion: app.getVersion(), website: 'https://vc-vfx.com' });
 
   void app.whenReady().then(async () => {
-    registerIpcHandlers(() => mainWindow, isDevelopment);
+    const frameCache = new FrameCache({ dir: join(app.getPath('userData'), 'Frame Cache') });
+    protocol.handle(FRAME_SCHEME, async (request) => {
+      const file = resolveFrameUrl(request.url, frameCache.dir);
+      if (!file) return new Response('Not found', { status: 404 });
+      const response = await net.fetch(pathToFileURL(file).toString()).catch(() => null);
+      if (!response || !response.ok) return new Response('Not found', { status: 404 });
+      return new Response(response.body, { headers: { 'content-type': 'image/jpeg', 'cache-control': 'private, max-age=31536000, immutable' } });
+    });
+    registerIpcHandlers(() => mainWindow, isDevelopment, frameCache);
     await buildMenu(() => mainWindow, isDevelopment);
     createWindow();
     // Restoring a stored session must not delay the window.

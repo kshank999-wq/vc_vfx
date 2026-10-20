@@ -10,8 +10,9 @@
     "build:preview": "vite build --config vite.preview.config.ts",
     "typecheck": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.web.json --noEmit",
     "test": "vitest run",
-    "package:win": "electron-vite build && electron-builder --win --publish never",
-    "package:mac": "electron-vite build && electron-builder --mac --publish never"
+    "fetch:ffmpeg": "node scripts/fetch-ffmpeg.mjs",
+    "package:win": "node scripts/fetch-ffmpeg.mjs win32-x64 && electron-vite build && electron-builder --win --publish never",
+    "package:mac": "node scripts/fetch-ffmpeg.mjs darwin-arm64 darwin-x64 && electron-vite build && electron-builder --mac --publish never"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.115.0",

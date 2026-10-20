@@ -10,3 +10,6 @@ release
 
 # Built by apps/web/scripts/build-preview.mjs at deploy time
 apps/web/public/preview
+
+# Fetched by apps/desktop/scripts/fetch-ffmpeg.mjs
+apps/desktop/resources/ffmpeg/*/

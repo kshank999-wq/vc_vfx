@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { HandoffIssue } from '@vcvfx/domain';
-import { capabilityFrom } from '@vcvfx/domain';
+import { ENCODINGS, PROJECT_EXR_COLOR, capabilityFrom, type ProjectExrColor } from '@vcvfx/domain';
 import type { AccountStatus, AppInfo, FfmpegInfo, LicenceStanding, Settings, VcvfxApi } from '../../shared/bridge';
 
 export function Modal({ title, onClose, children, footer, wide }: { title: string; onClose: () => void; children: ReactNode; footer?: ReactNode; wide?: boolean }) {
@@ -120,6 +120,8 @@ export function SettingsDialog({
   settings,
   outputRoot,
   hasProject,
+  plateColorDefault,
+  onPlateColorDefault,
   onSaved,
   onChooseOutputRoot,
   onClose,
@@ -128,6 +130,9 @@ export function SettingsDialog({
   settings: Settings;
   outputRoot: string | null;
   hasProject: boolean;
+  /** The open project's default for EXR plates; null with no project. */
+  plateColorDefault: ProjectExrColor | null;
+  onPlateColorDefault: (value: ProjectExrColor) => void;
   onSaved: (s: Settings) => void;
   onChooseOutputRoot: () => void;
   onClose: () => void;
@@ -165,16 +170,18 @@ export function SettingsDialog({
       </label>
       <label className="field">
         <span>ffmpeg</span>
-        <input value={ffmpegPath} onChange={(e) => setFfmpegPath(e.target.value)} placeholder="Leave empty to use ffmpeg on PATH" className="mono" />
+        <input value={ffmpegPath} onChange={(e) => setFfmpegPath(e.target.value)} placeholder="Leave empty to use the ffmpeg bundled with VC VFX" className="mono" />
       </label>
       <p className="small">
         {ffmpeg === null ? (
           <span className="muted">Looking for ffmpeg…</span>
         ) : ffmpeg.found ? (
-          <span className="ok-text">Found: {ffmpeg.version}</span>
+          <span className="ok-text">
+            {ffmpeg.source === 'bundled' ? 'Bundled with VC VFX' : ffmpeg.source === 'settings' ? 'Set here' : 'Found on PATH'}: {ffmpeg.version}
+          </span>
         ) : (
           <span className="warn-text">
-            ffmpeg was not found. macOS: <code>brew install ffmpeg</code> · Windows: <code>winget install Gyan.FFmpeg</code> ·{' '}
+            {ffmpeg.problem ?? 'ffmpeg was not found.'} macOS: <code>brew install ffmpeg</code> · Windows: <code>winget install Gyan.FFmpeg</code> ·{' '}
             <button type="button" className="link" onClick={() => void api.openExternal('ffmpeg')}>
               ffmpeg.org
             </button>
@@ -192,6 +199,21 @@ export function SettingsDialog({
           </div>
           <p className="muted small">Kept on this computer, not in the project file. Never inside a source media folder.</p>
         </div>
+      ) : null}
+      {hasProject && plateColorDefault ? (
+        <label className="field">
+          <span>EXR plates in this project</span>
+          <select aria-label="EXR plates in this project" value={plateColorDefault} onChange={(e) => onPlateColorDefault(e.target.value as ProjectExrColor)}>
+            {PROJECT_EXR_COLOR.map((v) => (
+              <option key={v} value={v}>
+                {v === 'as_shot' ? 'As shot (no conversion)' : `Convert to ${ENCODINGS[v].label}`}
+              </option>
+            ))}
+          </select>
+          <span className="muted small">
+            Saved in the project and logged. Applies when a shot’s source encoding is known and it has no choice of its own; DPX and TIFF plates always keep the camera encoding. No display look is ever applied to plates.
+          </span>
+        </label>
       ) : null}
     </Modal>
   );

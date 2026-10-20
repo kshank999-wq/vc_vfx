@@ -9,7 +9,7 @@ const hasFfmpeg = spawnSync('ffmpeg', ['-version']).status === 0;
 
 describe('detectFfmpeg', () => {
   it('reports a missing binary', async () => {
-    expect(await detectFfmpeg('/definitely/not/ffmpeg')).toEqual({ found: false, path: null, version: null });
+    expect(await detectFfmpeg('/definitely/not/ffmpeg')).toMatchObject({ found: false, path: null, version: null, problem: expect.stringMatching(/Settings/) });
   });
 });
 
@@ -22,6 +22,7 @@ describe.skipIf(!hasFfmpeg)('generateSequence (real ffmpeg)', () => {
     expect(made.status).toBe(0);
     const progress: number[] = [];
     const r = await generateSequence({ project, shotId: 'A', outputRoot: join(root, 'OUT'), ffmpeg: 'ffmpeg', onProgress: (f) => progress.push(f) });
+    if (r.ok) expect(r.record.color).toMatchObject({ policy: { mode: 'as_shot' }, lookApplied: false });
     if (!r.ok) throw new Error(r.reason);
     // frameIn 10..19 with 2 handles → source 8..21 → 14 frames, 1001..1014.
     expect(r.frames).toBe(14);

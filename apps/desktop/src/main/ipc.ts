@@ -13,8 +13,12 @@ import { buildMenu } from './menu';
 import { packageShot, sourceFiles } from './package-shot';
 import { defaultProjectPath, isInside, outputRootProblem, withProjectExtension } from './paths';
 import { printShotList } from './print';
-import { FFMPEG_HELP, detectFfmpeg, generateSequence } from './sequence';
-import { detectFfprobe, probeProject } from './probe';
+import { FFMPEG_HELP, generateSequence } from './sequence';
+import { probeProject } from './probe';
+import { cachedResolver, type ResolvedTools } from './ffmpeg-tools';
+import type { FrameCache } from './frame-cache';
+import { viewerFrame, viewerSources } from './viewer';
+import type { FfmpegInfo } from '../shared/bridge';
 import { noteRecent, readSettings, updateSettings } from './settings';
 import { verifyProject } from './verify';
 
@@ -60,7 +64,13 @@ function handle<S extends z.ZodTypeAny, R>(channel: string, schema: S, fn: (even
 
 const none = z.undefined().or(z.null()).optional();
 
-export function registerIpcHandlers(getWindow: () => BrowserWindow | null, isDevelopment: boolean): void {
+/** Settings → bundled → PATH (ffmpeg-tools.ts), resolved once per Settings value. */
+const tools = cachedResolver(() => ({ resourcesPath: process.resourcesPath, appPath: app.getAppPath(), packaged: app.isPackaged, platform: process.platform, arch: process.arch }));
+const currentTools = async (): Promise<ResolvedTools> => tools.get((await readSettings()).ffmpegPath);
+const ffmpegInfo = (t: ResolvedTools): FfmpegInfo =>
+  t.ffmpeg ? { found: true, path: t.ffmpeg, version: t.ffmpegVersion, source: t.source, problem: null } : { found: false, path: null, version: null, source: null, problem: t.problem };
+
+export function registerIpcHandlers(getWindow: () => BrowserWindow | null, isDevelopment: boolean, frameCache: FrameCache): void {
   const parent = () => getWindow() ?? undefined;
   const refreshMenu = () => void buildMenu(getWindow, isDevelopment);
 
@@ -174,9 +184,10 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null, isDev
   });
 
   handle('settings:get', none, async () => readSettings());
-  handle('settings:set', z.object({ operatorName: z.string().max(200).optional(), ffmpegPath: z.string().max(4096).optional() }).strict(), async (_e, patch) =>
-    updateSettings((s) => ({ ...s, ...patch })),
-  );
+  handle('settings:set', z.object({ operatorName: z.string().max(200).optional(), ffmpegPath: z.string().max(4096).optional() }).strict(), async (_e, patch) => {
+    if (patch.ffmpegPath !== undefined) tools.reset();
+    return updateSettings((s) => ({ ...s, ...patch }));
+  });
   handle('settings:choose-output-root', z.object({ projectKey: z.string().min(1).max(4200), text: projectText }), async (_e, input) => {
     try {
       return ok(await ensureOutputRoot(input.projectKey, projectFrom(input.text), true));
@@ -240,33 +251,37 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null, isDev
     },
   );
 
-  handle('ffmpeg:detect', none, async () => detectFfmpeg((await readSettings()).ffmpegPath));
+  handle('ffmpeg:detect', none, async () => {
+    tools.reset();
+    return ffmpegInfo(await currentTools());
+  });
 
   handle(
     'job:sequence',
     z.object({ jobId, text: projectText, shotId: z.string().min(1).max(200), projectKey: z.string().min(1).max(4200) }),
     async (event, input) => {
       if ((await capability()) !== 'full') return fail(READ_ONLY_REASON);
-      const ffmpeg = await detectFfmpeg((await readSettings()).ffmpegPath);
-      if (!ffmpeg.found || !ffmpeg.path) return fail(FFMPEG_HELP);
+      const resolved = await currentTools();
+      if (!resolved.ffmpeg) return fail(resolved.problem ?? FFMPEG_HELP);
       const signal = startJob(input.jobId);
       const progress = progressSender(event.sender, input.jobId, `Writing plates for ${input.shotId}`);
       try {
         const project = projectFrom(input.text);
         const root = await ensureOutputRoot(input.projectKey, project, false);
         if (!root) return fail('No output root was chosen, so nothing was written.');
-        const ffprobe = await detectFfprobe(ffmpeg.path);
         const result = await generateSequence({
           project,
           shotId: input.shotId,
           outputRoot: root,
-          ffmpeg: ffmpeg.path,
-          ffprobe,
+          ffmpeg: resolved.ffmpeg,
+          ffprobe: resolved.ffprobe,
+          caps: resolved.caps,
+          appVersion: app.getVersion(),
           signal,
           onProgress: (f, t) => progress(f, t, `${f} / ${t} frames`),
         });
         if (!result.ok) return fail(result.reason);
-        return ok({ folder: result.folder, pattern: result.pattern, frames: result.frames, ...(result.probed ? { probed: result.probed } : {}) });
+        return ok({ folder: result.folder, pattern: result.pattern, frames: result.frames, record: result.record, notes: result.notes, ...(result.probed ? { probed: result.probed } : {}) });
       } catch (error) {
         return fail(error);
       } finally {
@@ -277,7 +292,7 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null, isDev
 
   // Read only, like verification: allowed in read-only licence mode.
   handle('job:probe', z.object({ jobId, text: projectText, shotIds: z.array(z.string().min(1).max(200)).max(10000).optional() }), async (event, input) => {
-    const ffprobe = await detectFfprobe((await readSettings()).ffmpegPath);
+    const ffprobe = (await currentTools()).ffprobe;
     if (!ffprobe) return ok({ ffprobe: null, results: [] });
     const signal = startJob(input.jobId);
     const progress = progressSender(event.sender, input.jobId, 'Reading clips');
@@ -294,6 +309,44 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null, isDev
       endJob(input.jobId);
     }
   });
+
+  // The viewer: read only, so allowed in read-only licence mode, like verification.
+  // Frame requests arrive many times a second with the same project text; it is parsed once.
+  let viewerCache: { text: string; project: Project } | null = null;
+  const viewerProject = (text: string): Project => {
+    if (viewerCache?.text !== text) viewerCache = { text, project: projectFrom(text) };
+    return viewerCache.project;
+  };
+  const outputRootFor = async (projectKey: string) => (await readSettings()).outputRoots[projectKey] ?? null;
+  const shotInput = { text: projectText, shotId: z.string().min(1).max(200), projectKey: z.string().min(1).max(4200) };
+  handle('viewer:sources', z.object(shotInput), async (_e, input) => {
+    try {
+      return ok(await viewerSources(viewerProject(input.text), input.shotId, await outputRootFor(input.projectKey)));
+    } catch (error) {
+      return fail(error);
+    }
+  });
+  handle(
+    'viewer:frame',
+    z.object({
+      ...shotInput,
+      layer: z.enum(['source', 'plates']),
+      version: z.number().int().positive().max(999).optional(),
+      frame: z.number().int().nonnegative().max(100_000_000),
+      view: z.enum(['rec709', 'raw']),
+      maxWidth: z.number().int().min(64).max(4096),
+      prefetch: z.boolean().optional(),
+    }),
+    async (_e, input) => {
+      try {
+        const resolved = await currentTools();
+        if (!resolved.ffmpeg) return fail(resolved.problem ?? FFMPEG_HELP);
+        return ok(await viewerFrame(viewerProject(input.text), input, await outputRootFor(input.projectKey), { cache: frameCache, ffmpeg: resolved.ffmpeg, caps: resolved.caps }));
+      } catch (error) {
+        return fail(error);
+      }
+    },
+  );
 
   handle('job:cancel', jobId, async (_e, id) => cancelJob(id));
   handle('shell:reveal', z.string().min(1).max(4096), async (_e, path) => shell.showItemInFolder(path));

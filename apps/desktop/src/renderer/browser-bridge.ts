@@ -1,5 +1,16 @@
-import { PROJECT_EXTENSION, parseProject, shotListHtml, type QueueFilter } from '@vcvfx/domain';
-import type { ApiResult, ExternalLink, LicenceStanding, MenuCommand, OpenedFile, Settings, VcvfxApi } from '../shared/bridge';
+import { PROJECT_EXTENSION, parseProject, plateColorFor, shotListHtml, shotState, viewTransform, type QueueFilter } from '@vcvfx/domain';
+import type { ApiResult, ExternalLink, LicenceStanding, MenuCommand, OpenedFile, Settings, VcvfxApi, ViewerFrame, ViewerFrameRequest, ViewerSources } from '../shared/bridge';
+import { viewerTimeline } from '../shared/viewer';
+
+/**
+ * The viewer's stand-in frames (scripts/make-sample-frames.mjs): a synthetic
+ * LogC4 scene and ACEScg plates made from it, five frames each, raw and
+ * through the Rec.709 (approx.) view. Only the sample project shows them,
+ * labelled "sample frames".
+ */
+const SAMPLE_FRAMES = import.meta.glob<string>('./assets/sample-frames/*.jpg', { eager: true, query: '?url', import: 'default' });
+const SAMPLE_COUNT = 5;
+const sampleFrame = (layer: 'source' | 'plates', view: 'raw' | 'rec709', k: number): string | undefined => SAMPLE_FRAMES[`./assets/sample-frames/${layer}-${view}-${k}.jpg`];
 
 /**
  * The bridge for the browser preview at vc-vfx.com/preview
@@ -213,6 +224,40 @@ export function createBrowserBridge(): BrowserBridge {
     // Reported as present so the plate action reaches generateSequence and its message, not an install hint.
     detectFfmpeg: async () => ({ found: true, path: null, version: null }),
     generateSequence: async () => fail(desktopOnly('plates are written by ffmpeg on your computer.')),
+
+    // The viewer: the sample project gets stand-in frames; a real project's media is on a drive the browser cannot read.
+    viewerSources: async ({ text, shotId }): Promise<ApiResult<ViewerSources>> => {
+      const parsed = parseProject(text);
+      if (!parsed.ok) return fail(parsed.reason);
+      const project = parsed.project;
+      const state = shotState(project, shotId);
+      const timeline = viewerTimeline(project, shotId);
+      if (!state) return fail(`No shot ${shotId}`);
+      const sample = project.handoffPath === 'sample';
+      const encoding = plateColorFor(project, shotId).sourceEncoding;
+      if (!sample || !timeline) {
+        return ok({ source: { available: false, reason: sample ? 'The frame range is unknown.' : desktopOnly('frames are read from the media on the drive.'), encoding }, plates: [] });
+      }
+      const hasPlates = state.tasks.some((t) => t.kind === 'sequence_conversion');
+      return ok({
+        source: { available: true, reason: null, encoding },
+        plates: hasPlates ? [{ version: 1, format: 'exr', first: timeline.first, last: timeline.last, count: timeline.last - timeline.first + 1, encoding: 'acescg' }] : [],
+        sample: true,
+      });
+    },
+    viewerFrame: async (req: ViewerFrameRequest): Promise<ApiResult<ViewerFrame>> => {
+      const parsed = parseProject(req.text);
+      if (!parsed.ok) return fail(parsed.reason);
+      const project = parsed.project;
+      const timeline = viewerTimeline(project, req.shotId);
+      if (project.handoffPath !== 'sample' || !timeline) return fail(desktopOnly('frames are read from the media on the drive.'));
+      const frame = Math.min(timeline.last, Math.max(timeline.first, Math.round(req.frame)));
+      const k = 1 + Math.round(((frame - timeline.first) / Math.max(1, timeline.last - timeline.first)) * (SAMPLE_COUNT - 1));
+      const url = sampleFrame(req.layer, req.view, k);
+      if (!url) return fail('No sample frame');
+      const encoding = req.layer === 'plates' ? 'acescg' : plateColorFor(project, req.shotId).sourceEncoding;
+      return ok({ url, frame, viewLabel: viewTransform(encoding, req.view).label });
+    },
     cancelJob: async () => undefined,
     onProgress: () => () => undefined,
     revealPath: async () => undefined,

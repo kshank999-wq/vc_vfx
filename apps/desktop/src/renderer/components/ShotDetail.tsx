@@ -1,8 +1,16 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import {
+  COLOR_ENCODINGS,
+  ENCODINGS,
+  PLATE_COLOR_LABELS,
   PREP_TASKS,
   PREP_TASK_KINDS,
+  SHOT_PLATE_COLOR,
   TASK_STATE_LABELS,
+  parseColorEncoding,
+  plateColorFor,
+  type ColorEncodingId,
+  type ShotPlateColor,
   formatRange,
   framePattern,
   handoffShot,
@@ -37,6 +45,10 @@ export interface ShotDetailHandlers {
   onGeneratePlates(): void;
   onChangeOutputRoot(): void;
   onRevealOutput(): void;
+  /** The plate colour choice and/or the operator's reading of the source encoding (null: the handoff's). */
+  onPlateColor(change: { choice?: ShotPlateColor; encoding?: ColorEncodingId | null }): void;
+  /** Open the frame viewer on this shot. */
+  onView(): void;
 }
 
 interface Props extends ShotDetailHandlers {
@@ -221,6 +233,10 @@ export function ShotDetail(props: Props) {
           <CircleDot circled={shot.circled} />
           <h2>{name}</h2>
           <StatusPill status={status} />
+          <span className="spacer" />
+          <button type="button" onClick={props.onView} title="Open the frame viewer and contact sheet (or double-click the row)">
+            View frames
+          </button>
         </div>
         <div className="detail-sub">
           Scene {shot.scene}
@@ -318,6 +334,19 @@ export function ShotDetail(props: Props) {
           <p>{shot.supervisorNotes ?? <span className="muted">—</span>}</p>
         </div>
         <NotesField label="Shot notes" value={state.notes} disabled={!canEdit} placeholder="Prep notes for this shot" onCommit={props.onShotNotes} />
+        {state.reviewMarks.length ? (
+          <div className="review-marks">
+            <span className="label">Marked for correction</span>
+            <ul>
+              {state.reviewMarks.map((m) => (
+                <li key={m.frame}>
+                  <span className="mono">{m.frame}</span> <span className="muted">{m.viewing} · {m.by}</span>
+                  {m.note ? <span> — {m.note}</span> : null}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
       </section>
 
       <section className="panel">
@@ -347,6 +376,8 @@ export function ShotDetail(props: Props) {
           </div>
         )}
       </section>
+
+      <PlateColorPanel {...props} />
 
       <section className="panel">
         <h3>Camera &amp; colour</h3>
@@ -437,5 +468,72 @@ export function ShotDetail(props: Props) {
         </ol>
       </section>
     </aside>
+  );
+}
+
+/** Plate colour (spec §4, addendum 03): what the plates' pixels will be, said in one line. */
+function PlateColorPanel(props: Props) {
+  const { project, shotId, canEdit, busy } = props;
+  const shot = handoffShot(project, shotId);
+  const state = shotState(project, shotId);
+  if (!shot || !state) return null;
+  const decision = plateColorFor(project, shotId);
+  const parsed = parseColorEncoding(shot.color.sourceColorSpace, shot.color.gamma);
+  const task = state.tasks.find((t) => t.kind === 'sequence_conversion');
+  const locked = state.stage !== 'prep' ? `The shot is ${state.stage}; reopen it first.` : task?.state === 'approved' ? 'These plates are approved; reopen the task to change how the next version is made.' : null;
+  const disabled = !canEdit || busy || Boolean(locked);
+  const title = !canEdit ? READ_ONLY_TITLE : (locked ?? undefined);
+  const exrDefault = project.plateColorDefault;
+  const output = outputFor(project.handoff, shot);
+  const autoLabel = output.format === 'exr' ? (exrDefault === 'as_shot' ? 'As shot' : `Convert to ${ENCODINGS[exrDefault].label.replace(/ \(.*\)$/, '')}`) : 'As shot';
+  const written = state.plates.find((r) => r.version === (task?.version ?? 1));
+  return (
+    <section className="panel plate-colour">
+      <h3>Plate colour</h3>
+      <div className="pc-grid">
+        <label>
+          <span className="muted">Source encoding</span>
+          <select
+            aria-label="Source encoding"
+            value={state.sourceEncoding ?? ''}
+            disabled={disabled}
+            title={title}
+            onChange={(e) => props.onPlateColor({ encoding: (e.target.value || null) as ColorEncodingId | null })}
+          >
+            <option value="">{parsed.encoding ? `From handoff: ${ENCODINGS[parsed.encoding].label}` : `From handoff: unknown${shot.color.sourceColorSpace ? ` (“${shot.color.sourceColorSpace}”)` : ''}`}</option>
+            {COLOR_ENCODINGS.map((id) => (
+              <option key={id} value={id}>
+                {ENCODINGS[id].label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <span className="muted">Plates</span>
+          <select aria-label="Plate colour" value={state.plateColor} disabled={disabled} title={title} onChange={(e) => props.onPlateColor({ choice: e.target.value as ShotPlateColor })}>
+            {SHOT_PLATE_COLOR.map((c) => (
+              <option key={c} value={c}>
+                {c === 'auto' ? `Project default (${autoLabel})` : PLATE_COLOR_LABELS[c]}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <p className={`pc-summary${decision.blocked ? ' blocked' : ''}`} role="status">
+        {decision.blocked ?? decision.summary}
+      </p>
+      {decision.warnings.map((w) => (
+        <p key={w} className="pc-warning small">
+          {w}
+        </p>
+      ))}
+      {written ? (
+        <p className="muted small">
+          {versionTag(written.version)} written {written.writtenAt.replace('T', ' ').slice(0, 16)} by {written.by}
+          {written.color.summary === decision.summary ? ', as above.' : `: ${written.color.summary} The next version follows the choice above.`}
+        </p>
+      ) : null}
+      <p className="muted small">The transform and its LUT are written to 09_PROJECT_DATA with the plates. Display looks are never applied to plates.</p>
+    </section>
   );
 }

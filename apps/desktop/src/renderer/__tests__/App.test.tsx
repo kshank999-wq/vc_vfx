@@ -211,3 +211,88 @@ describe('a VCDIT handoff', () => {
     expect(screen.getByText(/handoff ID 14_B_03/)).toBeTruthy();
   });
 });
+
+describe('plate colour', () => {
+  it('shows the decision in one line and records a change, logged', async () => {
+    await openSample();
+    fireEvent.click(screen.getByText('020_010'));
+    expect(screen.getByText('Writes ACEScg linear EXR half from Sony S-Log3 / S-Gamut3.Cine; no look applied.')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Plate colour'), { target: { value: 'as_shot' } });
+    expect(screen.getByText('Writes EXR half as shot (Sony S-Log3 / S-Gamut3.Cine kept); no look applied.')).toBeTruthy();
+    expect(screen.getAllByText('plates.colour').length).toBeGreaterThan(0);
+    fireEvent.change(screen.getByLabelText('Source encoding'), { target: { value: 'red_log3g10_rwg' } });
+    expect(document.querySelector('.pc-summary')?.textContent).toBe('Writes EXR half as shot (RED Log3G10 / REDWideGamutRGB kept); no look applied.');
+  });
+
+  it('keeps DPX plates in the camera encoding and says why a conversion is refused', async () => {
+    await openSample();
+    expect(screen.getByText('Writes DPX 10-bit as shot (ARRI LogC4 / AWG4 kept); no look applied.')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Plate colour'), { target: { value: 'acescg' } });
+    expect(screen.getByText(/needs a float format/)).toBeTruthy();
+  });
+});
+
+describe('the frame viewer', () => {
+  const frames = (over = {}) =>
+    stubBridge({
+      viewerSources: async () => ({ ok: true, data: { source: { available: true, reason: null, encoding: 'arri_logc4_awg4' }, plates: [{ version: 1, format: 'dpx', first: 1009, last: 1128, count: 120, encoding: 'arri_logc4_awg4' }] } }),
+      viewerFrame: async (req) => ({ ok: true, data: { url: `vcvfx-frame://cache/${req.layer}-${req.view}-${req.frame}-${req.maxWidth}.jpg`, frame: req.frame, viewLabel: req.view === 'raw' ? 'Raw values (as encoded)' : 'ARRI LogC4 → Rec.709 (approx.)' } }),
+      ...over,
+    });
+
+  it('opens on double-click at the editorial in-point, steps with the keyboard and closes with Esc', async () => {
+    const table = await openSample(frames());
+    fireEvent.doubleClick(shotRows(table)[0]!);
+    await act(async () => undefined);
+    const viewer = screen.getByRole('region', { name: 'Viewer — 010_020' });
+    expect(within(viewer).getByLabelText('Frame').textContent).toBe('1009');
+    expect((within(viewer).getByAltText('Source frame 1009') as HTMLImageElement).src).toBe('vcvfx-frame://cache/source-rec709-1009-1280.jpg');
+    expect(within(viewer).getByText('TC 01:00:00:00')).toBeTruthy();
+    fireEvent.keyDown(window, { key: 'ArrowRight' });
+    fireEvent.keyDown(window, { key: 'ArrowRight', shiftKey: true });
+    expect(within(viewer).getByLabelText('Frame').textContent).toBe('1020');
+    fireEvent.keyDown(window, { key: 'ArrowLeft' });
+    expect(within(viewer).getByLabelText('Frame').textContent).toBe('1019');
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByRole('region', { name: 'Viewer — 010_020' })).toBeNull();
+  });
+
+  it('shows a contact sheet of first, last and twelve between; a tile jumps there', async () => {
+    const table = await openSample(frames());
+    fireEvent.doubleClick(shotRows(table)[0]!);
+    await act(async () => undefined);
+    const sheet = screen.getByRole('region', { name: 'Contact sheet' });
+    const tiles = within(sheet).getAllByRole('button', { name: /^Frame / });
+    expect(tiles).toHaveLength(14);
+    expect(tiles[0]!.getAttribute('aria-label')).toBe('Frame 1009');
+    expect(tiles[13]!.getAttribute('aria-label')).toBe('Frame 1128');
+    fireEvent.click(tiles[5]!);
+    expect(screen.getByLabelText('Frame').textContent).toBe(tiles[5]!.getAttribute('aria-label')!.slice(6));
+  });
+
+  it('wipes between source and plates, and marks a frame for correction in the shot, logged', async () => {
+    const table = await openSample(frames());
+    fireEvent.doubleClick(shotRows(table)[0]!);
+    await act(async () => undefined);
+    fireEvent.click(screen.getByRole('button', { name: 'Wipe' }));
+    await act(async () => undefined);
+    expect(screen.getByAltText('Plates v001 frame 1009')).toBeTruthy();
+    expect(screen.getByText('B · Plates v001')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Correction note'), { target: { value: 'Hair edge chatter' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Mark for correction' }));
+    expect(screen.getByRole('button', { name: '● Marked for correction' })).toBeTruthy();
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.getByText('Marked for correction')).toBeTruthy();
+    expect(document.querySelector('.review-marks')?.textContent).toBe('Marked for correction1009 source · Prep Artist — Hair edge chatter');
+    expect(screen.getAllByText('review.marked').length).toBeGreaterThan(0);
+  });
+
+  it('switches the view for viewing only, and says when there is nothing to show', async () => {
+    const table = await openSample(frames({ viewerSources: async () => ({ ok: true, data: { source: { available: false, reason: 'The sample project has no media on disk.', encoding: null }, plates: [] } }) }));
+    fireEvent.doubleClick(shotRows(table)[0]!);
+    await act(async () => undefined);
+    expect(screen.getByText('The sample project has no media on disk.')).toBeTruthy();
+    expect(screen.getByText('Nothing to show for this shot yet.')).toBeTruthy();
+    expect((screen.getByRole('button', { name: 'Wipe' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+});

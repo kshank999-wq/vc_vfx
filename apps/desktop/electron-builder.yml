@@ -18,6 +18,23 @@ files:
   - out/**
   - package.json
 
+# The bundled ffmpeg and ffprobe (addendum 03), fetched and SHA-256-verified
+# by scripts/fetch-ffmpeg.mjs into resources/ffmpeg/<platform>-<arch>. They
+# go beside app.asar in Resources/ffmpeg, never inside it: an executable
+# cannot be spawned from an asar archive. electron-builder expands the macros
+# per arch, so the arm64 and x64 macOS builds each get their own binary.
+# main/ffmpeg-tools.ts finds them at process.resourcesPath/ffmpeg.
+extraResources:
+  - from: resources/ffmpeg/${platform}-${arch}
+    to: ffmpeg
+    filter:
+      - ffmpeg
+      - ffprobe
+      - ffmpeg.exe
+      - ffprobe.exe
+      - LICENSE.txt
+      - README.txt
+
 # Installers are uploaded to the private release bucket by CI and handed out as
 # short-lived signed URLs, so electron-builder itself publishes nothing.
 publish: null

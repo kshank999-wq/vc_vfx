@@ -137,6 +137,9 @@ project** (Save As), and prints the shot list through the browser's print
 dialog (Export PDF is the same dialog). The licence standing is `active`, so the
 approval flow can be tried. Verifying sources, writing plates, packaging,
 choosing an output root and signing in answer "Available in the desktop app".
+The frame viewer works on the sample project with bundled stand-in frames
+(`src/renderer/assets/sample-frames`, labelled "sample frames"); on any other
+project it says frames are read from the drive by the desktop app.
 
 Access is decided in `src/middleware.ts` (`src/lib/preview-gate.ts`) from the
 signed-in user's `profiles.is_admin`; anyone else is redirected to
@@ -151,6 +154,12 @@ and gating them costs a Supabase round trip per file and turns a file fetched
 after the session expires into HTML. They are cached `immutable`.
 
 ## 6. Publishing a release
+
+The installers include ffmpeg and ffprobe. `package:mac` / `package:win` run
+`apps/desktop/scripts/fetch-ffmpeg.mjs` first, which downloads the pinned
+static builds and refuses any whose SHA-256 differs (docs/spec/addendum-03).
+To update ffmpeg, change the release tag and pins there, and run the
+colour-pipeline tests against the new binary.
 
 1. Sign in as an administrator and open `https://vc-vfx.com/admin/releases`.
 2. Choose the platform, version, channel (start with *internal* or *beta*),

@@ -150,12 +150,18 @@ export function QueueTable({
   selected,
   marked = [],
   onSelect,
+  onOpen,
+  compact = false,
 }: {
   project: Project;
   rows: QueueRow[];
   selected: string | null;
   marked?: string[];
   onSelect: (shotId: string, gesture: SelectGesture) => void;
+  /** Double-click: open the shot in the frame viewer. */
+  onOpen?: (shotId: string) => void;
+  /** Beside the viewer: shot, frames and status only. */
+  compact?: boolean;
 }) {
   const selectedRef = useRef<HTMLTableRowElement | null>(null);
   useEffect(() => {
@@ -166,7 +172,7 @@ export function QueueTable({
     return <div className="queue-empty">No shots match these filters.</div>;
   }
   return (
-    <table className="queue" aria-label="Shot queue">
+    <table className={`queue${compact ? ' compact' : ''}`} aria-label="Shot queue">
       <thead>
         <tr>
           <th className="col-shot">Shot</th>
@@ -195,6 +201,8 @@ export function QueueTable({
               if (e.shiftKey) e.preventDefault();
             }}
             onClick={(e) => onSelect(shot.shotId, e.shiftKey ? 'range' : e.metaKey || e.ctrlKey ? 'toggle' : 'single')}
+            onDoubleClick={() => onOpen?.(shot.shotId)}
+            title={onOpen && !compact ? 'Double-click to view frames' : undefined}
           >
             <td className="col-shot">
               <CircleDot circled={shot.circled} />

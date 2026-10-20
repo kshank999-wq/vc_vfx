@@ -3,6 +3,7 @@ import { stat } from 'node:fs/promises';
 import { TimecodeSchema, handoffShot, shotState, shotTiming, type ProbedMediaInput, type Project } from '@vcvfx/domain';
 import type { ProbeResult } from '../shared/bridge';
 import { isSampleHandoff, resolveFromHandoff } from './paths';
+import { cameraRawProblem, detectImageSequence } from './image-sequence';
 
 /**
  * Reading a source clip with ffprobe: frame count, start timecode, frame
@@ -18,16 +19,7 @@ import { isSampleHandoff, resolveFromHandoff } from './paths';
 export const FFPROBE_HELP =
   'ffprobe (part of ffmpeg) was not found, so clip lengths, timecode and resolution could not be read and frame ranges stay unknown (“—”). Install ffmpeg — macOS: `brew install ffmpeg`; Windows: `winget install Gyan.FFmpeg` — or set its path in Settings; ffprobe is looked for beside it.';
 
-/** ffprobe beside the configured ffmpeg: "/opt/ff/ffmpeg" → "/opt/ff/ffprobe", "C:\\ff\\ffmpeg.exe" → "C:\\ff\\ffprobe.exe". */
-export function ffprobePathFor(ffmpeg: string): string {
-  const configured = ffmpeg.trim();
-  if (!configured) return 'ffprobe';
-  const cut = Math.max(configured.lastIndexOf('/'), configured.lastIndexOf('\\'));
-  const dir = configured.slice(0, cut + 1);
-  const name = configured.slice(cut + 1);
-  const exe = /\.exe$/i.test(name) ? name.slice(name.length - 4) : '';
-  return `${dir}ffprobe${exe}`;
-}
+export { ffprobePathFor } from './ffmpeg-tools';
 
 /** "24000/1001" → 23.976; null for 0/0 or nonsense. */
 export function parseRational(value: unknown): number | null {
@@ -53,6 +45,11 @@ export function normaliseTimecode(value: unknown): string | undefined {
 interface FfprobeStream {
   codec_type?: string;
   codec_name?: string;
+  pix_fmt?: string;
+  color_space?: string;
+  color_range?: string;
+  color_transfer?: string;
+  color_primaries?: string;
   width?: number;
   height?: number;
   r_frame_rate?: string;
@@ -84,6 +81,14 @@ export function parseFfprobe(json: unknown, file: string): ProbedMediaInput | nu
   const tag = (tags: Record<string, string> | undefined) => (tags ? (tags['timecode'] ?? tags['TIMECODE']) : undefined);
   const timecodeIn =
     normaliseTimecode(tag(video.tags)) ?? normaliseTimecode(streams.map((s) => tag(s.tags)).find(Boolean)) ?? normaliseTimecode(tag(doc.format?.tags));
+  const tagOf = (v: string | undefined) => (v && v !== 'unknown' && v !== 'unspecified' && v !== 'reserved' ? v : undefined);
+  const colour = {
+    ...(video.pix_fmt ? { pixelFormat: video.pix_fmt } : {}),
+    ...(tagOf(video.color_space) ? { colorSpace: tagOf(video.color_space)! } : {}),
+    ...(tagOf(video.color_range) ? { colorRange: tagOf(video.color_range)! } : {}),
+    ...(tagOf(video.color_transfer) ? { colorTransfer: tagOf(video.color_transfer)! } : {}),
+    ...(tagOf(video.color_primaries) ? { colorPrimaries: tagOf(video.color_primaries)! } : {}),
+  };
   const width = asNumber(video.width);
   const height = asNumber(video.height);
   return {
@@ -93,6 +98,7 @@ export function parseFfprobe(json: unknown, file: string): ProbedMediaInput | nu
     ...(frameRate ? { frameRate } : {}),
     ...(width && height && width > 0 && height > 0 ? { resolution: { width: Math.round(width), height: Math.round(height) } } : {}),
     ...(video.codec_name ? { codec: video.codec_name } : {}),
+    ...colour,
   };
 }
 
@@ -122,17 +128,17 @@ function run(command: string, args: string[], signal?: AbortSignal): Promise<{ c
   });
 }
 
-/** ffprobe's path if it runs, else null. */
-export async function detectFfprobe(ffmpegSetting: string): Promise<string | null> {
-  const command = ffprobePathFor(ffmpegSetting);
-  const r = await run(command, ['-hide_banner', '-version']);
-  return r && r.code === 0 ? command : null;
-}
-
 export type ProbeFileResult = { ok: true; media: ProbedMediaInput } | { ok: false; error: string };
 
-/** Probe one file. `relative` is the handoff-relative path recorded with the result. */
+/**
+ * Probe one file. `relative` is the handoff-relative path recorded with the
+ * result. A frame of an image sequence is read as the sequence: its pixels
+ * from the first frame, its length from the run of numbered files.
+ */
 export async function probeFile(ffprobe: string, absolute: string, relative: string, signal?: AbortSignal): Promise<ProbeFileResult> {
+  const raw = cameraRawProblem(absolute);
+  if (raw) return { ok: false, error: raw };
+  const sequence = await detectImageSequence(absolute);
   const r = await run(ffprobe, ['-v', 'error', '-print_format', 'json', '-show_format', '-show_streams', absolute], signal);
   if (!r) return { ok: false, error: 'ffprobe could not be started' };
   if (r.code !== 0) return { ok: false, error: r.err.trim().split('\n').pop() || `ffprobe exited with ${r.code}` };
@@ -144,6 +150,10 @@ export async function probeFile(ffprobe: string, absolute: string, relative: str
   }
   const media = parseFfprobe(json, relative);
   if (!media) return { ok: false, error: 'No picture stream in this file' };
+  if (sequence) {
+    const { frameRate: _ignored, ...rest } = media;
+    return { ok: true, media: { ...rest, frameCount: sequence.count } };
+  }
   return { ok: true, media };
 }
 

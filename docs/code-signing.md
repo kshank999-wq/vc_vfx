@@ -170,6 +170,8 @@ added there too.
 
 ```bash
 codesign --verify --deep --strict --verbose=2 "VC VFX.app"
+# The bundled ffmpeg and ffprobe must be signed with the hardened runtime too.
+codesign --verify --strict --verbose=2 "VC VFX.app/Contents/Resources/ffmpeg/ffmpeg" "VC VFX.app/Contents/Resources/ffmpeg/ffprobe"
 spctl --assess --type execute --verbose "VC VFX.app"
 xcrun stapler validate "VC VFX.dmg"
 ```
@@ -201,5 +203,8 @@ it.
       password obtained and their secrets set
 - [ ] A tagged build packaged on both platforms
 - [ ] `spctl` and `Get-AuthenticodeSignature` both clean
+- [ ] The bundled `Resources/ffmpeg/ffmpeg` and `ffprobe` signed and runnable on a
+      fresh Mac (notarisation rejects unsigned nested executables), and
+      `resources\ffmpeg\ffmpeg.exe` runs on a fresh Windows machine
 - [ ] Installers uploaded, checked and activated at `/admin/releases`
 - [ ] One end-to-end purchase on live Stripe keys, download, install, activate

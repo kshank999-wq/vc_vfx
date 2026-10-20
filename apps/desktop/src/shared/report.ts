@@ -1,4 +1,5 @@
 import {
+  plateColorFor,
   PREP_TASKS,
   SHOT_STATUS_LABELS,
   TASK_STATE_LABELS,
@@ -34,6 +35,10 @@ export function prepReportHtml(p: Project, shotId: string, input: { generatedAt:
   const row = (label: string, value: unknown) => `<tr><th>${escapeHtml(label)}</th><td>${e(value)}</td></tr>`;
   const cam = shot.camera;
   const color = shot.color;
+  // What was applied to this version's plates when they were written; else what will be.
+  const plateVersion = state.tasks.find((t) => t.kind === 'sequence_conversion')?.version ?? 1;
+  const written = state.plates.find((r) => r.version === plateVersion);
+  const plateColour = written ? `${written.color.summary}${written.color.transform ? ` ${written.color.transform}` : ''}` : `${plateColorFor(p, shotId).summary} (planned; no plates written yet)`;
   const tasks = state.tasks
     .map(
       (t) => `<tr><td>${escapeHtml(PREP_TASKS[t.kind].label)}</td><td>${escapeHtml(TASK_STATE_LABELS[t.state])}</td><td>${versionTag(t.version)}</td><td>${
@@ -97,7 +102,8 @@ ${row('Delivered in–out', range(plan?.deliveredIn, plan?.deliveredOut))}
 ${row('Editorial in–out', range(plan?.editorialIn, plan?.editorialOut))}
 ${row('Handles / frame count', `${plan?.handles ?? shot.handles} / ${plan?.frameCount ?? 'unknown'}`)}
 ${row('File pattern', framePattern(name, 'plate', state.tasks.find((t) => t.kind === 'sequence_conversion')?.version ?? 1, output.format))}
-${row('Colour baked into plates', 'No')}
+${row('Plate colour', plateColour)}
+${row('Display look baked into plates', 'No')}
 </table>
 <h2>Supervisor notes</h2><p>${e(shot.supervisorNotes)}</p>
 ${state.notes ? `<h2>Prep notes</h2><p>${e(state.notes)}</p>` : ''}
