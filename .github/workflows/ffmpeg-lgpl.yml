@@ -1,0 +1,88 @@
+name: Build LGPL ffmpeg
+
+# Builds the LGPL ffmpeg/ffprobe that ship inside the installer, for every
+# platform VC VFX ships on, and publishes them as a GitHub release of this
+# repository (addendum 03 §1, addendum 05). Run by hand when the pinned
+# versions in apps/desktop/scripts/build-ffmpeg-lgpl.sh change; then copy the
+# release's SHA256SUMS into apps/desktop/scripts/fetch-ffmpeg.mjs.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to publish (e.g. ffmpeg-lgpl-n7.1-1)
+        required: true
+        default: ffmpeg-lgpl-n7.1-1
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: darwin-arm64, os: macos-14 }
+          - { target: darwin-x64, os: macos-13 }
+          - { target: win32-x64, os: ubuntu-24.04 }
+          - { target: linux-x64, os: ubuntu-24.04 }
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build tools (macOS)
+        if: runner.os == 'macOS'
+        run: brew install nasm autoconf automake libtool pkg-config
+
+      - name: Build tools (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq nasm autoconf automake libtool pkg-config mingw-w64
+
+      - name: Build
+        run: apps/desktop/scripts/build-ffmpeg-lgpl.sh ${{ matrix.target }} out/${{ matrix.target }}
+
+      - name: Package
+        shell: bash
+        run: |
+          cd out/${{ matrix.target }}
+          exe=""; [ "${{ matrix.target }}" = win32-x64 ] && exe=".exe"
+          mkdir -p ../../dist
+          gzip -9 -c "ffmpeg$exe" > "../../dist/ffmpeg-${{ matrix.target }}.gz"
+          gzip -9 -c "ffprobe$exe" > "../../dist/ffprobe-${{ matrix.target }}.gz"
+          cp LICENSE "../../dist/${{ matrix.target }}.LICENSE"
+          cp README "../../dist/${{ matrix.target }}.README"
+          # Hashes of the files as installed (decompressed), which is what
+          # fetch-ffmpeg.mjs pins.
+          for f in "ffmpeg$exe" "ffprobe$exe" LICENSE README; do
+            echo "$(shasum -a 256 "$f" | cut -d' ' -f1)  ${{ matrix.target }}/$f"
+          done > "../../dist/${{ matrix.target }}.sha256"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-${{ matrix.target }}
+          path: dist/*
+
+  publish:
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd dist
+          cat *.sha256 > SHA256SUMS
+          cat SHA256SUMS
+          gh release create "${{ inputs.tag }}" --repo "${{ github.repository }}" \
+            --title "LGPL ffmpeg for VC VFX (${{ inputs.tag }})" \
+            --notes "FFmpeg n7.1 built LGPL-only (no --enable-gpl / --enable-nonfree) with zimg and zlib, for the VC VFX installer. Corresponding source: https://github.com/FFmpeg/FFmpeg/tree/b08d7969c550a804a59511c7b83f2dd8cc0499b8, https://github.com/sekrit-twc/zimg/tree/e5b0de6bebbcbc66732ed5afaafef6b2c7dfef87, https://github.com/madler/zlib/tree/51b7f2abdade71cd9bb0e7a373ef2610ec6f9daf. Build script: apps/desktop/scripts/build-ffmpeg-lgpl.sh. SHA256SUMS lists the decompressed files." \
+            ./*

@@ -125,6 +125,12 @@ export default async function DownloadPage({ searchParams }: { searchParams: { p
             Installers are delivered as short-lived signed links from your account, with a SHA-256 checksum for each
             build.
           </p>
+          <p className="lede small" style={{ marginTop: 12 }}>
+            VC VFX includes <a href="https://ffmpeg.org">FFmpeg</a>, licensed under the{' '}
+            <a href="https://www.gnu.org/licenses/old-licenses/lgpl-2.1.html">GNU LGPL v2.1</a>, run as a separate
+            program you can replace in Settings. Its source and our build script:{' '}
+            <a href="https://github.com/kshank999-wq/vc_vfx/releases/tag/ffmpeg-lgpl-n7.1-1">FFmpeg for VC VFX</a>.
+          </p>
         </section>
       </div>
     </div>
