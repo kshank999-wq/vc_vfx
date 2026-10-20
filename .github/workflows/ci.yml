@@ -69,6 +69,11 @@ jobs:
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
 
+      # The bundled LGPL ffmpeg for this OS, so the colour-pipeline tests run
+      # against the very binaries the installer ships.
+      - name: Fetch bundled ffmpeg
+        run: node apps/desktop/scripts/fetch-ffmpeg.mjs
+
       - name: Test domain and desktop project store
         run: |
           pnpm --filter @vcvfx/domain test

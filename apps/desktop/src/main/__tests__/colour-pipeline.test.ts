@@ -21,6 +21,12 @@ const binaries = [
   ...(spawnSync('ffmpeg', ['-version']).status === 0 ? [['PATH ffmpeg', 'ffmpeg'] as const] : []),
   ...(existsSync(bundled) ? [['bundled ffmpeg', bundled] as const] : []),
 ];
+// With no ffmpeg anywhere, describe.each below makes no suites at all, which
+// vitest reports as a failure; say plainly that this machine cannot run them.
+describe.skipIf(binaries.length > 0)('colour pipeline', () => {
+  it.skip('needs ffmpeg on PATH or fetched with scripts/fetch-ffmpeg.mjs', () => {});
+});
+
 /** ffprobe from the same place as the ffmpeg. */
 const probeFor = (bin: string) => (bin === 'ffmpeg' ? 'ffprobe' : bin.replace(/ffmpeg(\.exe)?$/, (_m, e: string | undefined) => `ffprobe${e ?? ''}`));
 const W = 64;

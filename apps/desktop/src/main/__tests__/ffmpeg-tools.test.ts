@@ -9,7 +9,8 @@ const loc = (over: Partial<ToolLocation> = {}): ToolLocation => ({ resourcesPath
 
 describe('bundledPaths', () => {
   it('looks in Resources/ffmpeg when packaged and resources/ffmpeg/<platform>-<arch> in development', () => {
-    expect(bundledPaths(loc())).toEqual({ ffmpeg: '/Applications/VC VFX.app/Contents/Resources/ffmpeg/ffmpeg', ffprobe: '/Applications/VC VFX.app/Contents/Resources/ffmpeg/ffprobe' });
+    const resources = '/Applications/VC VFX.app/Contents/Resources';
+    expect(bundledPaths(loc())).toEqual({ ffmpeg: join(resources, 'ffmpeg', 'ffmpeg'), ffprobe: join(resources, 'ffmpeg', 'ffprobe') });
     expect(bundledPaths(loc({ packaged: false, platform: 'win32', arch: 'x64' })).ffmpeg).toBe(join('/repo/apps/desktop', 'resources', 'ffmpeg', 'win32-x64', 'ffmpeg.exe'));
   });
 });
