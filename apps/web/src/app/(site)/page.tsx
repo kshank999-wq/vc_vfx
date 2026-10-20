@@ -81,7 +81,11 @@ const ROADMAP: ReadonlyArray<{ title: string; desc: string; v1?: boolean }> = [
     desc: 'DPX / TIFF / EXR, 1001 numbering, handles, checksums, manifests.',
     v1: true,
   },
-  { title: 'Paint-to-roto', desc: 'Paint-guided mattes with propagation, component parts and approval review.' },
+  {
+    title: 'Paint-to-roto',
+    desc: 'Paint the subject on one frame; the matte follows it through the shot, with parts, confidence review and local corrections.',
+    v1: true,
+  },
   { title: 'Green / blue screen keying', desc: 'Hybrid key + roto, despill and background-reference matching.' },
   { title: 'Clean-plate generation', desc: 'Temporal reconstruction for object removal prep.' },
   { title: '2D / planar tracking', desc: 'Corner-pin tracks with replacement preview and export.' },
@@ -103,11 +107,11 @@ const FAQ = [
   },
   {
     q: 'Does V1 do roto, keying, clean plates or tracking?',
-    a: 'Not yet. Those are on the roadmap. In V1 they can already be requested in the handoff and are tracked in the queue and on the printed shot list, so everyone can see what each shot still needs — but VC VFX does not perform them yet.',
+    a: 'Roto, yes: paint the subject on a key frame and VC VFX propagates the matte through the shot, flags the frames it is least sure of, and re-propagates your corrections locally. It runs on your own machine. Keying, clean plates and tracking are on the roadmap; they can already be requested in the handoff and are tracked in the queue and on the printed shot list, so everyone can see what each shot still needs.',
   },
   {
     q: 'Which plate formats are supported?',
-    a: 'DPX, TIFF and EXR image sequences, with a configurable start frame (1001 by default) and optional head and tail handles. Colour settings are explicit and display looks are never baked into plates.',
+    a: 'DPX, TIFF and EXR image sequences, with a configurable start frame (1001 by default) and optional head and tail handles. Sources can be ProRes, DNxHR, H.264/HEVC or DPX/EXR/TIFF sequences; camera raw is transcoded first. EXR plates can be converted from camera log to ACEScg using the camera makers\' published maths, the transform is recorded with each plate, and display looks are never baked in.',
   },
   {
     q: 'Is my footage uploaded anywhere?',
