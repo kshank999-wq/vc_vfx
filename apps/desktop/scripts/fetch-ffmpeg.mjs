@@ -36,14 +36,34 @@ export const LGPL_RELEASE = 'ffmpeg-lgpl-n7.1-1';
 const LGPL_BASE = `https://github.com/kshank999-wq/vc_vfx/releases/download/${LGPL_RELEASE}`;
 
 /**
- * SHA-256 of each LGPL file as installed, from the release's SHA256SUMS.
- * null until the workflow has run and the sums are copied here.
+ * SHA-256 of each LGPL file as installed, from the release's SHA256SUMS
+ * (workflow run 39491427112).
  */
 export const LGPL_PINNED = {
-  'darwin-arm64': null,
-  'darwin-x64': null,
-  'win32-x64': null,
-  'linux-x64': null,
+  'darwin-arm64': {
+    ffmpeg: 'bacb09782d11ea6b2bf29238ffa30fcd447193acbe7507f6a42d2efbce15e040',
+    ffprobe: '2b16df88b380003abff18b4f8c7a80d24012ffd26fbb676d6a473f7cdf9fab25',
+    LICENSE: 'b634ab5640e258563c536e658cad87080553df6f34f62269a21d554844e58bfe',
+    README: '47ff3592a944ce31c15e3bf5aafef975671b5703af8ec9b31e8ce99b6062ca51',
+  },
+  'darwin-x64': {
+    ffmpeg: '29f035640bb3ba694eb39fd36a7194a58a115d7ef9e7d8c7bf25f5bf2bec564e',
+    ffprobe: '8e5b5e9500a36a406e34a20455543b14c5fd13c85b61e07a444d207b0ba8bf88',
+    LICENSE: 'b634ab5640e258563c536e658cad87080553df6f34f62269a21d554844e58bfe',
+    README: '0deaecd7f3fe70c333f47d92af921b0bd40fde7f4d28bc1d1a542a0ef67d491d',
+  },
+  'win32-x64': {
+    ffmpeg: 'b6b1f59760dc3ba6e4577f9579621bfca7aab1762d9b428412ee5d9441b455cc',
+    ffprobe: '94470898214101224e2ddddc578c99b8bc8c5c78c969e1cdc2bc481d9b91722d',
+    LICENSE: 'b634ab5640e258563c536e658cad87080553df6f34f62269a21d554844e58bfe',
+    README: '6ca74eee9d7c26fee6e9087f8cdbb1ebbee7017d807128b345a0ab572b3bf695',
+  },
+  'linux-x64': {
+    ffmpeg: '3686719d071d511037b54f54e9870daa3753c2a9c3d838c294c6a8ec220ac6c4',
+    ffprobe: '8ffd766a352c71ac113906de0f2b651d857311520991ff904bbd7870ed407f04',
+    LICENSE: 'b634ab5640e258563c536e658cad87080553df6f34f62269a21d554844e58bfe',
+    README: 'd0c3c89bed725abea08b20b91ad211876d7ab073f84a1e0de1dfd1a419071c8f',
+  },
 };
 
 /** Development/CI only: GPL static build, never packaged. */

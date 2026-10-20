@@ -30,7 +30,13 @@ DNxHR, H.264 and HEVC is native and LGPL.
 Verified here: linux-x64 built and passed every real-ffmpeg plate and viewer
 test (`colour-pipeline.test.ts`, including LogC3 grey → ACEScg 0.18);
 win32-x64 cross-built with mingw-w64 and imports only Windows system DLLs.
-macOS is built on GitHub's macOS runners and has not been run here.
+macOS builds on GitHub's runners (macos-14 for arm64, macos-15-intel for
+x64) and passes the script's own LGPL/encoder/filter checks there; both
+binaries link only Apple system libraries (CoreFoundation, CoreMedia,
+CoreVideo, libSystem, libc++). Published as release `ffmpeg-lgpl-n7.1-1`
+(workflow run 39491427112) and pinned; the colour-pipeline tests pass on the
+published linux-x64 build. Not yet run on a real Mac or Windows machine, nor
+signed/notarised inside the app.
 
 ## How it reaches the installer
 
@@ -41,8 +47,8 @@ macOS is built on GitHub's macOS runners and has not been run here.
 2. The sums are copied into `LGPL_PINNED` in `scripts/fetch-ffmpeg.mjs`.
    Until they are, `package:mac` and `package:win` stop with an instruction
    rather than ship anything else.
-3. linux-x64 (development and CI only, never shipped) keeps the GPL
-   `ffmpeg-static` build until its LGPL pin is filled in.
+3. linux-x64 (development and CI only, never shipped) uses the same LGPL
+   release.
 
 ## Obligations, and where each is met
 
