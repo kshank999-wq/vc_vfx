@@ -56,6 +56,11 @@ export default async function AdminOverviewPage() {
         <p className="lede" style={{ marginTop: 32 }}>
           <Link href="/admin/releases">Manage release builds →</Link>
         </p>
+        <p className="lede">
+          {/* A static page outside the app router, so a plain link: a full navigation. */}
+          <a href="/preview">Preview the app →</a>
+          <span className="field-note"> The desktop interface in this browser, built from this deployment, with the sample project open.</span>
+        </p>
       </div>
     </>
   );

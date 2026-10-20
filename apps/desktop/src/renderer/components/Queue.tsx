@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   PREP_TASKS,
   PREP_TASK_KINDS,
@@ -93,16 +93,69 @@ export function QueueFilters({ project, filter, onChange }: { project: Project; 
   );
 }
 
+/** How a row was clicked: plainly, with Ctrl/Cmd (add or remove one), or with Shift (a range). */
+export type SelectGesture = 'single' | 'toggle' | 'range';
+
+/** Shown above the queue while several shots are picked: one task added to all of them. */
+export function BulkBar({
+  project,
+  shotIds,
+  canEdit,
+  busy,
+  onAddTask,
+  onClear,
+}: {
+  project: Project;
+  shotIds: string[];
+  canEdit: boolean;
+  busy: boolean;
+  onAddTask: (kind: PrepTaskKind) => void;
+  onClear: () => void;
+}) {
+  const [kind, setKind] = useState<PrepTaskKind | ''>('');
+  const missing = (k: PrepTaskKind) => shotIds.filter((id) => !project.shots.find((s) => s.shotId === id)?.tasks.some((t) => t.kind === k)).length;
+  return (
+    <div className="bulk-bar" role="toolbar" aria-label="Selected shots">
+      <strong>{shotIds.length} shots selected</strong>
+      <select aria-label="Task for selected shots" value={kind} disabled={!canEdit} onChange={(e) => setKind(e.target.value as PrepTaskKind | '')}>
+        <option value="">Add a task to all…</option>
+        {PREP_TASK_KINDS.map((k) => (
+          <option key={k} value={k} disabled={missing(k) === 0}>
+            {PREP_TASKS[k].label}
+            {missing(k) < shotIds.length ? ` (${missing(k)} need it)` : ''}
+          </option>
+        ))}
+      </select>
+      <button
+        type="button"
+        disabled={!kind || !canEdit || busy}
+        onClick={() => {
+          if (kind) onAddTask(kind);
+          setKind('');
+        }}
+      >
+        Add to {shotIds.length} shots
+      </button>
+      <button type="button" className="link" onClick={onClear}>
+        Clear selection
+      </button>
+      <span className="muted small">Shift-click a range · Ctrl/⌘-click to add or remove</span>
+    </div>
+  );
+}
+
 export function QueueTable({
   project,
   rows,
   selected,
+  marked = [],
   onSelect,
 }: {
   project: Project;
   rows: QueueRow[];
   selected: string | null;
-  onSelect: (shotId: string) => void;
+  marked?: string[];
+  onSelect: (shotId: string, gesture: SelectGesture) => void;
 }) {
   const selectedRef = useRef<HTMLTableRowElement | null>(null);
   useEffect(() => {
@@ -127,25 +180,43 @@ export function QueueTable({
         </tr>
       </thead>
       <tbody>
-        {rows.map(({ shot, state, status }) => (
+        {rows.map(({ shot, state, status }) => {
+          const isSelected = shot.shotId === selected;
+          const isMarked = marked.includes(shot.shotId);
+          return (
           <tr
             key={shot.shotId}
-            ref={shot.shotId === selected ? selectedRef : undefined}
-            className={shot.shotId === selected ? 'selected' : undefined}
-            aria-selected={shot.shotId === selected}
+            ref={isSelected ? selectedRef : undefined}
+            className={[isSelected ? 'selected' : '', isMarked ? 'marked' : ''].filter(Boolean).join(' ') || undefined}
+            aria-selected={isSelected || isMarked}
             data-shot={shot.shotId}
-            onClick={() => onSelect(shot.shotId)}
+            onMouseDown={(e) => {
+              // Keep Shift-click from selecting the table's text.
+              if (e.shiftKey) e.preventDefault();
+            }}
+            onClick={(e) => onSelect(shot.shotId, e.shiftKey ? 'range' : e.metaKey || e.ctrlKey ? 'toggle' : 'single')}
           >
             <td className="col-shot">
               <CircleDot circled={shot.circled} />
-              <span className="shot-id">{shot.shotId}</span>
+              <span className="shot-id" title={state.vfxShotId ? `Handoff ID ${shot.shotId}` : shot.clip ? `Clip ${shot.clip}` : undefined}>
+                {state.vfxShotId ?? shot.shotId}
+              </span>
             </td>
             <td>
               {shot.scene}
               {shot.setup ? <span className="muted"> / Setup {shot.setup}</span> : null}
             </td>
             <td className="num">{shot.take ?? '—'}</td>
-            <td className="num">{deliveredRange(project, shot)}</td>
+            {(() => {
+              const frames = deliveredRange(project, shot);
+              return frames === '—' ? (
+                <td className="num muted" title="Frame range unknown: not in the handoff, and the clip has not been read yet">
+                  —
+                </td>
+              ) : (
+                <td className="num">{frames}</td>
+              );
+            })()}
             <td>{requiredPrep(project, shot, state)}</td>
             <td>
               <StatusPill status={status} />
@@ -155,7 +226,8 @@ export function QueueTable({
               <span className={`verify verify-${state.sourceVerified}`}>{VERIFY_LABEL[state.sourceVerified]}</span>
             </td>
           </tr>
-        ))}
+          );
+        })}
       </tbody>
     </table>
   );

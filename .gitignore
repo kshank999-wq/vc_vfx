@@ -7,3 +7,6 @@ release
 !.env.example
 *.tsbuildinfo
 .vercel
+
+# Built by apps/web/scripts/build-preview.mjs at deploy time
+apps/web/public/preview

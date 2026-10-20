@@ -67,12 +67,13 @@ const isManifestOrLatest = (rel: string) => /^manifest(_v\d{3})?\.json$/.test(re
 export function shotFolder(project: Project, shotId: string, outputRoot: string): string {
   const shot = handoffShot(project, shotId);
   if (!shot) throw new Error(`No shot ${shotId}`);
-  return join(outputRoot, ...shotFolderSegments(project.handoff.project, shot.scene, shotId));
+  // Named by the VFX shot number once assigned (it is fixed once a package exists).
+  return join(outputRoot, ...shotFolderSegments(project.handoff.project, shot.scene, shotState(project, shotId)?.vfxShotId ?? shotId));
 }
 
 export function sourceFiles(project: Project): string[] {
   return project.handoff.shots
-    .flatMap((s) => [s.sourcePath, ...s.checksums.map((c) => c.path)])
+    .flatMap((s) => [s.sourcePath, ...(s.sourceFiles ?? []), ...s.checksums.map((c) => c.path)])
     .map((p) => resolveFromHandoff(project.handoffPath, p))
     .filter((p): p is string => p !== null);
 }

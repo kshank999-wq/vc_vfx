@@ -7,9 +7,10 @@ import {
   framePattern,
   handoffShot,
   outputFor,
-  sequencePlan,
+  planFor,
   shotState,
   shotStatus,
+  shotTiming,
   versionTag,
   type PrepTaskKind,
   type Project,
@@ -29,6 +30,10 @@ export interface ShotDetailHandlers {
   onTaskNotes(kind: PrepTaskKind, notes: string): void;
   onShotNotes(notes: string): void;
   onAddTask(kind: PrepTaskKind): void;
+  /** Assign (or clear, with "") the VFX editor's shot number. */
+  onSetVfxShotId(value: string): void;
+  /** Read the source clip with ffprobe; absent where that cannot be done (the sample, the browser). */
+  onProbe?: () => void;
   onGeneratePlates(): void;
   onChangeOutputRoot(): void;
   onRevealOutput(): void;
@@ -167,6 +172,29 @@ function TaskCard({ task, props }: { task: TaskRecord; props: Props }) {
   );
 }
 
+function VfxIdField({ value, handoffId, disabled, onCommit }: { value: string | null; handoffId: string; disabled: boolean; onCommit: (v: string) => void }) {
+  const [draft, setDraft] = useState(value ?? '');
+  useEffect(() => setDraft(value ?? ''), [value]);
+  const changed = draft.trim() !== (value ?? '');
+  return (
+    <form
+      className="vfx-id"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (changed) onCommit(draft);
+      }}
+    >
+      <label>
+        <span className="muted">VFX shot number</span>
+        <input aria-label="VFX shot number" value={draft} disabled={disabled} placeholder={`e.g. ${handoffId.split('_')[0] ?? ''}_010 — from the VFX editor`} onChange={(e) => setDraft(e.target.value)} />
+      </label>
+      <button type="submit" disabled={disabled || !changed}>
+        {draft.trim() || !value ? 'Set' : 'Clear'}
+      </button>
+    </form>
+  );
+}
+
 export function ShotDetail(props: Props) {
   const { project, shotId, now, canEdit, busy } = props;
   const shot = handoffShot(project, shotId);
@@ -175,7 +203,9 @@ export function ShotDetail(props: Props) {
   if (!shot || !state) return <aside className="detail empty">Select a shot.</aside>;
 
   const output = outputFor(project.handoff, shot);
-  const plan = sequencePlan(shot, output);
+  const plan = planFor(project, shot);
+  const timing = shotTiming(project, shot);
+  const name = state.vfxShotId ?? shot.shotId;
   const status = shotStatus(state);
   const plateVersion = state.tasks.find((t) => t.kind === 'sequence_conversion')?.version ?? 1;
   const approve = canApproveShot(project, shotId, now);
@@ -189,7 +219,7 @@ export function ShotDetail(props: Props) {
       <header className="detail-head">
         <div className="detail-title">
           <CircleDot circled={shot.circled} />
-          <h2>{shot.shotId}</h2>
+          <h2>{name}</h2>
           <StatusPill status={status} />
         </div>
         <div className="detail-sub">
@@ -197,7 +227,10 @@ export function ShotDetail(props: Props) {
           {shot.setup ? ` · Setup ${shot.setup}` : ''}
           {shot.take ? ` · Take ${shot.take}` : ''}
           {shot.circled ? ' · Circle take' : ''}
+          {shot.clip ? ` · ${shot.clip}` : ''}
+          {state.vfxShotId ? <span className="muted"> · handoff ID {shot.shotId}</span> : null}
         </div>
+        <VfxIdField value={state.vfxShotId} handoffId={shot.shotId} disabled={!canEdit || busy} onCommit={props.onSetVfxShotId} />
       </header>
 
       <section className="panel approval">
@@ -245,7 +278,9 @@ export function ShotDetail(props: Props) {
 
       <section className="panel">
         <h3>Prep tasks</h3>
-        {state.tasks.length === 0 ? <p className="muted">No prep tasks requested.</p> : null}
+        {state.tasks.length === 0 ? (
+          <p className="muted">No prep tasks yet. Add one below — or Shift/Ctrl-click several shots in the queue to add a task to all of them.</p>
+        ) : null}
         <ul className="tasks">
           {state.tasks.map((t) => (
             <TaskCard key={t.kind} task={t} props={props} />
@@ -287,16 +322,30 @@ export function ShotDetail(props: Props) {
 
       <section className="panel">
         <h3>Sequence plan</h3>
-        <KV
-          rows={[
-            ['Source in–out', <span className="num">{formatRange(plan.sourceIn, plan.sourceOut)}</span>],
-            ['Delivered in–out', <span className="num">{formatRange(plan.deliveredIn, plan.deliveredOut)}</span>],
-            ['Editorial in–out', <span className="num">{formatRange(plan.editorialIn, plan.editorialOut)}</span>],
-            ['Handles · frames', <span className="num">{`${plan.handles} · ${plan.frameCount}`}</span>],
-            ['Format', `${plan.format.toUpperCase()} ${plan.bitDepth}-bit${output.compression ? ` · ${output.compression}` : ''}`],
-            ['File pattern', <span className="mono">{framePattern(shot.shotId, 'plate', plateVersion, plan.format)}</span>],
-          ]}
-        />
+        {plan ? (
+          <KV
+            rows={[
+              ['Source in–out', <span className="num">{formatRange(plan.sourceIn, plan.sourceOut)}</span>],
+              ['Delivered in–out', <span className="num">{formatRange(plan.deliveredIn, plan.deliveredOut)}</span>],
+              ['Editorial in–out', <span className="num">{formatRange(plan.editorialIn, plan.editorialOut)}</span>],
+              ['Handles · frames', <span className="num">{`${plan.handles} · ${plan.frameCount}`}</span>],
+              ['Format', `${plan.format.toUpperCase()} ${plan.bitDepth}-bit${output.compression ? ` · ${output.compression}` : ''}`],
+              ['File pattern', <span className="mono">{framePattern(name, 'plate', plateVersion, plan.format)}</span>],
+            ]}
+          />
+        ) : (
+          <div className="range-unknown">
+            <p className="muted">
+              Frame range unknown. The handoff does not give one{project.handoff.origin ? ' (VCDIT sends none)' : ''}, and the clip has not been read yet. Plates
+              cover the whole take once it is read.
+            </p>
+            {props.onProbe ? (
+              <button type="button" onClick={props.onProbe} disabled={busy}>
+                Read from clip
+              </button>
+            ) : null}
+          </div>
+        )}
       </section>
 
       <section className="panel">
@@ -319,13 +368,28 @@ export function ShotDetail(props: Props) {
         <h3>Source</h3>
         <KV
           rows={[
-            ['Timecode', shot.timecodeIn ? `${shot.timecodeIn}${shot.timecodeOut ? ` – ${shot.timecodeOut}` : ''}` : ''],
-            ['Frames (source)', <span className="num">{formatRange(shot.frameIn, shot.frameOut)}</span>],
-            ['Frame rate', `${shot.frameRate} fps`],
-            ['Resolution', shot.resolution ? `${shot.resolution.width} × ${shot.resolution.height}` : ''],
+            ['Timecode', timing?.timecodeIn ? `${timing.timecodeIn}${shot.timecodeOut ? ` – ${shot.timecodeOut}` : ''}` : ''],
+            [
+              'Frames (source)',
+              timing ? (
+                <span className="num">
+                  {formatRange(timing.frameIn, timing.frameOut)}
+                  {timing.from === 'probe' ? <span className="muted"> · whole clip, read with ffprobe</span> : null}
+                </span>
+              ) : (
+                'unknown'
+              ),
+            ],
+            ['Frame rate', `${timing?.frameRate ?? shot.frameRate} fps${!timing && project.handoff.origin ? ' (production setting)' : ''}`],
+            ['Resolution', timing?.resolution ? `${timing.resolution.width} × ${timing.resolution.height}` : ''],
+            ['Codec', state.probe?.codec],
             ['Unit · day', [shot.unit, shot.shootDay].filter(Boolean).join(' · ')],
             ['Roll · clip', [shot.cameraRoll, shot.clip].filter(Boolean).join(' · ')],
+            ['Flagged by', shot.flaggedBy],
             ['Path', <span className="mono path">{shot.sourcePath}</span>],
+            ...(shot.sourceFiles?.length
+              ? ([['Other files', <span className="mono path">{shot.sourceFiles.map((f) => f.split('/').pop()).join(', ')}</span>]] as [string, ReactNode][])
+              : []),
             ['Verification', <span className={`verify verify-${state.sourceVerified}`}>{state.sourceVerified}</span>],
           ]}
         />

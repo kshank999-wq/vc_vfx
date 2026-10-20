@@ -6,8 +6,9 @@ import {
   framePattern,
   handoffShot,
   outputFor,
-  sequencePlan,
+  planFor,
   shotState,
+  shotTiming,
   shotStatus,
   versionTag,
   type Project,
@@ -25,7 +26,10 @@ export function prepReportHtml(p: Project, shotId: string, input: { generatedAt:
   const state = shotState(p, shotId);
   if (!shot || !state) throw new Error(`No shot ${shotId}`);
   const output = outputFor(p.handoff, shot);
-  const plan = sequencePlan(shot, output);
+  const plan = planFor(p, shot);
+  const timing = shotTiming(p, shot);
+  const name = state.vfxShotId ?? shot.shotId;
+  const range = (a: number | undefined, b: number | undefined) => (a === undefined || b === undefined ? 'unknown' : formatRange(a, b));
   const e = (v: unknown) => escapeHtml(v === undefined || v === null || v === '' ? '—' : String(v));
   const row = (label: string, value: unknown) => `<tr><th>${escapeHtml(label)}</th><td>${e(value)}</td></tr>`;
   const cam = shot.camera;
@@ -45,7 +49,7 @@ export function prepReportHtml(p: Project, shotId: string, input: { generatedAt:
   const references = shot.references.map((r) => `<li>${e(r.kind.replace(/_/g, ' '))}: <span class="mono">${e(r.path)}</span>${r.notes ? ` — ${e(r.notes)}` : ''}</li>`).join('');
 
   return `<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><title>${e(shot.shotId)} — Prep Report</title>
+<html lang="en"><head><meta charset="utf-8"><title>${e(name)} — Prep Report</title>
 <style>
 @page { margin: 14mm; }
 body { font: 10pt/1.4 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; color: #111; margin: 24px; }
@@ -58,20 +62,23 @@ thead th { background: #eee; font-size: 8.5pt; text-transform: uppercase; }
 .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 18pt; }
 footer { margin-top: 18pt; color: #777; font-size: 8pt; }
 </style></head><body>
-<h1>${e(p.handoff.project)} — Shot ${e(shot.shotId)}</h1>
+<h1>${e(p.handoff.project)} — Shot ${e(name)}</h1>
 <p class="meta">Package ${versionTag(Math.max(1, state.packageVersion))} · ${e(SHOT_STATUS_LABELS[shotStatus(state)])} · Shot approval: ${
     state.approval ? `${e(state.approval.by)} (${e(state.approval.at)})` : 'not approved'
   } · Source verification: ${e(state.sourceVerified)}</p>
 <div class="grid">
 <div><h2>Shot</h2><table class="kv">
+${state.vfxShotId ? row('Handoff shot ID', shot.shotId) : ''}
 ${row('Scene / setup / take', [shot.scene, shot.setup, shot.take].filter(Boolean).join(' / '))}
 ${row('Circle take', shot.circled ? 'Yes' : 'No')}
 ${row('Unit / shoot day', [shot.unit, shot.shootDay].filter(Boolean).join(' / '))}
 ${row('Camera roll / clip', [shot.cameraRoll, shot.clip].filter(Boolean).join(' / '))}
+${row('Flagged by', shot.flaggedBy)}
 ${row('Source', shot.sourcePath)}
-${row('Timecode', shot.timecodeIn ? `${shot.timecodeIn}${shot.timecodeOut ? ` – ${shot.timecodeOut}` : ''}` : '')}
-${row('Frame rate', shot.frameRate)}
-${row('Resolution', shot.resolution ? `${shot.resolution.width} × ${shot.resolution.height}` : '')}
+${row('Timecode', timing?.timecodeIn ? `${timing.timecodeIn}${shot.timecodeOut ? ` – ${shot.timecodeOut}` : ''}` : '')}
+${row('Frame rate', timing?.frameRate ?? shot.frameRate)}
+${row('Resolution', timing?.resolution ? `${timing.resolution.width} × ${timing.resolution.height}` : '')}
+${row('Range from', timing ? (timing.from === 'probe' ? `the whole clip, read with ffprobe${state.probe?.codec ? ` (${state.probe.codec})` : ''}` : 'the handoff') : 'unknown')}
 </table></div>
 <div><h2>Camera &amp; colour</h2><table class="kv">
 ${row('Body / sensor mode', [cam.body, cam.sensorMode].filter(Boolean).join(' / '))}
@@ -85,11 +92,11 @@ ${row('Look reference (not baked)', color.lookReference)}
 </div>
 <h2>Plates</h2><table class="kv">
 ${row('Format', `${output.format.toUpperCase()} ${output.bitDepth}-bit${output.compression ? ` (${output.compression})` : ''}`)}
-${row('Source in–out (with handles)', formatRange(plan.sourceIn, plan.sourceOut))}
-${row('Delivered in–out', formatRange(plan.deliveredIn, plan.deliveredOut))}
-${row('Editorial in–out', formatRange(plan.editorialIn, plan.editorialOut))}
-${row('Handles / frame count', `${plan.handles} / ${plan.frameCount}`)}
-${row('File pattern', framePattern(shot.shotId, 'plate', state.tasks.find((t) => t.kind === 'sequence_conversion')?.version ?? 1, output.format))}
+${row('Source in–out (with handles)', range(plan?.sourceIn, plan?.sourceOut))}
+${row('Delivered in–out', range(plan?.deliveredIn, plan?.deliveredOut))}
+${row('Editorial in–out', range(plan?.editorialIn, plan?.editorialOut))}
+${row('Handles / frame count', `${plan?.handles ?? shot.handles} / ${plan?.frameCount ?? 'unknown'}`)}
+${row('File pattern', framePattern(name, 'plate', state.tasks.find((t) => t.kind === 'sequence_conversion')?.version ?? 1, output.format))}
 ${row('Colour baked into plates', 'No')}
 </table>
 <h2>Supervisor notes</h2><p>${e(shot.supervisorNotes)}</p>

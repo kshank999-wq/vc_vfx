@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
+    "build:preview": "vite build --config vite.preview.config.ts",
     "typecheck": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.web.json --noEmit",
     "test": "vitest run",
     "package:win": "electron-vite build && electron-builder --win --publish never",
@@ -15,6 +16,7 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.115.0",
     "@vcvfx/domain": "workspace:*",
+    "xxhash-wasm": "^1.1.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { PREP_TASK_KINDS } from './tasks.js';
 import { SHOT_STATUSES } from './status.js';
+import { fromVcditHandoff, isVcditDocument } from './vcdit.js';
 
 /**
  * The VCDIT → VCVFX handoff specification (master spec §2, §18).
@@ -13,6 +14,11 @@ import { SHOT_STATUSES } from './status.js';
  * The schema is deliberately tolerant of fields it does not know about
  * (`passthrough`), because VCDIT may grow faster than VCVFX and an unknown
  * field must never make a production's drive unreadable.
+ *
+ * Two formats are read: this one (VC VFX's own, richer schema) and the file
+ * VCDIT actually writes today, `vcdit.vfx-handoff/1`, which `parseHandoff`
+ * recognises by its `schema` field and converts (see vcdit.ts and
+ * docs/spec/addendum-02-vcdit-handoff.md).
  */
 
 export const HANDOFF_SCHEMA_VERSION = 1;
@@ -20,15 +26,26 @@ export const HANDOFF_SCHEMA_VERSION = 1;
 export const SEQUENCE_FORMATS = ['dpx', 'tiff', 'exr', 'png', 'jpeg'] as const;
 export type SequenceFormat = (typeof SEQUENCE_FORMATS)[number];
 
-const timecode = z
+export const TimecodeSchema = z
   .string()
   .regex(/^\d{2}:\d{2}:\d{2}[:;]\d{2}$/, 'Timecode must be HH:MM:SS:FF (or ;FF for drop-frame)');
+
+/**
+ * Checksum algorithms a handoff may carry. VCDIT ingests with xxHash64, MD5 or
+ * SHA-1 (its `ChecksumMethod`); sha256 is VC VFX's own. xxh128 / xxh3 are
+ * accepted so an ASC MHL-style record is never refused, but are reported
+ * rather than computed.
+ */
+export const CHECKSUM_ALGORITHMS = ['sha256', 'md5', 'sha1', 'xxh64', 'xxh128', 'xxh3'] as const;
+export type ChecksumAlgorithm = (typeof CHECKSUM_ALGORITHMS)[number];
 
 export const ChecksumRecordSchema = z
   .object({
     path: z.string().min(1),
-    algorithm: z.enum(['sha256', 'md5', 'xxh64']).default('sha256'),
+    algorithm: z.enum(CHECKSUM_ALGORITHMS).default('sha256'),
     value: z.string().min(1),
+    /** File size in bytes, when the handoff states it. */
+    bytes: z.number().int().nonnegative().optional(),
     verifiedAt: z.string().optional(),
   })
   .passthrough();
@@ -103,13 +120,22 @@ export const HandoffShotSchema = z
     circled: z.boolean().default(false),
     /** Path to the duplicated VFX source, relative to the handoff file. */
     sourcePath: z.string().min(1),
+    /** The take's other files (sidecars, further frames), relative to the handoff file. */
+    sourceFiles: z.array(z.string().min(1)).optional(),
+    /** Who flagged the shot on set (VCDIT: "Script sup." or "DIT tag"). */
+    flaggedBy: z.string().optional(),
     /** Where VCDIT expects VCVFX to write; VCVFX picks one if absent. */
     outputPath: z.string().optional(),
-    frameIn: z.number().int().nonnegative(),
-    frameOut: z.number().int().nonnegative(),
+    /**
+     * The editorial range. Optional: VCDIT does not send one today. When
+     * absent, VC VFX reads the clip with ffprobe and works on the whole take
+     * (see `shotTiming` in project.ts).
+     */
+    frameIn: z.number().int().nonnegative().optional(),
+    frameOut: z.number().int().nonnegative().optional(),
     handles: z.number().int().nonnegative().default(8),
-    timecodeIn: timecode.optional(),
-    timecodeOut: timecode.optional(),
+    timecodeIn: TimecodeSchema.optional(),
+    timecodeOut: TimecodeSchema.optional(),
     frameRate: z.number().positive(),
     resolution: z.object({ width: z.number().int().positive(), height: z.number().int().positive() }).optional(),
     camera: CameraSchema.default({}),
@@ -123,8 +149,27 @@ export const HandoffShotSchema = z
     checksums: z.array(ChecksumRecordSchema).default([]),
   })
   .passthrough()
-  .refine((s) => s.frameOut >= s.frameIn, { message: 'frameOut must not be before frameIn', path: ['frameOut'] });
+  .superRefine((s, ctx) => {
+    if ((s.frameIn === undefined) !== (s.frameOut === undefined)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'frameIn and frameOut come together, or not at all', path: [s.frameIn === undefined ? 'frameIn' : 'frameOut'] });
+    } else if (s.frameIn !== undefined && s.frameOut !== undefined && s.frameOut < s.frameIn) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'frameOut must not be before frameIn', path: ['frameOut'] });
+    }
+  });
 export type HandoffShot = z.infer<typeof HandoffShotSchema>;
+
+/** Where a converted handoff came from (absent for VC VFX's own format). */
+export const HandoffOriginSchema = z
+  .object({
+    /** The source document's schema, e.g. "vcdit.vfx-handoff/1". */
+    format: z.string().min(1),
+    tool: z.string().optional(),
+    productionCode: z.string().optional(),
+    day: z.object({ number: z.number().int().nonnegative().optional(), date: z.string().optional() }).passthrough().optional(),
+    createdAt: z.string().optional(),
+  })
+  .passthrough();
+export type HandoffOrigin = z.infer<typeof HandoffOriginSchema>;
 
 export const HandoffSchema = z
   .object({
@@ -135,6 +180,7 @@ export const HandoffSchema = z
     productionCompany: z.string().optional(),
     ditOperator: z.string().optional(),
     vfxSupervisor: z.string().optional(),
+    origin: HandoffOriginSchema.optional(),
     /** Project-wide output default; a shot's own `output` wins. */
     output: OutputSpecSchema.default({}),
     shots: z.array(HandoffShotSchema).min(1, 'A handoff must contain at least one shot'),
@@ -158,11 +204,15 @@ export interface HandoffIssue {
 
 export type ParseHandoffResult = { ok: true; handoff: Handoff; warnings: HandoffIssue[] } | { ok: false; issues: HandoffIssue[] };
 
-function pathOf(p: (string | number)[]): string {
+export function pathOf(p: (string | number)[]): string {
   return p.reduce<string>((acc, part) => (typeof part === 'number' ? `${acc}[${part}]` : acc ? `${acc}.${part}` : part), '');
 }
 
-/** Parse handoff JSON text, reporting every problem rather than the first. */
+/**
+ * Parse handoff JSON text, reporting every problem rather than the first.
+ * A VCDIT `vcdit.vfx-handoff/N` document is recognised by its `schema` field
+ * and converted; the warnings then say what VCDIT did not supply.
+ */
 export function parseHandoff(text: string): ParseHandoffResult {
   let raw: unknown;
   try {
@@ -170,18 +220,27 @@ export function parseHandoff(text: string): ParseHandoffResult {
   } catch (e) {
     return { ok: false, issues: [{ path: '', message: `Not valid JSON: ${(e as Error).message}` }] };
   }
+  let warnings: HandoffIssue[] = [];
+  const vcdit = isVcditDocument(raw);
+  if (vcdit) {
+    const converted = fromVcditHandoff(raw);
+    if (!converted.ok) return converted;
+    raw = converted.handoff;
+    warnings = converted.warnings;
+  }
   const parsed = HandoffSchema.safeParse(raw);
   if (!parsed.success) {
     return { ok: false, issues: parsed.error.issues.map((i) => ({ path: pathOf(i.path), message: i.message })) };
   }
   const handoff = parsed.data;
-  const warnings: HandoffIssue[] = [];
+  if (vcdit) return { ok: true, handoff, warnings };
   if (handoff.schemaVersion > HANDOFF_SCHEMA_VERSION) {
     warnings.push({ path: 'schemaVersion', message: `Written by a newer VCDIT (schema ${handoff.schemaVersion}); unknown fields are kept but ignored` });
   }
   handoff.shots.forEach((s, i) => {
     if (s.tasks.length === 0) warnings.push({ path: `shots[${i}].tasks`, message: `${s.shotId} has no prep tasks requested` });
     if (s.checksums.length === 0) warnings.push({ path: `shots[${i}].checksums`, message: `${s.shotId} carries no source checksums to verify against` });
+    if (s.frameIn === undefined) warnings.push({ path: `shots[${i}].frameIn`, message: `${s.shotId} has no frame range; it is read from the clip with ffprobe` });
   });
   return { ok: true, handoff, warnings };
 }

@@ -1,4 +1,4 @@
-import type { LicenseStatus, QueueFilter } from '@vcvfx/domain';
+import type { LicenseStatus, ProbedMediaInput, QueueFilter } from '@vcvfx/domain';
 
 /**
  * The contract between the renderer and the main process.
@@ -80,6 +80,20 @@ export interface SequenceOutcome {
   folder: string;
   pattern: string;
   frames: number;
+  /** The clip as read when its range was unknown; the renderer records it with `setProbedMedia`. */
+  probed?: ProbedMediaInput;
+}
+
+export interface ProbeResult {
+  shotId: string;
+  media?: ProbedMediaInput;
+  error?: string;
+}
+
+export interface ProbeOutcome {
+  /** The ffprobe that ran, or null when none was found (then `results` is empty). */
+  ffprobe: string | null;
+  results: ProbeResult[];
 }
 
 export type ExternalLink = 'site' | 'subscribe' | 'account' | 'ffmpeg';
@@ -120,6 +134,12 @@ export interface VcvfxApi {
   packageShot(input: { jobId: string; text: string; shotId: string; projectKey: string; operator: string }): Promise<ApiResult<PackageOutcome>>;
   detectFfmpeg(): Promise<FfmpegInfo>;
   generateSequence(input: { jobId: string; text: string; shotId: string; projectKey: string }): Promise<ApiResult<SequenceOutcome>>;
+  /**
+   * Read source clips with ffprobe (frame count, timecode, rate, resolution):
+   * by default every shot whose range is unknown. Optional, because only the
+   * desktop has ffprobe; the renderer skips probing when it is absent.
+   */
+  probeSources?(input: { jobId: string; text: string; shotIds?: string[] }): Promise<ApiResult<ProbeOutcome>>;
   cancelJob(jobId: string): Promise<void>;
   onProgress(listener: (progress: JobProgress) => void): () => void;
   revealPath(path: string): Promise<void>;

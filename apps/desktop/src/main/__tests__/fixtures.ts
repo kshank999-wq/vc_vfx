@@ -5,7 +5,7 @@ import { dirname, join } from 'node:path';
 import { createProject, parseHandoff, type Project } from '@vcvfx/domain';
 
 /** A handoff on a temporary "drive", with real files for its sources. */
-export async function makeDrive(shots: { shotId: string; sourcePath: string; bytes?: Buffer; checksum?: 'right' | 'wrong' | 'md5' | 'none'; extra?: Record<string, unknown> }[]) {
+export async function makeDrive(shots: { shotId: string; sourcePath: string; bytes?: Buffer; checksum?: 'right' | 'wrong' | 'md5' | 'md5-wrong' | 'xxh128' | 'none'; extra?: Record<string, unknown> }[]) {
   const root = await mkdtemp(join(tmpdir(), 'vcvfx-test-'));
   const drive = join(root, 'DRIVE');
   const handoffPath = join(drive, 'handoff.json');
@@ -20,7 +20,9 @@ export async function makeDrive(shots: { shotId: string; sourcePath: string; byt
     const sha = createHash('sha256').update(s.bytes ?? Buffer.from('absent')).digest('hex');
     if (s.checksum === 'right') checksums.push({ path: s.sourcePath, algorithm: 'sha256', value: sha });
     if (s.checksum === 'wrong') checksums.push({ path: s.sourcePath, algorithm: 'sha256', value: '0'.repeat(64) });
-    if (s.checksum === 'md5') checksums.push({ path: s.sourcePath, algorithm: 'md5', value: 'abc' });
+    if (s.checksum === 'md5') checksums.push({ path: s.sourcePath, algorithm: 'md5', value: createHash('md5').update(s.bytes ?? Buffer.from('absent')).digest('hex') });
+    if (s.checksum === 'md5-wrong') checksums.push({ path: s.sourcePath, algorithm: 'md5', value: 'abc' });
+    if (s.checksum === 'xxh128') checksums.push({ path: s.sourcePath, algorithm: 'xxh128', value: 'abc' });
     handoffShots.push({
       shotId: s.shotId,
       scene: '12A',

@@ -1,10 +1,11 @@
-import { formatRange, outputFor, sequencePlan, PREP_TASKS, type HandoffShot, type Project, type ShotState } from '@vcvfx/domain';
+import { formatRange, outputFor, planFor, PREP_TASKS, type HandoffShot, type Project, type ShotState } from '@vcvfx/domain';
 
 /** Display helpers shared by the queue and the detail panel. Pure. */
 
+/** Delivered frames with handles, or "—" while the range is unknown (not in the handoff, clip not yet read). */
 export function deliveredRange(p: Project, shot: HandoffShot): string {
-  const plan = sequencePlan(shot, outputFor(p.handoff, shot));
-  return formatRange(plan.deliveredIn, plan.deliveredOut);
+  const plan = planFor(p, shot);
+  return plan ? formatRange(plan.deliveredIn, plan.deliveredOut) : '—';
 }
 
 export function requiredPrep(p: Project, shot: HandoffShot, state: ShotState): string {

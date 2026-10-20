@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { HandoffSchema, type Handoff, type HandoffShot } from './handoff.js';
+import { HandoffSchema, TimecodeSchema, outputFor, type Handoff, type HandoffShot } from './handoff.js';
+import { sequencePlan, type SequencePlan } from './frames.js';
 import { PREP_TASK_KINDS, PREP_TASKS, TASK_STATE_LABELS, TASK_STATES, sortTaskKinds, type PrepTaskKind, type TaskState } from './tasks.js';
 import { SHOT_STATUSES, type ShotStatus } from './status.js';
 
@@ -34,8 +35,31 @@ export const TaskRecordSchema = z.object({
 });
 export type TaskRecord = z.infer<typeof TaskRecordSchema>;
 
+/**
+ * What ffprobe read from a shot's source clip. Kept in the shot's state, not
+ * in the handoff, so the handoff stays as it was received.
+ */
+export const ProbedMediaSchema = z.object({
+  /** Handoff-relative path of the file that was read. */
+  file: z.string(),
+  frameCount: z.number().int().positive().optional(),
+  timecodeIn: TimecodeSchema.optional(),
+  frameRate: z.number().positive().optional(),
+  resolution: z.object({ width: z.number().int().positive(), height: z.number().int().positive() }).optional(),
+  codec: z.string().optional(),
+  probedAt: z.string(),
+});
+export type ProbedMedia = z.infer<typeof ProbedMediaSchema>;
+export type ProbedMediaInput = Omit<ProbedMedia, 'probedAt'>;
+
 export const ShotStateSchema = z.object({
   shotId: z.string(),
+  /**
+   * The VFX editor's shot number, assigned in VC VFX. Shown in the queue, the
+   * shot list and package names in place of the handoff's ID. Null: none yet.
+   */
+  vfxShotId: z.string().nullable().default(null),
+  probe: ProbedMediaSchema.nullable().default(null),
   tasks: z.array(TaskRecordSchema),
   approval: ApprovalSchema.nullable().default(null),
   /** Explicit stages past approval. */
@@ -78,6 +102,8 @@ export function createProject(handoff: Handoff, handoffPath: string, actor: stri
   const at = now.toISOString();
   const shots: ShotState[] = handoff.shots.map((s) => ({
     shotId: s.shotId,
+    vfxShotId: null,
+    probe: null,
     tasks: sortTaskKinds([...new Set(s.tasks.map((t) => t.kind))]).map((kind) => ({
       kind,
       state: 'pending' as const,
@@ -118,6 +144,64 @@ export function handoffShot(p: Project, shotId: string): HandoffShot | undefined
 
 export function shotState(p: Project, shotId: string): ShotState | undefined {
   return p.shots.find((s) => s.shotId === shotId);
+}
+
+/** The name a shot goes by: the VFX shot number once assigned, else the handoff's ID. */
+export function displayShotId(p: Project, shotId: string): string {
+  return shotState(p, shotId)?.vfxShotId ?? shotId;
+}
+
+/** The frame range and timing VC VFX works from, wherever it came from. */
+export interface ShotTiming {
+  frameIn: number;
+  frameOut: number;
+  handles: number;
+  frameRate: number;
+  timecodeIn?: string;
+  resolution?: { width: number; height: number };
+  /**
+   * handoff: the handoff gave the range (absolute frames when it gives a
+   * timecodeIn). probe: the whole clip as ffprobe read it, clip-relative from 0.
+   */
+  from: 'handoff' | 'probe';
+}
+
+/**
+ * The shot's timing: the handoff's own range when it has one, else the clip
+ * as probed (frames 0 … frameCount − 1, the probe's rate and start
+ * timecode). Null while the range is unknown.
+ */
+export function shotTiming(p: Project, shot: HandoffShot): ShotTiming | null {
+  const probe = shotState(p, shot.shotId)?.probe ?? null;
+  const resolution = shot.resolution ?? probe?.resolution;
+  if (shot.frameIn !== undefined && shot.frameOut !== undefined) {
+    return {
+      frameIn: shot.frameIn,
+      frameOut: shot.frameOut,
+      handles: shot.handles,
+      frameRate: shot.frameRate,
+      ...(shot.timecodeIn ? { timecodeIn: shot.timecodeIn } : {}),
+      ...(resolution ? { resolution } : {}),
+      from: 'handoff',
+    };
+  }
+  if (!probe?.frameCount) return null;
+  const timecodeIn = shot.timecodeIn ?? probe.timecodeIn;
+  return {
+    frameIn: 0,
+    frameOut: probe.frameCount - 1,
+    handles: shot.handles,
+    frameRate: probe.frameRate ?? shot.frameRate,
+    ...(timecodeIn ? { timecodeIn } : {}),
+    ...(resolution ? { resolution } : {}),
+    from: 'probe',
+  };
+}
+
+/** The shot's sequence plan, or null while its frame range is unknown. */
+export function planFor(p: Project, shot: HandoffShot): SequencePlan | null {
+  const timing = shotTiming(p, shot);
+  return timing ? sequencePlan(timing, outputFor(p.handoff, shot)) : null;
 }
 
 /** The shot's status (§16), always derived from its tasks and explicit acts. */
@@ -266,6 +350,74 @@ export function setSourceVerified(p: Project, shotId: string, result: ShotState[
   return chain(r, (proj) => log(proj, { at: now.toISOString(), actor, shotId, action: `source.${result}`, detail }));
 }
 
+/**
+ * Record what ffprobe read from the shot's source clip. Refused once the shot
+ * has left prep: its plates and package were made from the range it had.
+ */
+export function setProbedMedia(p: Project, shotId: string, media: ProbedMediaInput, actor: string, now: Date): Result {
+  const at = now.toISOString();
+  const parsed = ProbedMediaSchema.safeParse({ ...media, probedAt: at });
+  if (!parsed.success) return { ok: false, reason: `Probe result for ${shotId} is not usable: ${parsed.error.issues[0]?.message ?? 'bad data'}` };
+  const r = updateShot(p, shotId, (s) => (s.stage !== 'prep' ? `${shotId} is ${s.stage}; reopen it before reading its clip again` : { ...s, probe: parsed.data }));
+  const m = parsed.data;
+  const detail = [
+    m.frameCount ? `${m.frameCount} frames` : 'frame count unknown',
+    m.frameRate ? `${m.frameRate} fps` : null,
+    m.timecodeIn ? `TC ${m.timecodeIn}` : null,
+    m.resolution ? `${m.resolution.width}×${m.resolution.height}` : null,
+    m.codec ?? null,
+  ]
+    .filter(Boolean)
+    .join(', ');
+  return chain(r, (proj) => log(proj, { at, actor, shotId, action: 'source.probed', detail: `${m.file}: ${detail}` }));
+}
+
+const VFX_SHOT_ID = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/;
+
+/**
+ * Assign (or clear, with "") the VFX editor's shot number. It must be unique
+ * in the project, and is fixed once work has been written under the old name:
+ * any task past pending, or a package.
+ */
+export function setVfxShotId(p: Project, shotId: string, vfxShotId: string, actor: string, now: Date): Result {
+  const next = vfxShotId.trim() || null;
+  if (next && !VFX_SHOT_ID.test(next)) return { ok: false, reason: 'A VFX shot number is letters, digits, “_”, “-” or “.”, up to 64 characters' };
+  if (next && p.shots.some((s) => s.shotId !== shotId && (s.vfxShotId ?? s.shotId) === next)) return { ok: false, reason: `Another shot is already ${next}` };
+  if (shotState(p, shotId)?.vfxShotId === next) return { ok: true, project: p };
+  let before = '';
+  const r = updateShot(p, shotId, (s) => {
+    if (s.packageVersion > 0) return `${shotId} has been packaged under ${s.vfxShotId ?? shotId}; its number can no longer change`;
+    if (s.tasks.some((t) => t.state !== 'pending' || t.version > 1)) return `Work on ${shotId} has started under ${s.vfxShotId ?? shotId}; its number can no longer change`;
+    before = s.vfxShotId ?? '';
+    return { ...s, vfxShotId: next };
+  });
+  return chain(r, (proj) => log(proj, { at: now.toISOString(), actor, shotId, action: 'shot.vfx_id', detail: `${before || '(none)'} → ${next ?? '(none)'}` }));
+}
+
+/**
+ * Add one task to several shots. Shots that already have it, or are past
+ * prep, are skipped and reported rather than failing the rest.
+ */
+export function addTaskToShots(
+  p: Project,
+  shotIds: readonly string[],
+  kind: PrepTaskKind,
+  actor: string,
+  now: Date,
+): { project: Project; added: string[]; skipped: { shotId: string; reason: string }[] } {
+  let project = p;
+  const added: string[] = [];
+  const skipped: { shotId: string; reason: string }[] = [];
+  for (const shotId of shotIds) {
+    const r = addTask(project, shotId, kind, actor, now);
+    if (r.ok) {
+      project = r.project;
+      added.push(shotId);
+    } else skipped.push({ shotId, reason: r.reason });
+  }
+  return { project, added, skipped };
+}
+
 // ---------------------------------------------------------------------------
 // The queue
 // ---------------------------------------------------------------------------
@@ -301,11 +453,11 @@ export function queueRows(p: Project, filter: QueueFilter = {}): QueueRow[] {
     .filter(
       (r) =>
         !needle ||
-        [r.shot.shotId, r.shot.scene, r.shot.setup, r.shot.take, r.shot.clip, r.shot.supervisorNotes, r.state.notes]
+        [r.shot.shotId, r.state.vfxShotId, r.shot.scene, r.shot.setup, r.shot.take, r.shot.clip, r.shot.supervisorNotes, r.state.notes]
           .filter(Boolean)
           .some((v) => String(v).toLowerCase().includes(needle)),
     )
-    .sort((a, b) => collator.compare(a.shot.scene, b.shot.scene) || collator.compare(a.shot.shotId, b.shot.shotId));
+    .sort((a, b) => collator.compare(a.shot.scene, b.shot.scene) || collator.compare(a.state.vfxShotId ?? a.shot.shotId, b.state.vfxShotId ?? b.shot.shotId));
 }
 
 export function scenesOf(p: Project): string[] {

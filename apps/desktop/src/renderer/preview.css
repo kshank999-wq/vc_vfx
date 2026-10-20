@@ -1,0 +1,55 @@
+/* The browser preview's frame (preview.tsx). The App fills what is left. */
+
+.preview-shell {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.preview-app {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.preview-app > .app {
+  position: absolute;
+  inset: 0;
+  height: auto;
+}
+
+.preview-banner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  align-items: center;
+  padding: 5px 14px;
+  background: #241a0b;
+  border-bottom: 1px solid rgba(242, 163, 58, 0.35);
+  color: var(--text);
+  font-size: 12px;
+}
+
+.preview-banner strong {
+  color: var(--accent);
+}
+
+.preview-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.preview-banner a.link {
+  color: var(--accent);
+  text-decoration: none;
+}
+.preview-banner a.link:hover {
+  text-decoration: underline;
+}
+
+.preview-build {
+  margin-left: auto;
+  color: var(--faint);
+  font-family: var(--mono);
+  font-size: 11px;
+}

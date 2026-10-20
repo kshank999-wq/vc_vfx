@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  PREP_TASKS,
   SAMPLE_HANDOFF,
   addTask,
+  addTaskToShots,
   approveShot,
   approveTask,
   capabilityFrom,
@@ -12,11 +14,14 @@ import {
   queueRows,
   reopenShot,
   serializeProject,
+  setProbedMedia,
   setShotNotes,
   setSourceVerified,
+  setVfxShotId,
   setTaskNotes,
   setTaskState,
   shotState,
+  shotTiming,
   type HandoffIssue,
   type PrepTaskKind,
   type Project,
@@ -24,9 +29,9 @@ import {
   type Result,
   type TaskState,
 } from '@vcvfx/domain';
-import type { AccountStatus, AppInfo, JobProgress, LicenceStanding, MenuCommand, Settings, VcvfxApi } from '../shared/bridge';
+import type { AccountStatus, AppInfo, JobProgress, LicenceStanding, MenuCommand, ProbeResult, Settings, VcvfxApi } from '../shared/bridge';
 import { projectKey } from '../shared/queue';
-import { QueueFilters, QueueTable } from './components/Queue';
+import { BulkBar, QueueFilters, QueueTable, type SelectGesture } from './components/Queue';
 import { ShotDetail } from './components/ShotDetail';
 import { AccountDialog, IssuesDialog, PromptDialog, SettingsDialog } from './components/Dialogs';
 
@@ -69,6 +74,8 @@ export function App({ api, now = () => new Date() }: { api: VcvfxApi; now?: () =
 
   const [filter, setFilter] = useState<QueueFilter>({});
   const [selected, setSelected] = useState<string | null>(null);
+  /** Shots picked with Shift/Ctrl/Cmd-click for a bulk action; empty when only one is selected. */
+  const [marked, setMarked] = useState<string[]>([]);
   const [issues, setIssues] = useState<{ title: string; intro: string; issues: HandoffIssue[] } | null>(null);
   const [warnings, setWarnings] = useState<HandoffIssue[]>([]);
   const [notices, setNotices] = useState<Notice[]>([]);
@@ -141,6 +148,7 @@ export function App({ api, now = () => new Date() }: { api: VcvfxApi; now?: () =
     (project: Project, path: string | null, dirty: boolean) => {
       setDoc({ project, path, dirty });
       setFilter({});
+      setMarked([]);
       setSelected(queueRows(project)[0]?.shot.shotId ?? null);
     },
     [setDoc],
@@ -159,6 +167,64 @@ export function App({ api, now = () => new Date() }: { api: VcvfxApi; now?: () =
       void api.getSettings().then(setSettings);
     },
     [api, notify, setDoc],
+  );
+
+  const runJob = useCallback(
+    async <T,>(label: string, fn: (jobId: string) => Promise<T>): Promise<T> => {
+      const jobId = `job-${(jobSeq += 1)}`;
+      setJob({ jobId, label, done: 0, total: 0 });
+      try {
+        return await fn(jobId);
+      } finally {
+        setJob(null);
+      }
+    },
+    [],
+  );
+
+  /** Record ffprobe's answers in the project, and say what could not be read. */
+  const applyProbes = useCallback(
+    (results: ProbeResult[]) => {
+      const current = docRef.current;
+      if (!current) return;
+      let next = current.project;
+      const failed: string[] = [];
+      const at = now();
+      for (const r of results) {
+        if (!r.media) {
+          failed.push(`${r.shotId}: ${r.error ?? 'not read'}`);
+          continue;
+        }
+        const applied = setProbedMedia(next, r.shotId, r.media, actor, at);
+        if (applied.ok) next = applied.project;
+        else failed.push(`${r.shotId}: ${applied.reason}`);
+      }
+      if (next !== current.project) setDoc({ ...current, project: next, dirty: true });
+      const read = results.length - failed.length;
+      if (failed.length) notify('error', `Read ${read} of ${results.length} clips. Not read — ${failed.slice(0, 3).join('; ')}${failed.length > 3 ? `; and ${failed.length - 3} more` : ''}`);
+      else if (read) notify('ok', `Read ${read} clip${read === 1 ? '' : 's'} with ffprobe: frame ranges, timecode and resolution filled in.`);
+    },
+    [actor, notify, setDoc],
+  );
+
+  /** Read the clips of shots with no frame range (a VCDIT handoff sends none). */
+  const probeSources = useCallback(
+    async (shotIds?: string[]) => {
+      const current = docRef.current;
+      if (!current || !api.probeSources || current.project.handoffPath === 'sample') return;
+      const probe = api.probeSources.bind(api);
+      const r = await runJob('Reading clips', (jobId) => probe({ jobId, text: serializeProject(current.project), ...(shotIds ? { shotIds } : {}) }));
+      if (!r.ok) return notify('error', r.error);
+      if (!r.data.ffprobe) {
+        notify('error', 'ffprobe (part of ffmpeg) was not found, so clip lengths, timecode and resolution were not read; frame ranges stay unknown (“—”). Install ffmpeg or set its path in Settings, then use “Read from clip”.', {
+          label: 'ffmpeg.org',
+          run: () => void api.openExternal('ffmpeg'),
+        });
+        return;
+      }
+      applyProbes(r.data.results);
+    },
+    [api, applyProbes, notify, runJob],
   );
 
   const openHandoff = useCallback(async () => {
@@ -186,7 +252,9 @@ export function App({ api, now = () => new Date() }: { api: VcvfxApi; now?: () =
       void api.getSettings().then(setSettings);
     } else if (!saved.ok) notify('error', saved.error);
     else notify('info', 'The project is not saved yet. Use File › Save to keep it.');
-  }, [api, actor, loadProject, notify, setDoc]);
+    // VCDIT sends no frame ranges: read them from the clips now.
+    if (project.handoff.shots.some((shot) => !shotTiming(project, shot))) await probeSources();
+  }, [api, actor, loadProject, notify, setDoc, probeSources]);
 
   const openProjectText = useCallback(
     (path: string, text: string) => {
@@ -237,19 +305,6 @@ export function App({ api, now = () => new Date() }: { api: VcvfxApi; now?: () =
     [api, filter, notify],
   );
 
-  const runJob = useCallback(
-    async <T,>(label: string, fn: (jobId: string) => Promise<T>): Promise<T> => {
-      const jobId = `job-${(jobSeq += 1)}`;
-      setJob({ jobId, label, done: 0, total: 0 });
-      try {
-        return await fn(jobId);
-      } finally {
-        setJob(null);
-      }
-    },
-    [],
-  );
-
   const verify = useCallback(async () => {
     const current = docRef.current;
     if (!current) return notify('info', 'Open a project first.');
@@ -266,7 +321,7 @@ export function App({ api, now = () => new Date() }: { api: VcvfxApi; now?: () =
     const tally = (k: string) => r.data.filter((v) => v.result === k).length;
     notify(
       tally('mismatch') || tally('missing') ? 'error' : 'ok',
-      `Sources: ${tally('verified')} verified · ${tally('mismatch')} mismatched · ${tally('missing')} missing · ${tally('unchecked')} without a sha256`,
+      `Sources: ${tally('verified')} verified · ${tally('mismatch')} mismatched · ${tally('missing')} missing · ${tally('unchecked')} without a checksum to check`,
     );
   }, [actor, api, notify, runJob, setDoc]);
 
@@ -324,6 +379,8 @@ export function App({ api, now = () => new Date() }: { api: VcvfxApi; now?: () =
       if (before !== 'processing' && before !== 'approved') apply((p) => setTaskState(p, shotId, 'sequence_conversion', before, actor, now()));
       return notify('error', r.error);
     }
+    const probed = r.data.probed;
+    if (probed) apply((p) => setProbedMedia(p, shotId, probed, actor, now()));
     // Processing finishing never approves anything (§15.6): it goes to review.
     apply((p) => setTaskState(p, shotId, 'sequence_conversion', 'needs_review', actor, now()));
     const folder = r.data.folder;
@@ -390,6 +447,41 @@ export function App({ api, now = () => new Date() }: { api: VcvfxApi; now?: () =
     if (rows.length && !rows.some((r) => r.shot.shotId === selected)) setSelected(rows[0]!.shot.shotId);
   }, [rows, selected]);
 
+  // Click selects one shot; Ctrl/Cmd-click adds or removes a shot; Shift-click takes the range from the selected one.
+  const selectShot = (shotId: string, gesture: SelectGesture) => {
+    const ids = rows.map((r) => r.shot.shotId);
+    if (gesture === 'toggle') {
+      const base = marked.length ? marked : selected ? [selected] : [];
+      const next = base.includes(shotId) ? base.filter((id) => id !== shotId) : [...base, shotId];
+      setMarked(next.length > 1 ? next : []);
+      setSelected(next.includes(shotId) ? shotId : (next[next.length - 1] ?? shotId));
+      return;
+    }
+    if (gesture === 'range' && selected) {
+      const a = ids.indexOf(selected);
+      const b = ids.indexOf(shotId);
+      if (a >= 0 && b >= 0) {
+        const range = ids.slice(Math.min(a, b), Math.max(a, b) + 1);
+        setMarked(range.length > 1 ? range : []);
+        return;
+      }
+    }
+    setMarked([]);
+    setSelected(shotId);
+  };
+  // Only shots still visible stay marked.
+  const visibleMarked = marked.filter((id) => rows.some((r) => r.shot.shotId === id));
+
+  const addTaskToMarked = (kind: PrepTaskKind) => {
+    const current = docRef.current;
+    if (!current) return;
+    const r = addTaskToShots(current.project, visibleMarked, kind, actor, now());
+    if (r.added.length) setDoc({ ...current, project: r.project, dirty: true });
+    const label = PREP_TASKS[kind].label;
+    const skipped = r.skipped.length ? ` Skipped ${r.skipped.length}: ${r.skipped.map((x) => x.reason).slice(0, 3).join('; ')}${r.skipped.length > 3 ? '…' : ''}` : '';
+    notify(r.added.length ? 'ok' : 'error', `${label} added to ${r.added.length} shot${r.added.length === 1 ? '' : 's'}.${skipped}`);
+  };
+
   // --- render ---------------------------------------------------------------
   const project = doc?.project ?? null;
   return (
@@ -403,6 +495,17 @@ export function App({ api, now = () => new Date() }: { api: VcvfxApi; now?: () =
           <div className="doc-title">
             <strong>{project.handoff.project}</strong>
             {project.handoff.productionCompany ? <span className="muted"> · {project.handoff.productionCompany}</span> : null}
+            {project.handoff.origin?.day ? (
+              <span className="muted doc-day" title={project.handoff.origin.tool ? `Handed off by ${project.handoff.origin.tool}` : undefined}>
+                {' · '}
+                {[
+                  project.handoff.origin.day.number !== undefined ? `Day ${project.handoff.origin.day.number}` : null,
+                  project.handoff.origin.day.date,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </span>
+            ) : null}
             <span className="doc-path" title={doc?.path ?? undefined}>
               {doc?.path ? doc.path.split(/[\\/]/).pop() : project.handoffPath === 'sample' ? 'Sample — not saved' : 'Not saved'}
               {doc?.dirty ? <span className="dirty" title="Unsaved changes"> •</span> : null}
@@ -468,7 +571,10 @@ export function App({ api, now = () => new Date() }: { api: VcvfxApi; now?: () =
           <QueueFilters project={project} filter={filter} onChange={setFilter} />
           <main className="workspace">
             <section className="queue-pane" aria-label="Queue">
-              <QueueTable project={project} rows={rows} selected={selected} onSelect={setSelected} />
+              {visibleMarked.length > 1 ? (
+                <BulkBar project={project} shotIds={visibleMarked} canEdit={canEdit} busy={busy} onAddTask={addTaskToMarked} onClear={() => setMarked([])} />
+              ) : null}
+              <QueueTable project={project} rows={rows} selected={selected} marked={visibleMarked} onSelect={selectShot} />
             </section>
             {selected ? (
               <ShotDetail
@@ -497,6 +603,8 @@ export function App({ api, now = () => new Date() }: { api: VcvfxApi; now?: () =
                 onTaskNotes={(kind, notes) => apply((p) => setTaskNotes(p, selected, kind, notes, actor, now()))}
                 onShotNotes={(notes) => apply((p) => setShotNotes(p, selected, notes, actor, now()))}
                 onAddTask={(kind) => apply((p) => addTask(p, selected, kind, actor, now()))}
+                onSetVfxShotId={(value) => apply((p) => setVfxShotId(p, selected, value, actor, now()))}
+                {...(api.probeSources && project.handoffPath !== 'sample' ? { onProbe: () => void probeSources([selected]) } : {})}
                 onGeneratePlates={() => void generatePlates(selected)}
                 onChangeOutputRoot={() => void chooseOutputRoot()}
                 onRevealOutput={() => outputRoot && void api.revealPath(outputRoot)}

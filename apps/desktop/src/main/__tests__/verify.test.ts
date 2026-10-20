@@ -10,14 +10,24 @@ describe('verifyProject', () => {
       { shotId: 'A', sourcePath: 'VFX/A/a.mov', bytes: Buffer.alloc(9 * 1024 * 1024, 7), checksum: 'right' },
       { shotId: 'B', sourcePath: 'VFX/B/b.mov', bytes: Buffer.from('bytes'), checksum: 'wrong' },
       { shotId: 'C', sourcePath: 'VFX/C/c.mov', checksum: 'right' },
-      { shotId: 'D', sourcePath: 'VFX/D/d.mov', bytes: Buffer.from('d'), checksum: 'md5' },
+      { shotId: 'D', sourcePath: 'VFX/D/d.mov', bytes: Buffer.from('d'), checksum: 'xxh128' },
       { shotId: 'E', sourcePath: 'VFX/E/e.mov', bytes: Buffer.from('e'), checksum: 'none' },
+      { shotId: 'F', sourcePath: 'VFX/F/f.mov', bytes: Buffer.from('f'), checksum: 'md5' },
+      { shotId: 'G', sourcePath: 'VFX/G/g.mov', bytes: Buffer.from('g'), checksum: 'md5-wrong' },
     ]);
     const before = await readdir(dirname(join(drive, 'VFX/A/a.mov')));
     const progress: number[] = [];
     const results = await verifyProject(project, { onProgress: (p) => progress.push(p.bytesDone) });
-    expect(Object.fromEntries(results.map((r) => [r.shotId, r.result]))).toEqual({ A: 'verified', B: 'mismatch', C: 'missing', D: 'unchecked', E: 'unchecked' });
-    expect(results.find((r) => r.shotId === 'D')!.detail).toMatch(/md5/);
+    expect(Object.fromEntries(results.map((r) => [r.shotId, r.result]))).toEqual({
+      A: 'verified',
+      B: 'mismatch',
+      C: 'missing',
+      D: 'unchecked',
+      E: 'unchecked',
+      F: 'verified',
+      G: 'mismatch',
+    });
+    expect(results.find((r) => r.shotId === 'D')!.detail).toMatch(/not computed: .*xxh128/);
     expect(progress.length).toBeGreaterThan(1);
     // Read only: nothing appeared beside the source.
     expect(await readdir(dirname(join(drive, 'VFX/A/a.mov')))).toEqual(before);

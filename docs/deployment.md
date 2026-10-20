@@ -13,9 +13,13 @@ read lazily at the point of use.
    Root Directory in the Build Step"** on (the default) — the build needs
    `packages/domain`.
 3. Framework preset: Next.js (also pinned by `apps/web/vercel.json`). Install
-   command: default (Vercel detects the pnpm workspace from the root
-   `pnpm-lock.yaml`). Build command: default (`pnpm build`, which runs
-   `pnpm --filter @vcvfx/domain build && next build`). Node 20+.
+   command: pinned by `apps/web/vercel.json` to
+   `ELECTRON_SKIP_BINARY_DOWNLOAD=1 pnpm install` — pnpm finds the workspace
+   from the root `pnpm-lock.yaml` and installs every package, the desktop's
+   devDependencies included (the preview build needs its Vite), but the site
+   never needs Electron's ~100 MB binary. Build command: default (`pnpm build`,
+   which runs `pnpm --filter @vcvfx/domain build`, then the browser preview
+   build, then `next build`). Node 20.11+.
 4. **Domains:** add `vc-vfx.com` as the production domain and `www.vc-vfx.com`
    as a 308 redirect to `vc-vfx.com`. At the registrar: `A @ 76.76.21.21` and
    `CNAME www cname.vercel-dns.com` (or whatever Vercel's domain panel shows).
@@ -109,6 +113,42 @@ where lower(email) = lower('you@example.com');
 
 The Admin link appears in the site header for that account; `/admin` shows
 counts of orders, licences and activations, and `/admin/releases` manages builds.
+
+### Browser preview
+
+The desktop application's interface is also served at
+**https://vc-vfx.com/preview**, for administrators only — before launch and
+after `SITE_LAUNCHED=true` alike — so a change pushed to `main` can be tried at
+the next refresh instead of after a download and an install. It is linked from
+`/admin` ("Preview the app").
+
+It is the same renderer the desktop runs, built by plain Vite
+(`apps/desktop/vite.preview.config.ts`, `pnpm --filter @vcvfx/desktop
+build:preview`) with `src/renderer/preview.tsx` installing a browser bridge
+(`src/renderer/browser-bridge.ts`) where the preload would put `window.vcvfx`.
+The site's build runs `apps/web/scripts/build-preview.mjs`, which builds it and
+copies it under `apps/web/public/preview/` (git-ignored). A failed preview build
+fails the deployment rather than leaving a stale preview.
+
+What it does: opens the sample project at start (or the last project kept in
+this browser), opens a handoff or `.vcvfx` through a file picker, keeps
+projects in memory and `localStorage`, downloads a `.vcvfx` on **Download
+project** (Save As), and prints the shot list through the browser's print
+dialog (Export PDF is the same dialog). The licence standing is `active`, so the
+approval flow can be tried. Verifying sources, writing plates, packaging,
+choosing an output root and signing in answer "Available in the desktop app".
+
+Access is decided in `src/middleware.ts` (`src/lib/preview-gate.ts`) from the
+signed-in user's `profiles.is_admin`; anyone else is redirected to
+`/signin?next=%2Fpreview`. The gate covers `/preview` and
+`/preview/index.html` (Next serves `public/` *after* middleware, and the matcher
+includes these paths). The page carries its own content security policy —
+`script-src 'self'`, since a Vite bundle has no nonce to carry — and
+`Cache-Control: no-store`. The bundle's hashed files under `/preview/assets/`
+are deliberately not gated, as in VC Writer: they are build artifacts of code
+that ships in the installer, their names are only knowable from the gated page,
+and gating them costs a Supabase round trip per file and turns a file fetched
+after the session expires into HTML. They are cached `immutable`.
 
 ## 6. Publishing a release
 

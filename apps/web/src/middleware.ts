@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { strayAuthRedirect } from '@/lib/auth-redirect';
+import { previewContentSecurityPolicy, previewRoute, previewSignIn } from '@/lib/preview-gate';
 
 /**
  * Refreshes the Supabase session cookie on navigation and sets a nonce-based
@@ -40,6 +41,11 @@ const launched = (): boolean => process.env.SITE_LAUNCHED?.trim() === 'true';
 export async function middleware(request: NextRequest) {
   const stray = strayAuthRedirect(request.nextUrl);
   if (stray) return NextResponse.redirect(stray);
+
+  // The browser preview: administrators only, always — launched or not —
+  // with the bundle's own policy (src/lib/preview-gate.ts).
+  const preview = previewRoute(request.nextUrl.pathname);
+  if (preview) return previewResponse(request, preview);
 
   const nonce = Buffer.from(crypto.randomUUID()).toString('base64');
   const local = request.nextUrl.hostname === 'localhost' || request.nextUrl.hostname === '127.0.0.1';
@@ -89,6 +95,57 @@ export async function middleware(request: NextRequest) {
   }
   return response;
 }
+
+const previewResponse = async (request: NextRequest, route: NonNullable<ReturnType<typeof previewRoute>>): Promise<NextResponse> => {
+  /**
+   * The bundle's own files are served without the gate, as VC Writer's are.
+   * They are content-hashed build artifacts of code that ships inside the
+   * installer anyway, and their names are only knowable from the page, which
+   * is gated. Gating them too would cost every file a round trip to Supabase
+   * and, worse, turn a file fetched after the session expired into the
+   * sign-in page's HTML. Hashed names also mean they can be cached hard.
+   */
+  if (route.kind === 'asset') {
+    const response = NextResponse.next();
+    response.headers.set('cache-control', 'public, max-age=31536000, immutable');
+    return response;
+  }
+
+  const signIn = (): NextResponse => NextResponse.redirect(new URL(previewSignIn, request.url));
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  // A deployment without accounts has no administrators to let through.
+  if (!url || !anon) return signIn();
+
+  const response = NextResponse.rewrite(new URL(route.to, request.url));
+  try {
+    const supabase = createServerClient(url, anon, {
+      cookies: {
+        get: (name: string) => request.cookies.get(name)?.value,
+        // A refreshed token has to be written back, or a preview session
+        // expires while it is being used and never renews itself.
+        set: (name: string, value: string, options: CookieOptions) => {
+          response.cookies.set({ name, value, ...options });
+        },
+        remove: (name: string, options: CookieOptions) => {
+          response.cookies.set({ name, value: '', ...options });
+        },
+      },
+    });
+    const { data } = await supabase.auth.getUser();
+    if (!data.user) return signIn();
+    const { data: profile } = await supabase.from('profiles').select('is_admin').eq('id', data.user.id).maybeSingle();
+    if (!profile?.is_admin) return signIn();
+  } catch {
+    // A Supabase hiccup costs a refresh, never opens the gate.
+    return signIn();
+  }
+
+  response.headers.set('content-security-policy', previewContentSecurityPolicy);
+  // Always the newest build: the point of the page is that a refresh is enough.
+  response.headers.set('cache-control', 'no-store');
+  return response;
+};
 
 export const config = {
   // Everything except static assets and the Stripe webhook, which

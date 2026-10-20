@@ -9,5 +9,5 @@
   },
   // Main, preload and the pure shared helpers. Renderer sources — including
   // their tests — are typechecked by tsconfig.web.json, which has the DOM lib.
-  "include": ["electron.vite.config.ts", "src/main/**/*.ts", "src/preload/**/*.ts", "src/shared/**/*.ts"]
+  "include": ["electron.vite.config.ts", "vite.preview.config.ts", "src/main/**/*.ts", "src/preload/**/*.ts", "src/shared/**/*.ts"]
 }

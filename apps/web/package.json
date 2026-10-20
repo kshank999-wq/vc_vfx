@@ -5,7 +5,8 @@
   "description": "vc-vfx.com: marketing site, accounts, Stripe checkout, licence delivery and installer downloads",
   "scripts": {
     "dev": "next dev",
-    "build": "pnpm --filter @vcvfx/domain build && next build",
+    "build": "pnpm --filter @vcvfx/domain build && pnpm run build:preview && next build",
+    "build:preview": "node scripts/build-preview.mjs",
     "start": "next start",
     "typecheck": "pnpm --filter @vcvfx/domain build && tsc --noEmit",
     "test": "vitest run"

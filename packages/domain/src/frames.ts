@@ -1,4 +1,4 @@
-import type { HandoffShot, OutputSpec, SequenceFormat } from './handoff.js';
+import type { OutputSpec, SequenceFormat } from './handoff.js';
 
 /**
  * Frame arithmetic for image-sequence generation (master spec §4).
@@ -24,7 +24,14 @@ export interface SequencePlan {
   bitDepth: number;
 }
 
-export function sequencePlan(shot: Pick<HandoffShot, 'frameIn' | 'frameOut' | 'handles'>, output: OutputSpec): SequencePlan {
+/** A known range: the handoff's own, or the probed clip's (see `shotTiming` in project.ts). */
+export interface FrameRange {
+  frameIn: number;
+  frameOut: number;
+  handles: number;
+}
+
+export function sequencePlan(shot: FrameRange, output: OutputSpec): SequencePlan {
   // A head handle cannot reach before frame 0 of the source; whatever is
   // available is used and the delivered numbering still starts at startFrame.
   const headHandles = Math.min(shot.handles, shot.frameIn);

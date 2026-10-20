@@ -14,6 +14,7 @@ import { packageShot, sourceFiles } from './package-shot';
 import { defaultProjectPath, isInside, outputRootProblem, withProjectExtension } from './paths';
 import { printShotList } from './print';
 import { FFMPEG_HELP, detectFfmpeg, generateSequence } from './sequence';
+import { detectFfprobe, probeProject } from './probe';
 import { noteRecent, readSettings, updateSettings } from './settings';
 import { verifyProject } from './verify';
 
@@ -254,9 +255,18 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null, isDev
         const project = projectFrom(input.text);
         const root = await ensureOutputRoot(input.projectKey, project, false);
         if (!root) return fail('No output root was chosen, so nothing was written.');
-        const result = await generateSequence({ project, shotId: input.shotId, outputRoot: root, ffmpeg: ffmpeg.path, signal, onProgress: (f, t) => progress(f, t, `${f} / ${t} frames`) });
+        const ffprobe = await detectFfprobe(ffmpeg.path);
+        const result = await generateSequence({
+          project,
+          shotId: input.shotId,
+          outputRoot: root,
+          ffmpeg: ffmpeg.path,
+          ffprobe,
+          signal,
+          onProgress: (f, t) => progress(f, t, `${f} / ${t} frames`),
+        });
         if (!result.ok) return fail(result.reason);
-        return ok({ folder: result.folder, pattern: result.pattern, frames: result.frames });
+        return ok({ folder: result.folder, pattern: result.pattern, frames: result.frames, ...(result.probed ? { probed: result.probed } : {}) });
       } catch (error) {
         return fail(error);
       } finally {
@@ -264,6 +274,26 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null, isDev
       }
     },
   );
+
+  // Read only, like verification: allowed in read-only licence mode.
+  handle('job:probe', z.object({ jobId, text: projectText, shotIds: z.array(z.string().min(1).max(200)).max(10000).optional() }), async (event, input) => {
+    const ffprobe = await detectFfprobe((await readSettings()).ffmpegPath);
+    if (!ffprobe) return ok({ ffprobe: null, results: [] });
+    const signal = startJob(input.jobId);
+    const progress = progressSender(event.sender, input.jobId, 'Reading clips');
+    try {
+      const results = await probeProject(projectFrom(input.text), ffprobe, {
+        ...(input.shotIds ? { shotIds: input.shotIds } : {}),
+        signal,
+        onProgress: (done, total, shotId) => progress(done, Math.max(total, 1), shotId),
+      });
+      return ok({ ffprobe, results });
+    } catch (error) {
+      return fail(error);
+    } finally {
+      endJob(input.jobId);
+    }
+  });
 
   handle('job:cancel', jobId, async (_e, id) => cancelJob(id));
   handle('shell:reveal', z.string().min(1).max(4096), async (_e, path) => shell.showItemInFolder(path));

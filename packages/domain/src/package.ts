@@ -1,6 +1,6 @@
 import { outputFor, type ChecksumRecord } from './handoff.js';
-import { framePattern, sequencePlan, versionTag } from './frames.js';
-import { handoffShot, shotState, shotStatus, type Project } from './project.js';
+import { framePattern, versionTag } from './frames.js';
+import { handoffShot, planFor, shotState, shotStatus, shotTiming, type Project } from './project.js';
 
 /**
  * The per-shot output package (master spec §17) and its manifest (§18).
@@ -58,7 +58,9 @@ export function buildManifest(p: Project, shotId: string, input: ManifestInput) 
   const state = shotState(p, shotId);
   if (!shot || !state) throw new Error(`No shot ${shotId}`);
   const output = outputFor(p.handoff, shot);
-  const plan = sequencePlan(shot, output);
+  const plan = planFor(p, shot);
+  const timing = shotTiming(p, shot);
+  const name = state.vfxShotId ?? shot.shotId;
   const sourceChecksums: ChecksumRecord[] = shot.checksums;
   return {
     manifestSchemaVersion: MANIFEST_SCHEMA_VERSION,
@@ -66,9 +68,12 @@ export function buildManifest(p: Project, shotId: string, input: ManifestInput) 
     generatedAt: input.generatedAt.toISOString(),
     operator: input.operator,
     project: p.handoff.project,
+    origin: p.handoff.origin ?? null,
     packageVersion: versionTag(Math.max(1, state.packageVersion)),
     shot: {
-      shotId: shot.shotId,
+      /** The VFX shot number when assigned, else the handoff's ID. */
+      shotId: name,
+      handoffShotId: shot.shotId,
       unit: shot.unit ?? null,
       shootDay: shot.shootDay ?? null,
       scene: shot.scene,
@@ -78,18 +83,33 @@ export function buildManifest(p: Project, shotId: string, input: ManifestInput) 
       cameraRoll: shot.cameraRoll ?? null,
       clip: shot.clip ?? null,
       sourcePath: shot.sourcePath,
-      timecodeIn: shot.timecodeIn ?? null,
+      sourceFiles: shot.sourceFiles ?? [],
+      flaggedBy: shot.flaggedBy ?? null,
+      timecodeIn: timing?.timecodeIn ?? null,
       timecodeOut: shot.timecodeOut ?? null,
-      frameRate: shot.frameRate,
-      resolution: shot.resolution ?? null,
+      frameRate: timing?.frameRate ?? shot.frameRate,
+      resolution: timing?.resolution ?? null,
+      /** handoff: the range the handoff gave; probe: the whole clip as ffprobe read it; null: unknown. */
+      rangeFrom: timing?.from ?? null,
+      probedMedia: state.probe,
       camera: shot.camera,
       color: shot.color,
       supervisorNotes: shot.supervisorNotes ?? null,
       references: shot.references,
     },
     plates: {
-      ...plan,
-      pattern: framePattern(shot.shotId, 'plate', 1, output.format),
+      /** Null fields: the frame range was never known (not in the handoff, clip not read). */
+      sourceIn: plan?.sourceIn ?? null,
+      sourceOut: plan?.sourceOut ?? null,
+      deliveredIn: plan?.deliveredIn ?? null,
+      deliveredOut: plan?.deliveredOut ?? null,
+      editorialIn: plan?.editorialIn ?? null,
+      editorialOut: plan?.editorialOut ?? null,
+      handles: plan?.handles ?? shot.handles,
+      frameCount: plan?.frameCount ?? null,
+      format: output.format,
+      bitDepth: output.bitDepth,
+      pattern: framePattern(name, 'plate', state.tasks.find((t) => t.kind === 'sequence_conversion')?.version ?? 1, output.format),
       /** Display looks are never baked into plates (§4). */
       colorBaked: false,
     },

@@ -1,11 +1,12 @@
 import { spawn } from 'node:child_process';
 import { mkdir, readdir, rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
-import { framePattern, handoffShot, outputFor, sequencePlan, shotState, versionTag, type Project } from '@vcvfx/domain';
+import { framePattern, handoffShot, outputFor, planFor, setProbedMedia, shotState, shotTiming, versionTag, type ProbedMediaInput, type Project } from '@vcvfx/domain';
 import { buildFfmpegArgs, parseFfmpegFrame } from '../shared/ffmpeg-args';
 import type { FfmpegInfo } from '../shared/bridge';
 import { isSampleHandoff, outputRootProblem, resolveFromHandoff } from './paths';
 import { shotFolder, sourceFiles } from './package-shot';
+import { FFPROBE_HELP, probeFile } from './probe';
 
 /**
  * Image-sequence generation (master spec §4) by running ffmpeg.
@@ -43,14 +44,19 @@ export interface SequenceInput {
   shotId: string;
   outputRoot: string;
   ffmpeg: string;
+  /** Used when the shot's frame range is unknown (a VCDIT handoff), to read the clip first. */
+  ffprobe?: string | null;
   signal?: AbortSignal;
   onProgress?: (frames: number, total: number) => void;
 }
 
-export type SequenceResult = { ok: true; folder: string; pattern: string; frames: number; notes: string[] } | { ok: false; reason: string };
+export type SequenceResult =
+  | { ok: true; folder: string; pattern: string; frames: number; notes: string[]; probed?: ProbedMediaInput }
+  | { ok: false; reason: string };
 
 export async function generateSequence(input: SequenceInput): Promise<SequenceResult> {
-  const { project, shotId } = input;
+  const { shotId } = input;
+  let project = input.project;
   const shot = handoffShot(project, shotId);
   const state = shotState(project, shotId);
   if (!shot || !state) return { ok: false, reason: `No shot ${shotId}` };
@@ -65,26 +71,41 @@ export async function generateSequence(input: SequenceInput): Promise<SequenceRe
   const source = resolveFromHandoff(project.handoffPath, shot.sourcePath)!;
   if (!(await stat(source).catch(() => null))) return { ok: false, reason: `The source clip is not on the drive: ${source}` };
 
+  // No range in the handoff and none read yet: read the clip, and work on all of it.
+  let probed: ProbedMediaInput | undefined;
+  if (!shotTiming(project, shot)) {
+    if (!input.ffprobe) return { ok: false, reason: `${shotId} has no frame range yet. ${FFPROBE_HELP}` };
+    const read = await probeFile(input.ffprobe, source, shot.sourcePath, input.signal);
+    if (!read.ok) return { ok: false, reason: `The clip could not be read to find its length: ${read.error}` };
+    if (!read.media.frameCount) return { ok: false, reason: 'ffprobe could not tell how many frames the clip has, so no plates were written.' };
+    const applied = setProbedMedia(project, shotId, read.media, 'ffprobe', new Date());
+    if (!applied.ok) return { ok: false, reason: applied.reason };
+    project = applied.project;
+    probed = read.media;
+  }
+  const timing = shotTiming(project, shot)!;
+  const plan = planFor(project, shot)!;
   const output = outputFor(project.handoff, shot);
-  const plan = sequencePlan(shot, output);
+  const name = state.vfxShotId ?? shot.shotId;
   const plates = join(shotFolder(project, shotId, input.outputRoot), '01_PLATES');
   await mkdir(plates, { recursive: true });
 
   // This version is not approved, so an earlier attempt at it may be cleared:
   // only files of exactly this shot, element and version, in our own folder.
-  const prefix = `${shot.shotId}_plate_${versionTag(task.version)}.`;
+  const prefix = `${name}_plate_${versionTag(task.version)}.`;
   for (const name of await readdir(plates)) if (name.startsWith(prefix)) await rm(join(plates, name), { force: true });
 
-  const pattern = framePattern(shot.shotId, 'plate', task.version, output.format);
+  const pattern = framePattern(name, 'plate', task.version, output.format);
   let command;
   try {
     command = buildFfmpegArgs({
       input: source,
       output: join(plates, pattern),
       plan,
-      frameRate: shot.frameRate,
-      frameIn: shot.frameIn,
-      timecodeIn: shot.timecodeIn,
+      frameRate: timing.frameRate,
+      frameIn: timing.frameIn,
+      // A probed range is already clip-relative (0 … frameCount − 1); its timecode only labels it.
+      timecodeIn: timing.from === 'handoff' ? timing.timecodeIn : undefined,
       compression: output.compression,
     });
   } catch (error) {
@@ -120,5 +141,5 @@ export async function generateSequence(input: SequenceInput): Promise<SequenceRe
     return { ok: false, reason: `ffmpeg wrote ${written} of ${total} frames. The clip may be shorter than the handoff's range; check frameIn/frameOut and timecodeIn.` };
   }
   input.onProgress?.(total, total);
-  return { ok: true, folder: plates, pattern, frames: written, notes: command.notes };
+  return { ok: true, folder: plates, pattern, frames: written, notes: command.notes, ...(probed ? { probed } : {}) };
 }
