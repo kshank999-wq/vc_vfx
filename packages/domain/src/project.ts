@@ -16,6 +16,7 @@ import {
   type ProjectExrColor,
   type ShotPlateColor,
 } from './color.js';
+import { RotoDocumentSchema } from './roto-schema.js';
 
 /**
  * A VCVFX project: the handoff it was built from plus VCVFX's own working
@@ -32,7 +33,12 @@ import {
  */
 
 export const PROJECT_FORMAT = 'vcvfx-project';
-export const PROJECT_VERSION = 1;
+/**
+ * 2: shots carry a paint-to-roto document (`roto`). A version 1 project opens
+ * unchanged (no roto yet) and is saved as 2; an older VC VFX refuses a 2
+ * rather than silently dropping the roto it does not know about.
+ */
+export const PROJECT_VERSION = 2;
 export const PROJECT_EXTENSION = 'vcvfx';
 
 export const ApprovalSchema = z.object({ by: z.string().min(1), at: z.string() });
@@ -142,6 +148,8 @@ export const ShotStateSchema = z.object({
   /** Plates written, one record per version. */
   plates: z.array(PlateRecordSchema).default([]),
   reviewMarks: z.array(ReviewMarkSchema).default([]),
+  /** Paint-to-roto (§5): parts, strokes, per-frame status and confidence. Null until roto starts. Masks are files, never here. */
+  roto: RotoDocumentSchema.nullable().default(null),
 });
 export type ShotState = z.infer<typeof ShotStateSchema>;
 
@@ -197,6 +205,7 @@ export function createProject(handoff: Handoff, handoffPath: string, actor: stri
     plateColor: 'auto' as const,
     plates: [],
     reviewMarks: [],
+    roto: null,
   }));
   return log(
     { format: PROJECT_FORMAT, version: PROJECT_VERSION, createdAt: at, updatedAt: at, handoffPath, handoff, plateColorDefault: 'acescg', shots, log: [] },
@@ -209,10 +218,19 @@ export function parseProject(text: string): { ok: true; project: Project } | { o
     const parsed = ProjectSchema.safeParse(JSON.parse(text));
     if (!parsed.success) return { ok: false, reason: parsed.error.issues[0]?.message ?? 'Not a VCVFX project' };
     if (parsed.data.version > PROJECT_VERSION) return { ok: false, reason: 'This project was saved by a newer VC VFX. Update to open it.' };
-    return { ok: true, project: parsed.data };
+    return { ok: true, project: migrateProject(parsed.data) };
   } catch (e) {
     return { ok: false, reason: `Not valid JSON: ${(e as Error).message}` };
   }
+}
+
+/**
+ * Bring an older project up to `PROJECT_VERSION`. The schema's defaults have
+ * already filled what a version 1 project lacks (`roto: null`); this records
+ * the version it is now saved as.
+ */
+export function migrateProject(p: Project): Project {
+  return p.version === PROJECT_VERSION ? p : { ...p, version: PROJECT_VERSION };
 }
 
 export function serializeProject(p: Project): string {
@@ -352,6 +370,10 @@ export function approveTask(p: Project, shotId: string, kind: PrepTaskKind, appr
     if (!task) return `${shotId} has no ${kind} task`;
     if (task.state === 'approved') return s;
     if (task.state !== 'needs_review') return `${PREP_TASKS[kind].label} is ${TASK_STATE_LABELS[task.state].toLowerCase()}; only work in review can be approved`;
+    // Roto made here is approved as files: the mattes of this version must have been exported.
+    if (kind === 'roto' && s.roto && s.roto.parts.some((part) => part.frames.length > 0) && !s.roto.exports.some((e) => e.version === task.version)) {
+      return `Export the mattes of roto ${'v' + String(task.version).padStart(3, '0')} first; approval approves the files a vendor receives`;
+    }
     return { ...s, tasks: s.tasks.map((t) => (t.kind === kind ? { ...t, state: 'approved' as const, approval: { by: approver.trim(), at } } : t)) };
   });
   return chain(r, (proj) => log(proj, { at, actor: approver.trim(), shotId, action: 'task.approved', detail: kind }));

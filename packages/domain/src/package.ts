@@ -1,6 +1,7 @@
 import { outputFor, type ChecksumRecord } from './handoff.js';
 import { framePattern, versionTag } from './frames.js';
 import { handoffShot, planFor, plateColorFor, shotState, shotStatus, shotTiming, type Project } from './project.js';
+import { partsInOrder, rotoConfidenceSummary, rotoNames } from './roto.js';
 
 /**
  * The per-shot output package (master spec §17) and its manifest (§18).
@@ -50,6 +51,36 @@ export interface ManifestInput {
   appVersion: string;
   operator: string;
   files: readonly PackagedFile[];
+}
+
+/**
+ * The roto section of the manifest (§5.2, §18): the task version, the export
+ * of that version (or null when none was written), which engines made it and
+ * how confident they were. Null when the shot has no roto document.
+ */
+function rotoManifest(state: NonNullable<ReturnType<typeof shotState>>, name: string) {
+  const doc = state.roto;
+  if (!doc) return null;
+  const task = state.tasks.find((t) => t.kind === 'roto');
+  const version = task?.version ?? 1;
+  const exported = doc.exports.find((e) => e.version === version) ?? null;
+  const summary = rotoConfidenceSummary(doc);
+  return {
+    version: versionTag(version),
+    state: task?.state ?? null,
+    approval: task?.approval ?? null,
+    exported: exported !== null,
+    folder: exported?.folder ?? null,
+    combined: exported ? exported.pattern : rotoNames.mattePattern(name, version),
+    metadata: exported?.metadata ?? null,
+    frames: exported ? { first: exported.first, last: exported.last, count: exported.frames } : null,
+    resolution: exported ? { width: exported.width, height: exported.height } : null,
+    bitDepth: exported?.bitDepth ?? null,
+    exr: exported?.exr ?? false,
+    engines: [...new Set(doc.parts.flatMap((p) => p.frames.map((f) => f.engine)).filter(Boolean))],
+    parts: partsInOrder(doc).map((p) => ({ id: p.id, name: p.name, parent: p.parentId, combine: p.combine, engine: p.engine, refine: p.refine, keyFrames: p.keyFrames.map((k) => k.frame), confidence: rotoConfidenceSummary(doc, p.id) })),
+    confidence: { frames: summary.frames, mean: summary.mean, min: summary.min, low: summary.low, flagged: summary.flagged, reviewed: summary.reviewed },
+  };
 }
 
 /** The machine-readable manifest written into each shot package. */
@@ -132,6 +163,7 @@ export function buildManifest(p: Project, shotId: string, input: ManifestInput) 
           },
     },
     review: { marks: state.reviewMarks },
+    roto: rotoManifest(state, name),
     status: shotStatus(state),
     tasks: state.tasks.map((t) => ({ kind: t.kind, state: t.state, version: versionTag(t.version), notes: t.notes, approval: t.approval })),
     approval: state.approval,

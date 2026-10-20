@@ -22,7 +22,7 @@ export async function buildMenu(getWindow: () => BrowserWindow | null, isDevelop
     const options = {
       type: 'info' as const,
       message: 'VC VFX',
-      detail: `Version ${app.getVersion()}\nVFX preparation and handoff for independent productions.\n${SITE_URL.replace(/^https?:\/\//, '')}`,
+      detail: `Version ${app.getVersion()}\nVFX preparation and handoff for independent productions.\n${SITE_URL.replace(/^https?:\/\//, '')}\n\nIncludes FFmpeg (GNU LGPL v2.1), run as a separate program; its licence, source and build details are in the app's ffmpeg folder and at ${SITE_URL.replace(/^https?:\/\//, '')}/download.`,
     };
     void (window ? dialog.showMessageBox(window, options) : dialog.showMessageBox(options));
   };
