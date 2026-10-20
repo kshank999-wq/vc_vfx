@@ -1349,3 +1349,317 @@ table.queue.compact th {
   margin: 0;
   padding: 0 12px 12px;
 }
+
+/* ---------------------------------------------------------------- roto (addendum 04) */
+
+.viewer-mode button {
+  min-width: 56px;
+}
+.roto {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 286px minmax(0, 1fr);
+}
+.roto-empty {
+  flex: 1;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 8px;
+  color: var(--muted);
+}
+.roto-side {
+  overflow: auto;
+  border-right: 1px solid var(--border);
+  background: var(--panel);
+  padding: 4px 12px 16px;
+}
+.roto-side section {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+  display: grid;
+  gap: 7px;
+}
+.roto-side section:last-child {
+  border-bottom: none;
+}
+.roto-side h4 {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.roto-side .hint {
+  margin: 0;
+  line-height: 1.35;
+}
+.roto-side .seg {
+  display: flex;
+}
+.roto-side .seg button {
+  flex: 1;
+}
+.seg button.on.tool-include {
+  color: #3ad07a;
+  border-color: #3ad07a;
+  background: rgba(58, 208, 122, 0.14);
+}
+.seg button.on.tool-exclude {
+  color: #ff6b62;
+  border-color: #ff6b62;
+  background: rgba(255, 95, 86, 0.14);
+}
+.seg button.on.tool-erase {
+  color: var(--text);
+  border-color: var(--muted);
+  background: rgba(230, 232, 236, 0.08);
+}
+.roto-engines {
+  display: grid;
+  gap: 6px;
+}
+.roto-engine {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  column-gap: 6px;
+  row-gap: 4px;
+}
+.roto-engine.unavailable > span:first-of-type {
+  color: var(--muted);
+}
+.roto-engine .small-button,
+.roto-engine .roto-reason {
+  grid-column: 2;
+  justify-self: start;
+}
+.small-button {
+  font-size: 11.5px;
+  padding: 2px 8px;
+}
+.roto-slider {
+  display: grid;
+  grid-template-columns: 92px 1fr 48px;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+.roto-slider input[type='range'] {
+  width: 100%;
+  accent-color: var(--accent);
+  padding: 0;
+  border: none;
+  background: transparent;
+}
+.roto-slider.compact {
+  grid-template-columns: auto 110px;
+}
+.check {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 12px;
+}
+.roto-parts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}
+.roto-parts li {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 6px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+}
+.roto-parts li.selected {
+  background: var(--accent-soft);
+  border-color: rgba(242, 163, 58, 0.45);
+}
+.roto-parts .swatch {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 3px;
+  background: none;
+  flex: none;
+}
+.roto-parts .eye {
+  border: none;
+  background: none;
+  padding: 0 2px;
+  color: var(--text);
+  font-size: 13px;
+}
+.roto-parts .eye.off {
+  color: var(--faint);
+}
+.roto-parts .part-name {
+  border: none;
+  background: none;
+  padding: 0;
+  font-weight: 600;
+  text-align: left;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.roto-parts .part-meta {
+  white-space: nowrap;
+}
+.roto-parts .part-meta select {
+  font-size: 11px;
+  padding: 0 2px;
+}
+.roto-parts .remove {
+  padding: 0 4px;
+}
+.roto-parts .rename {
+  flex: 1;
+}
+.roto-parts .rename input {
+  width: 100%;
+}
+.add-part {
+  display: flex;
+  gap: 6px;
+}
+.add-part input {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+}
+.roto-main {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+.roto-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px 0;
+  flex-wrap: wrap;
+}
+.roto-toolbar button.on {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.roto-stage.alpha {
+  background: #000;
+}
+.roto-frame {
+  position: absolute;
+}
+.roto-frame img.frame,
+.roto-frame canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.roto-frame img.frame {
+  object-fit: fill;
+}
+.roto-paint.can-paint {
+  cursor: none;
+}
+.roto-info {
+  padding-top: 6px;
+}
+.part-chip {
+  border: 1px solid;
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.roto-timeline {
+  padding: 8px 12px 0;
+}
+.roto-cells {
+  display: flex;
+  height: 22px;
+  gap: 1px;
+  background: #0b0d10;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 2px;
+}
+.roto-cells .cell {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: none;
+  border-radius: 1px;
+  background: #1d212a;
+  position: relative;
+}
+.roto-cells .cell.current {
+  outline: 2px solid var(--text);
+  outline-offset: 1px;
+  z-index: 1;
+}
+.roto-cells .cell.problem::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -5px;
+  height: 3px;
+  background: var(--danger);
+}
+.roto-cells .cell.flagged {
+  box-shadow: inset 0 0 0 2px var(--danger);
+}
+.roto-cells .key-mark {
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 10px;
+  line-height: 1;
+  text-shadow: 0 0 2px #000;
+  pointer-events: none;
+}
+.roto-scale {
+  display: flex;
+  justify-content: space-between;
+  padding-top: 6px;
+}
+.roto-sheet {
+  max-height: 42%;
+}
+.roto-tile {
+  position: relative;
+}
+.roto-tile canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.roto-tile img {
+  object-fit: fill;
+}
+.roto-slider.compact-select {
+  grid-template-columns: 92px minmax(0, 1fr) auto;
+}
+.roto-slider.compact-select select {
+  min-width: 0;
+}
+.roto-slider select {
+  font-size: 12px;
+}

@@ -1,7 +1,8 @@
 # Addendum 01 — V1 as built
 
 The master spec lists eleven MVP priorities (§20). V1 ships the first two
-in full and gives every later module a place in the queue, so a production
+in full, then the third — paint-to-roto ([addendum 04](addendum-04-paint-to-roto.md)) —
+and gives every later module a place in the queue, so a production
 can track all of its prep in VC VFX from day one even where the work itself
 is done in another application.
 
@@ -18,10 +19,11 @@ is done in another application.
 | §5.2, §15.4 | Frame viewer: source or plate versions in delivered numbering with timecode, A/B wipe and toggle, playback, view-only Rec.709 (approx.) / raw transforms, cached frames over a locked-down `vcvfx-frame://` protocol; contact sheet of first/last and twelve between; per-frame "Mark for correction" notes, logged (addendum 03 §4). |
 | §15, §16, §19 | Status model derived from task states; approval per task then per shot, always attributed; reopening approved work bumps the version and withdraws shot approval; every change logged. |
 | §17 | Shot package folders `00_SOURCE_REFERENCE` … `10_DELIVERY`, versioned `manifest_vNNN.json` and `prep_report_vNNN.html`, `manifest.json` = latest. |
+| §5, §5.1, §5.2 | Paint-to-roto ([addendum 04](addendum-04-paint-to-roto.md)): include/exclude paint on key frames, a classical Track engine (graph-cut segmentation, object-motion propagation, per-frame confidence) and an optional SAM 2.1 engine (ONNX, model downloaded on first use, pinned); parts combined into the subject matte; confidence timeline, next problem frame, contact sheet of mattes; corrections re-propagate locally; versioned 16-bit PNG (+ EXR) matte sequences and metadata in `02_MATTES_ROTO`; approval through the roto task. Project format 2. |
 
 ## Tracked, not yet automated
 
-Roto, key, despill, clean plate, 2D track, camera track, sky, background
+Key, despill, clean plate, 2D track, camera track, sky, background
 removal, texture extraction, lighting analysis, compositor. Each is a task
 kind (`tasks.ts`, `available: false`) that moves through the same review and
 approval states, so its results can be recorded and packaged.

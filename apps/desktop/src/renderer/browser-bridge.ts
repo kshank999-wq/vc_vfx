@@ -1,6 +1,7 @@
 import { PROJECT_EXTENSION, parseProject, plateColorFor, shotListHtml, shotState, viewTransform, type QueueFilter } from '@vcvfx/domain';
-import type { ApiResult, ExternalLink, LicenceStanding, MenuCommand, OpenedFile, Settings, VcvfxApi, ViewerFrame, ViewerFrameRequest, ViewerSources } from '../shared/bridge';
+import type { ApiResult, ExternalLink, JobProgress, LicenceStanding, MenuCommand, OpenedFile, Settings, VcvfxApi, ViewerFrame, ViewerFrameRequest, ViewerSources } from '../shared/bridge';
 import { viewerTimeline } from '../shared/viewer';
+import { createRotoPreview } from './roto-preview';
 
 /**
  * The viewer's stand-in frames (scripts/make-sample-frames.mjs): a synthetic
@@ -172,6 +173,10 @@ export function createBrowserBridge(): BrowserBridge {
 
   const standing = (): LicenceStanding => ({ status: 'active', expiresAt: null, checkedAt: new Date().toISOString() });
 
+  // Jobs that run in the page (roto propagation) report progress like the desktop's.
+  const progressListeners = new Set<(p: JobProgress) => void>();
+  const roto = createRotoPreview({ desktopOnly, progress: (p) => progressListeners.forEach((l) => l(p)) });
+
   return {
     command,
 
@@ -258,8 +263,18 @@ export function createBrowserBridge(): BrowserBridge {
       const encoding = req.layer === 'plates' ? 'acescg' : plateColorFor(project, req.shotId).sourceEncoding;
       return ok({ url, frame, viewLabel: viewTransform(encoding, req.view).label });
     },
-    cancelJob: async () => undefined,
-    onProgress: () => () => undefined,
+    // Paint-to-roto: the Track engine runs here on the sample's synthetic roto shot (roto-preview.ts).
+    rotoSession: (input) => roto.session(input),
+    rotoFrame: (input) => roto.frame(input),
+    rotoRun: (input) => roto.run(input),
+    rotoMask: (input) => roto.mask(input),
+    rotoExport: async () => fail(desktopOnly('mattes are written into the shot package on disk.')),
+    rotoModel: async ({ action }) => (action === 'download' ? fail(desktopOnly('the SAM 2 model is downloaded and runs on your computer.')) : ok(roto.engines()[1]!)),
+    cancelJob: async (jobId) => roto.cancel(jobId),
+    onProgress: (listener) => {
+      progressListeners.add(listener);
+      return () => progressListeners.delete(listener);
+    },
     revealPath: async () => undefined,
 
     accountStatus: async () => ({ configured: false, signedIn: false, email: null, displayName: null }),

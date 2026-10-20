@@ -34,6 +34,14 @@ extraResources:
       - ffprobe.exe
       - LICENSE.txt
       - README.txt
+  # onnxruntime-node for the SAM 2 roto engine (addendum 04), fetched and
+  # SHA-512-checked by scripts/fetch-onnxruntime.mjs with only this
+  # platform's native binaries. Beside app.asar, never inside it: a native
+  # module cannot load from the archive. main/roto/sam2-ort.ts loads it from
+  # process.resourcesPath/onnxruntime. The SAM 2 model itself is never
+  # shipped; it is downloaded on first use and checked against its pins.
+  - from: resources/onnxruntime
+    to: onnxruntime
 
 # Installers are uploaded to the private release bucket by CI and handed out as
 # short-lived signed URLs, so electron-builder itself publishes nothing.

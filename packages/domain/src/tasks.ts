@@ -34,7 +34,7 @@ export interface PrepTaskInfo {
 
 export const PREP_TASKS: Record<PrepTaskKind, PrepTaskInfo> = {
   sequence_conversion: { label: 'Image-sequence conversion', short: 'Plates', folder: '01_PLATES', available: true },
-  roto: { label: 'Paint-to-roto', short: 'Roto', folder: '02_MATTES_ROTO', available: false },
+  roto: { label: 'Paint-to-roto', short: 'Roto', folder: '02_MATTES_ROTO', available: true },
   key: { label: 'Green/blue-screen key', short: 'Key', folder: '03_KEYS', available: false },
   despill: { label: 'Despill and background match', short: 'Despill', folder: '03_KEYS', available: false },
   clean_plate: { label: 'Clean plate', short: 'Clean plate', folder: '04_CLEAN_PLATES', available: false },

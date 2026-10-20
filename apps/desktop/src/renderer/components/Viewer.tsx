@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as
 import { contactSheetFrames, encodingLabel, handoffShot, serializeProject, shotState, versionTag, type Project, type ViewTransformId } from '@vcvfx/domain';
 import type { ViewerFrame, ViewerLayer, ViewerSources, VcvfxApi } from '../../shared/bridge';
 import { clampFrame, viewerTimeline } from '../../shared/viewer';
+import { RotoWorkspace, type RotoWorkspaceProps } from './RotoWorkspace';
 
 /**
  * The frame viewer and contact sheet (master spec §5.2, §15.4; addendum 03).
@@ -22,6 +23,10 @@ export interface ViewerProps {
   canEdit: boolean;
   onClose(): void;
   onToggleMark(frame: number, viewing: string, note: string): void;
+  /** View frames, or paint roto (addendum 04). */
+  mode: 'view' | 'roto';
+  onMode(mode: 'view' | 'roto'): void;
+  roto: Pick<RotoWorkspaceProps, 'busy' | 'actor' | 'onRoto' | 'runJob' | 'notify' | 'onAddRotoTask'>;
 }
 
 type Compare = 'off' | 'wipe' | 'toggle';
@@ -31,7 +36,8 @@ const SIZES = [480, 960, 1280, 1920];
 const TILE_WIDTH = 320;
 const sizeFor = (px: number) => SIZES.find((s) => s >= px) ?? 1920;
 
-export function Viewer({ api, project, shotId, projectKey, canEdit, onClose, onToggleMark }: ViewerProps) {
+export function Viewer({ api, project, shotId, projectKey, canEdit, onClose, onToggleMark, mode, onMode, roto }: ViewerProps) {
+  const isView = mode === 'view';
   const shot = handoffShot(project, shotId);
   const state = shotState(project, shotId);
   const timeline = useMemo(() => viewerTimeline(project, shotId), [project, shotId]);
@@ -127,10 +133,10 @@ export function Viewer({ api, project, shotId, projectKey, canEdit, onClose, onT
   const primary: ViewerLayer = comparing ? (compare === 'toggle' && showB ? 'plates' : 'source') : layer;
 
   // The frame on screen, and its neighbours fetched ahead.
-  const current = available(primary) ? want(primary, version, frame, mainWidth, false) : undefined;
-  const second = comparing && compare === 'wipe' ? want('plates', version, frame, mainWidth, false) : undefined;
+  const current = isView && available(primary) ? want(primary, version, frame, mainWidth, false) : undefined;
+  const second = isView && comparing && compare === 'wipe' ? want('plates', version, frame, mainWidth, false) : undefined;
   useEffect(() => {
-    if (!timeline || playing) return;
+    if (!timeline || playing || !isView) return;
     const layers: ViewerLayer[] = comparing ? ['source', 'plates'] : [primary];
     for (const d of [1, -1, 2, 10, -10]) {
       const f = clampFrame(timeline, frame + d);
@@ -173,7 +179,7 @@ export function Viewer({ api, project, shotId, projectKey, canEdit, onClose, onT
       e.preventDefault();
       setPlaying(false);
       go(frame + (e.key === 'ArrowRight' ? 1 : -1) * (e.shiftKey ? 10 : 1));
-    } else if (e.key === ' ') {
+    } else if (e.key === ' ' && isView) {
       e.preventDefault();
       setPlaying((p) => !p);
     } else if (e.key === 'Escape') {
@@ -200,6 +206,7 @@ export function Viewer({ api, project, shotId, projectKey, canEdit, onClose, onT
   const name = state.vfxShotId ?? shot.shotId;
   const marks = state.reviewMarks;
   const markHere = marks.find((m) => m.frame === frame);
+  const hasRoto = state.tasks.some((t) => t.kind === 'roto');
   const plateLabel = version !== null ? `Plates ${versionTag(version)}` : 'Plates';
   const viewing = primary === 'plates' ? plateLabel.toLowerCase() : 'source';
   const encodingOf = (l: ViewerLayer) => (l === 'source' ? sources?.source.encoding : plateVersions.find((p) => p.version === version)?.encoding) ?? null;
@@ -221,8 +228,18 @@ export function Viewer({ api, project, shotId, projectKey, canEdit, onClose, onT
           {shot.take ? ` · Take ${shot.take}` : ''}
           {shot.clip ? ` · ${shot.clip}` : ''}
         </span>
-        {sources?.sample ? <span className="tag" title="The browser preview has no media; these frames stand in for the shot’s">sample frames</span> : null}
+        {sources?.sample && isView ? <span className="tag" title="The browser preview has no media; these frames stand in for the shot’s">sample frames</span> : null}
+        <div className="seg viewer-mode" role="tablist" aria-label="Viewer mode">
+          <button type="button" role="tab" className={isView ? 'on' : undefined} aria-selected={isView} onClick={() => onMode('view')}>
+            View
+          </button>
+          <button type="button" role="tab" className={!isView ? 'on' : undefined} aria-selected={!isView} onClick={() => onMode('roto')} title={hasRoto ? 'Paint-to-roto' : 'Paint-to-roto (adds the task)'}>
+            Roto
+          </button>
+        </div>
         <div className="spacer" />
+        {isView ? (
+          <>
         <label className="field-inline">
           <span className="muted">Show</span>
           <select
@@ -271,7 +288,14 @@ export function Viewer({ api, project, shotId, projectKey, canEdit, onClose, onT
             <option value="raw">Raw values</option>
           </select>
         </label>
+          </>
+        ) : null}
       </header>
+
+      {!isView ? (
+        <RotoWorkspace api={api} project={project} shotId={shotId} projectKey={projectKey} canEdit={canEdit} frame={frame} onFrame={(f) => (timeline ? setFrame(clampFrame(timeline, f)) : setFrame(f))} {...roto} />
+      ) : (
+        <>
 
       <div className="viewer-main">
         <div
@@ -410,6 +434,8 @@ export function Viewer({ api, project, shotId, projectKey, canEdit, onClose, onT
           </ol>
         ) : null}
       </section>
+        </>
+      )}
     </section>
   );
 }

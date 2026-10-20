@@ -317,11 +317,11 @@ export interface FrameJob {
  * before the wanted frame's timestamp (ffmpeg then decodes from the previous
  * keyframe and drops everything earlier, so the first frame out is exact).
  */
-export function buildFrameArgs(job: FrameJob): string[] {
+/** The view transform as filters (after scaling): decode LUT, matrix, tone LUT, in float. */
+function viewChain(job: Pick<FrameJob, 'view' | 'luts' | 'hints' | 'caps'>): string[] {
   const caps = job.caps ?? FULL_CAPS;
   const notes: string[] = [];
-  const width = Math.max(64, Math.min(4096, Math.round(job.maxWidth)));
-  const filters = [`scale=w=min(${width}\\,iw):h=-2:flags=bicubic`];
+  const filters: string[] = [];
   const v = job.view;
   if (v.decode || v.matrix || v.tone) {
     if (!caps.lut1d || !caps.colorchannelmixer) throw new Error('This ffmpeg lacks the lut1d/colorchannelmixer filters the viewer needs.');
@@ -337,10 +337,38 @@ export function buildFrameArgs(job: FrameJob): string[] {
       filters.push(`lut1d=file=${job.luts.tone}:interp=linear`);
     }
   }
-  filters.push('format=yuvj444p');
-  const input =
-    job.source.kind === 'clip'
-      ? ['-ss', Math.max(0, (job.frame - 0.5) / job.frameRate).toFixed(6), '-i', job.source.path]
-      : ['-f', 'image2', '-framerate', String(job.source.frameRate), '-start_number', String(job.frame), '-i', job.source.pattern];
-  return ['-hide_banner', '-nostdin', '-v', 'error', '-y', ...input, '-map', '0:v:0', '-an', '-sn', '-dn', '-vf', filters.join(','), '-frames:v', '1', '-c:v', 'mjpeg', '-q:v', '3', '-f', 'image2', '-update', '1', job.output];
+  return filters;
+}
+
+function frameInput(source: SourceInput, frame: number, frameRate: number): string[] {
+  return source.kind === 'clip'
+    ? ['-ss', Math.max(0, (frame - 0.5) / frameRate).toFixed(6), '-i', source.path]
+    : ['-f', 'image2', '-framerate', String(source.frameRate), '-start_number', String(frame), '-i', source.pattern];
+}
+
+export function buildFrameArgs(job: FrameJob): string[] {
+  const width = Math.max(64, Math.min(4096, Math.round(job.maxWidth)));
+  const filters = [`scale=w=min(${width}\\,iw):h=-2:flags=bicubic`, ...viewChain(job), 'format=yuvj444p'];
+  return ['-hide_banner', '-nostdin', '-v', 'error', '-y', ...frameInput(job.source, job.frame, job.frameRate), '-map', '0:v:0', '-an', '-sn', '-dn', '-vf', filters.join(','), '-frames:v', '1', '-c:v', 'mjpeg', '-q:v', '3', '-f', 'image2', '-update', '1', job.output];
+}
+
+export interface RawFramesJob extends Omit<FrameJob, 'maxWidth' | 'output'> {
+  /** How many consecutive frames from `frame`. */
+  count: number;
+  /** Exact output size. */
+  width: number;
+  height: number;
+}
+
+/**
+ * Consecutive frames as raw 8-bit RGB on stdout, at an exact size, through the
+ * view transform — what the roto engines analyse (addendum 04). The view is
+ * for analysis only: nothing read this way is ever written as a plate.
+ */
+export function buildRawFramesArgs(job: RawFramesJob): string[] {
+  const w = Math.max(16, Math.min(8192, Math.round(job.width)));
+  const h = Math.max(16, Math.min(8192, Math.round(job.height)));
+  const count = Math.max(1, Math.min(10_000, Math.round(job.count)));
+  const filters = [`scale=w=${w}:h=${h}:flags=area`, ...viewChain(job), 'format=rgb24'];
+  return ['-hide_banner', '-nostdin', '-v', 'error', ...frameInput(job.source, job.frame, job.frameRate), '-map', '0:v:0', '-an', '-sn', '-dn', '-vf', filters.join(','), '-frames:v', String(count), '-f', 'rawvideo', '-pix_fmt', 'rgb24', 'pipe:1'];
 }

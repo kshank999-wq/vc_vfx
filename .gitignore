@@ -13,3 +13,6 @@ apps/web/public/preview
 
 # Fetched by apps/desktop/scripts/fetch-ffmpeg.mjs
 apps/desktop/resources/ffmpeg/*/
+
+# Fetched by apps/desktop/scripts/fetch-onnxruntime.mjs (SAM 2 roto engine)
+apps/desktop/resources/onnxruntime/

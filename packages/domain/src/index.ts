@@ -9,3 +9,4 @@ export * from './commerce.js';
 export { SAMPLE_HANDOFF } from './sample.js';
 export * from './vcdit.js';
 export * from './color.js';
+export * from './roto.js';

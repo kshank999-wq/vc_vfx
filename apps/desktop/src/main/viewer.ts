@@ -93,7 +93,7 @@ export async function viewerSources(project: Project, shotId: string, outputRoot
 }
 
 /** The view's LUT files, written once into the cache's own `luts` folder. */
-async function viewLuts(cacheDir: string, view: ViewPipeline): Promise<{ dir: string; decode?: string; tone?: string }> {
+export async function viewLuts(cacheDir: string, view: ViewPipeline): Promise<{ dir: string; decode?: string; tone?: string }> {
   const dir = join(cacheDir, 'luts');
   await mkdir(dir, { recursive: true });
   const ensure = async (name: string, make: () => string) => {

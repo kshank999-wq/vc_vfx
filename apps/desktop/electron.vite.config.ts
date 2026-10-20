@@ -22,7 +22,8 @@ export default defineConfig(({ mode }) => {
       plugins: [externalizeDepsPlugin({ exclude: ['@vcvfx/domain'] })],
       define: buildEnv,
       build: {
-        rollupOptions: { input: { index: resolve(__dirname, 'src/main/index.ts') } },
+        // The roto worker thread is its own entry (out/main/roto-worker.js; addendum 04).
+        rollupOptions: { input: { index: resolve(__dirname, 'src/main/index.ts'), 'roto-worker': resolve(__dirname, 'src/main/roto/worker.ts') } },
       },
     },
     preload: {

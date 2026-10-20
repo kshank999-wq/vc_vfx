@@ -1,4 +1,4 @@
-import type { ColorEncodingId, LicenseStatus, PlateRecordInput, ProbedMediaInput, QueueFilter, ViewTransformId } from '@vcvfx/domain';
+import type { ColorEncodingId, LicenseStatus, PlateRecordInput, ProbedMediaInput, QueueFilter, RotoDirection, RotoEngineId, RotoExportInput, RotoPropagationResult, ViewTransformId } from '@vcvfx/domain';
 
 /**
  * The contract between the renderer and the main process.
@@ -31,6 +31,8 @@ export interface Settings {
   /** Output root per project key (project path, or `handoff:<path>` before the first save). */
   outputRoots: Record<string, string>;
   recent: string[];
+  /** Where the SAM 2 model is downloaded from; empty means the default (addendum 04). */
+  modelBaseUrl?: string;
 }
 
 export interface AccountStatus {
@@ -143,6 +145,73 @@ export interface ViewerFrame {
   viewLabel: string;
 }
 
+// ---------------------------------------------------------------------------
+// Paint-to-roto (addendum 04)
+// ---------------------------------------------------------------------------
+
+export interface RotoEngineInfo {
+  id: RotoEngineId;
+  label: string;
+  version: string;
+  available: boolean;
+  /** Why not, in words, when not. */
+  reason: string | null;
+  /** For an engine that needs a model download. */
+  model?: { label: string; approxBytes: number; present: boolean; pinned: boolean; downloadable: boolean };
+}
+
+export interface RotoSession {
+  available: boolean;
+  reason: string | null;
+  /** What the frames are: "plates v001", "source", "sample frames". */
+  frames: string;
+  /** Plate resolution: strokes are stored in these pixels. */
+  plate: { width: number; height: number } | null;
+  /** The resolution the engines work at. */
+  working: { width: number; height: number } | null;
+  first: number;
+  last: number;
+  engines: RotoEngineInfo[];
+  /** Mattes can be written to a package from here (not in the browser preview). */
+  exportable: boolean;
+  sample?: boolean;
+}
+
+export interface RotoMaskData {
+  width: number;
+  height: number;
+  /** 0 … 255 per pixel. */
+  alpha: Uint8Array;
+}
+
+export interface RotoShotInput {
+  text: string;
+  shotId: string;
+  projectKey: string;
+}
+
+export interface RotoRunRequest extends RotoShotInput {
+  jobId: string;
+  partId: string;
+  /** The key frame to start from. */
+  from: number;
+  directions: RotoDirection[];
+}
+
+export interface RotoExportRequest extends RotoShotInput {
+  jobId: string;
+  operator: string;
+  /** Also write half-float EXR beside each PNG. */
+  exr: boolean;
+}
+
+export interface RotoExportOutcome {
+  /** What was written; the renderer records it with `recordRotoExport`. */
+  record: RotoExportInput;
+  folder: string;
+  files: number;
+}
+
 export type ExternalLink = 'site' | 'subscribe' | 'account' | 'ffmpeg';
 
 export const MENU_COMMANDS = [
@@ -191,6 +260,18 @@ export interface VcvfxApi {
   viewerSources(input: { text: string; shotId: string; projectKey: string }): Promise<ApiResult<ViewerSources>>;
   /** One frame for the viewer, extracted and cached by main; display transform for viewing only. */
   viewerFrame(input: ViewerFrameRequest): Promise<ApiResult<ViewerFrame>>;
+  /** Paint-to-roto: whether it can run on this shot, at what sizes, with which engines. */
+  rotoSession(input: RotoShotInput): Promise<ApiResult<RotoSession>>;
+  /** A frame to paint on (plates when there are some, else the source), for display. */
+  rotoFrame(input: RotoShotInput & { frame: number; maxWidth: number; prefetch?: boolean }): Promise<ApiResult<ViewerFrame>>;
+  /** Segment a key frame and/or propagate from it, as a cancellable job. The renderer records the results with `recordPropagation`. */
+  rotoRun(input: RotoRunRequest): Promise<ApiResult<{ results: RotoPropagationResult[] }>>;
+  /** One part's matte on a frame (partId null: the combined subject matte), refined, for the overlay. Null when there is none. */
+  rotoMask(input: RotoShotInput & { partId: string | null; frame: number; maxWidth: number }): Promise<ApiResult<RotoMaskData | null>>;
+  /** Write the versioned matte sequences and their metadata into the shot package. */
+  rotoExport(input: RotoExportRequest): Promise<ApiResult<RotoExportOutcome>>;
+  /** The SAM 2 model: its status, or download it (a job with progress). */
+  rotoModel(input: { jobId: string; action: 'status' | 'download' }): Promise<ApiResult<RotoEngineInfo>>;
   cancelJob(jobId: string): Promise<void>;
   onProgress(listener: (progress: JobProgress) => void): () => void;
   revealPath(path: string): Promise<void>;

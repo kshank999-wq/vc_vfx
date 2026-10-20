@@ -93,6 +93,8 @@ export function App({ api, now = () => new Date() }: { api: VcvfxApi; now?: () =
   const [job, setJob] = useState<JobProgress | null>(null);
   /** The frame viewer is open on the selected shot. */
   const [viewing, setViewing] = useState(false);
+  /** What the viewer shows: frames, or the roto workspace. */
+  const [viewerMode, setViewerMode] = useState<'view' | 'roto'>('view');
   const [queueCollapsed, setQueueCollapsed] = useState(false);
 
   const capability = capabilityFrom(standing, now());
@@ -615,6 +617,16 @@ export function App({ api, now = () => new Date() }: { api: VcvfxApi; now?: () =
                 canEdit={canEdit}
                 onClose={() => setViewing(false)}
                 onToggleMark={(frame, seen, note) => apply((p) => toggleReviewMark(p, selected, { frame, viewing: seen, note }, actor, now()))}
+                mode={viewerMode}
+                onMode={setViewerMode}
+                roto={{
+                  busy,
+                  actor,
+                  onRoto: (fn) => apply((p) => fn(p, actor, now())),
+                  runJob,
+                  notify,
+                  onAddRotoTask: () => apply((p) => addTask(p, selected, 'roto', actor, now())),
+                }}
               />
             ) : selected ? (
               <ShotDetail
@@ -649,7 +661,14 @@ export function App({ api, now = () => new Date() }: { api: VcvfxApi; now?: () =
                 onChangeOutputRoot={() => void chooseOutputRoot()}
                 onRevealOutput={() => outputRoot && void api.revealPath(outputRoot)}
                 onPlateColor={(change) => apply((p) => setShotPlateColor(p, selected, change, actor, now()))}
-                onView={() => setViewing(true)}
+                onView={() => {
+                  setViewerMode('view');
+                  setViewing(true);
+                }}
+                onRoto={() => {
+                  setViewerMode('roto');
+                  setViewing(true);
+                }}
               />
             ) : (
               <aside className="detail empty">Select a shot.</aside>

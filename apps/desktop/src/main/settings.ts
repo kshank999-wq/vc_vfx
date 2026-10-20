@@ -19,6 +19,7 @@ const SettingsSchema = z.object({
   ffmpegPath: z.string().default(''),
   outputRoots: z.record(z.string()).default({}),
   recent: z.array(z.string()).default([]),
+  modelBaseUrl: z.string().default(''),
 });
 
 let cache: Settings | null = null;

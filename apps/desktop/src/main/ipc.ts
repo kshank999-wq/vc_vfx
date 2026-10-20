@@ -1,4 +1,4 @@
-import { app, dialog, ipcMain, shell, type BrowserWindow, type IpcMainInvokeEvent } from 'electron';
+import { app, dialog, ipcMain, net, shell, type BrowserWindow, type IpcMainInvokeEvent } from 'electron';
 import { readFile, stat } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { z } from 'zod';
@@ -20,6 +20,10 @@ import type { FrameCache } from './frame-cache';
 import { viewerFrame, viewerSources } from './viewer';
 import type { FfmpegInfo } from '../shared/bridge';
 import { noteRecent, readSettings, updateSettings } from './settings';
+import { join } from 'node:path';
+import { engineInfo, rotoExport, rotoFrame, rotoMask, rotoRun, rotoSession, type RotoEnv } from './roto/api';
+import { downloadModel, type FetchLike } from './roto/models';
+import { ortCandidates } from './roto/sam2-ort';
 import { verifyProject } from './verify';
 
 /**
@@ -184,7 +188,7 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null, isDev
   });
 
   handle('settings:get', none, async () => readSettings());
-  handle('settings:set', z.object({ operatorName: z.string().max(200).optional(), ffmpegPath: z.string().max(4096).optional() }).strict(), async (_e, patch) => {
+  handle('settings:set', z.object({ operatorName: z.string().max(200).optional(), ffmpegPath: z.string().max(4096).optional(), modelBaseUrl: z.union([z.literal(''), z.string().url().max(2048).startsWith('https://')]).optional() }).strict(), async (_e, patch) => {
     if (patch.ffmpegPath !== undefined) tools.reset();
     return updateSettings((s) => ({ ...s, ...patch }));
   });
@@ -347,6 +351,106 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null, isDev
       }
     },
   );
+
+  // Paint-to-roto (addendum 04). Looking (session, frames, mattes) is allowed read-only, like the viewer;
+  // running an engine, exporting and downloading a model are processing and need a licence.
+  const rotoEnv = async (): Promise<RotoEnv> => {
+    const t = await currentTools();
+    const loc = { resourcesPath: process.resourcesPath, appPath: app.getAppPath(), packaged: app.isPackaged };
+    return {
+      ffmpeg: t.ffmpeg,
+      caps: t.caps,
+      cacheRoot: join(app.getPath('userData'), 'Roto Cache'),
+      frameCache,
+      userData: app.getPath('userData'),
+      packaged: app.isPackaged,
+      ort: ortCandidates(loc),
+      workerFile: join(__dirname, 'roto-worker.js'),
+      generator: `VC VFX ${app.getVersion()}`,
+    };
+  };
+  handle('roto:session', z.object(shotInput), async (_e, input) => {
+    try {
+      return ok(await rotoSession(viewerProject(input.text), input.shotId, await outputRootFor(input.projectKey), await rotoEnv()));
+    } catch (error) {
+      return fail(error);
+    }
+  });
+  handle('roto:frame', z.object({ ...shotInput, frame: z.number().int().nonnegative().max(100_000_000), maxWidth: z.number().int().min(64).max(4096), prefetch: z.boolean().optional() }), async (_e, input) => {
+    try {
+      return ok(await rotoFrame(viewerProject(input.text), input, await outputRootFor(input.projectKey), await rotoEnv()));
+    } catch (error) {
+      return fail(error);
+    }
+  });
+  handle('roto:mask', z.object({ ...shotInput, partId: z.string().max(32).nullable(), frame: z.number().int().nonnegative().max(100_000_000), maxWidth: z.number().int().min(32).max(8192) }), async (_e, input) => {
+    try {
+      return ok(await rotoMask(viewerProject(input.text), input, await rotoEnv()));
+    } catch (error) {
+      return fail(error);
+    }
+  });
+  handle(
+    'job:roto-run',
+    z.object({ ...shotInput, jobId, partId: z.string().min(1).max(32), from: z.number().int().nonnegative().max(100_000_000), directions: z.array(z.enum(['key', 'forward', 'backward'])).min(1).max(3) }),
+    async (event, input) => {
+      if ((await capability()) !== 'full') return fail(READ_ONLY_REASON);
+      const signal = startJob(input.jobId);
+      const progress = progressSender(event.sender, input.jobId, `Roto ${input.shotId}`);
+      try {
+        const results = await rotoRun(projectFrom(input.text), input, await outputRootFor(input.projectKey), await rotoEnv(), {
+          signal,
+          onProgress: (done, total, frame) => progress(done, total, frame !== undefined ? `frame ${frame}` : undefined),
+        });
+        return ok({ results });
+      } catch (error) {
+        return fail(error);
+      } finally {
+        endJob(input.jobId);
+      }
+    },
+  );
+  handle('job:roto-export', z.object({ ...shotInput, jobId, operator: z.string().min(1).max(200), exr: z.boolean() }), async (event, input) => {
+    if ((await capability()) !== 'full') return fail(READ_ONLY_REASON);
+    const signal = startJob(input.jobId);
+    const progress = progressSender(event.sender, input.jobId, `Exporting mattes for ${input.shotId}`);
+    try {
+      const project = projectFrom(input.text);
+      const root = await ensureOutputRoot(input.projectKey, project, false);
+      if (!root) return fail('No output root was chosen, so nothing was written.');
+      return ok(await rotoExport(project, input, root, await rotoEnv(), { signal, onProgress: (done, total) => progress(done, total, `${done} / ${total} frames`) }));
+    } catch (error) {
+      return fail(error);
+    } finally {
+      endJob(input.jobId);
+    }
+  });
+  handle('job:roto-model', z.object({ jobId, action: z.enum(['status', 'download']) }), async (event, input) => {
+    try {
+      const env = await rotoEnv();
+      if (input.action === 'download') {
+        if ((await capability()) !== 'full') return fail(READ_ONLY_REASON);
+        const signal = startJob(input.jobId);
+        const progress = progressSender(event.sender, input.jobId, 'Downloading the SAM 2 model');
+        try {
+          const settings = await readSettings();
+          await downloadModel({
+            userData: env.userData,
+            packaged: env.packaged,
+            baseUrl: process.env['VCVFX_SAM2_URL'] || settings.modelBaseUrl || undefined,
+            fetch: ((url: string, init?: { signal?: AbortSignal }) => net.fetch(url, init)) as unknown as FetchLike,
+            signal,
+            onProgress: (done, total, file) => progress(done, total, file),
+          });
+        } finally {
+          endJob(input.jobId);
+        }
+      }
+      return ok((await engineInfo(env)).find((e) => e.id === 'sam2')!);
+    } catch (error) {
+      return fail(error);
+    }
+  });
 
   handle('job:cancel', jobId, async (_e, id) => cancelJob(id));
   handle('shell:reveal', z.string().min(1).max(4096), async (_e, path) => shell.showItemInFolder(path));

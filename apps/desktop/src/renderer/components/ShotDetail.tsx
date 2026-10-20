@@ -49,6 +49,8 @@ export interface ShotDetailHandlers {
   onPlateColor(change: { choice?: ShotPlateColor; encoding?: ColorEncodingId | null }): void;
   /** Open the frame viewer on this shot. */
   onView(): void;
+  /** Open the roto workspace on this shot (addendum 04). */
+  onRoto?(): void;
 }
 
 interface Props extends ShotDetailHandlers {
@@ -167,6 +169,11 @@ function TaskCard({ task, props }: { task: TaskRecord; props: Props }) {
           <ActionButton allowed={platesAllowed} onClick={props.onGeneratePlates} canEdit={canEdit} busy={busy}>
             Generate plates
           </ActionButton>
+        ) : null}
+        {task.kind === 'roto' && props.onRoto ? (
+          <button type="button" className={task.state === 'pending' ? 'primary' : undefined} onClick={props.onRoto} title="Paint, propagate, review and export mattes">
+            {task.state === 'pending' ? 'Paint roto…' : 'Open roto…'}
+          </button>
         ) : null}
         {NEXT_STATES[task.state].map((n) => (
           <ActionButton key={n.state} allowed={canSetTask(project, shotId, task.kind, n.state, now)} onClick={() => props.onTaskState(task.kind, n.state)} canEdit={canEdit} busy={busy}>

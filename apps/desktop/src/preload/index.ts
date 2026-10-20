@@ -25,6 +25,12 @@ const api: VcvfxApi = {
   probeSources: (input) => ipcRenderer.invoke('job:probe', input),
   viewerSources: (input) => ipcRenderer.invoke('viewer:sources', input),
   viewerFrame: (input) => ipcRenderer.invoke('viewer:frame', input),
+  rotoSession: (input) => ipcRenderer.invoke('roto:session', input),
+  rotoFrame: (input) => ipcRenderer.invoke('roto:frame', input),
+  rotoRun: (input) => ipcRenderer.invoke('job:roto-run', input),
+  rotoMask: (input) => ipcRenderer.invoke('roto:mask', input),
+  rotoExport: (input) => ipcRenderer.invoke('job:roto-export', input),
+  rotoModel: (input) => ipcRenderer.invoke('job:roto-model', input),
   cancelJob: (jobId) => ipcRenderer.invoke('job:cancel', jobId),
   onProgress: (listener) => {
     const wrapped = (_event: IpcRendererEvent, progress: JobProgress) => listener(progress);

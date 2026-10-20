@@ -116,4 +116,24 @@ describe('the viewer in the browser preview', () => {
     expect(r.ok && r.data.source.reason).toMatch(new RegExp(`^${DESKTOP_ONLY}`));
     expect((await api.viewerFrame({ text: sampleText(), shotId: '010_020', projectKey: 'k', layer: 'source', frame: 1010, view: 'raw', maxWidth: 480 })).ok).toBe(false);
   });
+
+  it('runs paint-to-roto in the page for the sample, and says export and SAM 2 are the desktop app’s', async () => {
+    const api = createBrowserBridge();
+    const text = sampleText().replace('"handoffPath": "NightShift_handoff.json"', '"handoffPath": "sample"');
+    const session = await api.rotoSession({ text, shotId: '010_020', projectKey: 'k' });
+    expect(session).toMatchObject({ ok: true, data: { available: true, sample: true, exportable: false, working: { width: 640, height: 338 }, first: 1009, last: 1128 } });
+    if (!session.ok) return;
+    expect(session.data.engines.map((e) => [e.id, e.available])).toEqual([
+      ['track', true],
+      ['sam2', false],
+    ]);
+    const exported = await api.rotoExport({ jobId: 'j', text, shotId: '010_020', projectKey: 'k', operator: 'T', exr: false });
+    expect(exported.ok ? '' : exported.error).toMatch(new RegExp(`^${DESKTOP_ONLY}`));
+    const model = await api.rotoModel({ jobId: 'j', action: 'download' });
+    expect(model.ok ? '' : model.error).toMatch(new RegExp(`^${DESKTOP_ONLY}`));
+    // A real project's roto needs its media.
+    const real = await api.rotoSession({ text: sampleText(), shotId: '010_020', projectKey: 'k' });
+    expect(real.ok && real.data.available).toBe(false);
+  });
 });
+
