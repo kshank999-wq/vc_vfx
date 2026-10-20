@@ -26,7 +26,7 @@ jobs:
       matrix:
         include:
           - { target: darwin-arm64, os: macos-14 }
-          - { target: darwin-x64, os: macos-13 }
+          - { target: darwin-x64, os: macos-15-intel }
           - { target: win32-x64, os: ubuntu-24.04 }
           - { target: linux-x64, os: ubuntu-24.04 }
     steps:
@@ -34,7 +34,10 @@ jobs:
 
       - name: Build tools (macOS)
         if: runner.os == 'macOS'
-        run: brew install nasm autoconf automake libtool pkg-config
+        run: |
+          brew install nasm autoconf automake libtool pkg-config
+          # zimg's autogen.sh calls libtoolize, which Homebrew names glibtoolize.
+          echo "$(brew --prefix libtool)/libexec/gnubin" >> "$GITHUB_PATH"
 
       - name: Build tools (Linux)
         if: runner.os == 'Linux'

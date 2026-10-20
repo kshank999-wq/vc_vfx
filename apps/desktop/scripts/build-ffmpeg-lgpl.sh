@@ -19,6 +19,8 @@
 # Nothing autodetected is linked (--disable-autodetect), so a build machine's
 # installed libraries cannot leak a GPL dependency in.
 set -euo pipefail
+# Arrays below may be empty; macOS's bash 3.2 calls an empty "${a[@]}"
+# unbound under set -u, hence the ${a[@]+"${a[@]}"} form.
 
 FFMPEG_TAG=n7.1
 FFMPEG_COMMIT=b08d7969c550a804a59511c7b83f2dd8cc0499b8
@@ -73,14 +75,14 @@ esac
 # zlib (EXR's ZIP compression), built here so every target links the same one.
 (
   cd "$work/zlib"
-  env "${zlib_env[@]}" CFLAGS="$cflags -O2" ./configure --static --prefix="$prefix" >/dev/null
+  env ${zlib_env[@]+"${zlib_env[@]}"} CFLAGS="$cflags -O2" ./configure --static --prefix="$prefix" >/dev/null
   make -s -j"$jobs" install >/dev/null
 )
 
 (
   cd "$work/zimg"
   ./autogen.sh >/dev/null
-  CFLAGS="$cflags" CXXFLAGS="$cflags" ./configure -q "${host_args[@]}" --prefix="$prefix" --disable-shared --enable-static
+  CFLAGS="$cflags" CXXFLAGS="$cflags" ./configure -q ${host_args[@]+"${host_args[@]}"} --prefix="$prefix" --disable-shared --enable-static
   make -s -j"$jobs" install
 )
 
@@ -96,7 +98,7 @@ esac
     --extra-cflags="-I$prefix/include $cflags" \
     --extra-ldflags="-L$prefix/lib $cflags" \
     --extra-libs="$cxxlib -lm" \
-    "${ff_args[@]}" >/dev/null || { tail -30 ffbuild/config.log >&2; exit 1; }
+    ${ff_args[@]+"${ff_args[@]}"} >/dev/null || { tail -30 ffbuild/config.log >&2; exit 1; }
   make -s -j"$jobs"
   cp "ffmpeg$exe" "ffprobe$exe" "$out/"
   cp COPYING.LGPLv2.1 "$out/LICENSE"
