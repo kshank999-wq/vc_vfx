@@ -7,7 +7,7 @@ import { shotState, shotStatus, type PrepTaskKind, type Project, type ShotStatus
  * the task) when the shot does not have that task.
  */
 
-export const MODULE_IDS = ['shots', 'plates', 'roto', 'key', 'camera', 'track2d', 'deliver'] as const;
+export const MODULE_IDS = ['shots', 'plates', 'roto', 'key', 'cleanplate', 'camera', 'track2d', 'deliver'] as const;
 export type ModuleId = (typeof MODULE_IDS)[number];
 
 export interface ModuleInfo {
@@ -24,6 +24,7 @@ export const MODULES: Record<ModuleId, ModuleInfo> = {
   plates: { id: 'plates', label: 'Plates', task: 'sequence_conversion', blurb: 'Turn the camera files into clean, numbered image sequences, and check them frame by frame.' },
   roto: { id: 'roto', label: 'Roto', task: 'roto', blurb: 'Paint over the subject once; the matte is carried through the shot for you to check.' },
   key: { id: 'key', label: 'Key', task: 'key', blurb: 'Pull a green- or blue-screen key in one click, repair it with roto, despill it against the background.' },
+  cleanplate: { id: 'cleanplate', label: 'Clean Plate', task: 'clean_plate', blurb: 'Remove a crew member, a rig or a passer-by: the background is rebuilt from the frames that see it.' },
   camera: { id: 'camera', label: 'Camera Track', task: 'camera_track', blurb: 'Work out how the camera moved, for 3D; align it to a LiDAR scan if you have one.' },
   track2d: { id: 'track2d', label: '2D Track', task: 'track_2d', blurb: 'Pin a flat surface (a screen, a sign) or a point through the shot for a replacement.' },
   deliver: { id: 'deliver', label: 'Deliver', task: null, blurb: 'Verify the sources, approve, write the vendor package and print the shot list.' },
@@ -50,11 +51,11 @@ export function moduleStatus(project: Project, shotId: string | null, id: Module
 /** The module a double-click opens: the last one used if the shot has its task, else the shot's first task module. */
 export function moduleToOpen(project: Project, shotId: string, last: ModuleId | null): ModuleId {
   if (last && last !== 'shots' && moduleStatus(project, shotId, last).kind !== 'missing') return last;
-  const order: ModuleId[] = ['plates', 'roto', 'track2d', 'camera', 'key'];
+  const order: ModuleId[] = ['plates', 'roto', 'track2d', 'camera', 'key', 'cleanplate'];
   return order.find((m) => moduleStatus(project, shotId, m).kind === 'task') ?? 'deliver';
 }
 
-/** The module a ⌘/Ctrl+digit selects (1 = Shots … 7 = Deliver). */
+/** The module a ⌘/Ctrl+digit selects (1 = Shots … 8 = Deliver). */
 export function moduleForDigit(key: string): ModuleId | null {
   const n = Number(key);
   return Number.isInteger(n) && n >= 1 && n <= MODULE_IDS.length ? MODULE_IDS[n - 1]! : null;

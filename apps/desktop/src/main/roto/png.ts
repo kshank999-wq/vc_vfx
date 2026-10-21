@@ -86,6 +86,24 @@ export function encodePngRgb(width: number, height: number, rgb: Uint8Array | Ui
   return Buffer.concat([SIGNATURE, chunk('IHDR', ihdr), chunk('IDAT', deflateSync(raw)), chunk('IEND', Buffer.alloc(0))]);
 }
 
+/** RGB 16-bit PNG (values 0…65535, interleaved), for plates kept in code values (clean plates of an unknown encoding). */
+export function encodePngRgb16(width: number, height: number, rgb: Uint16Array, options: { text?: Record<string, string> } = {}): Buffer {
+  const stride = width * 6;
+  const raw = Buffer.alloc((stride + 1) * height);
+  for (let y = 0; y < height; y += 1) {
+    const at = y * (stride + 1);
+    raw[at] = 0;
+    for (let i = 0; i < width * 3; i += 1) raw.writeUInt16BE(rgb[y * width * 3 + i]!, at + 1 + 2 * i);
+  }
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(width, 0);
+  ihdr.writeUInt32BE(height, 4);
+  ihdr[8] = 16;
+  ihdr[9] = 2;
+  const texts = Object.entries(options.text ?? {}).map(([k, v]) => chunk('tEXt', Buffer.concat([Buffer.from(k, 'latin1'), Buffer.from([0]), Buffer.from(v, 'latin1')])));
+  return Buffer.concat([SIGNATURE, chunk('IHDR', ihdr), ...texts, chunk('IDAT', deflateSync(raw)), chunk('IEND', Buffer.alloc(0))]);
+}
+
 const paeth = (a: number, b: number, c: number) => {
   const p = a + b - c;
   const pa = Math.abs(p - a);

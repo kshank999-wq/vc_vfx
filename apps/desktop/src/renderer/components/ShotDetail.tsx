@@ -71,7 +71,7 @@ export interface ShotDetailProps extends ShotDetailHandlers {
 export type TaskCtx = Pick<ShotDetailProps, 'project' | 'shotId' | 'now' | 'canEdit' | 'busy' | 'onTaskState' | 'onApproveTask' | 'onTaskNotes' | 'onGeneratePlates' | 'onOpenModule'>;
 
 /** Which module tab works on a task, if any. */
-export const MODULE_OF: Partial<Record<PrepTaskKind, ModuleId>> = { sequence_conversion: 'plates', roto: 'roto', key: 'key', camera_track: 'camera', track_2d: 'track2d' };
+export const MODULE_OF: Partial<Record<PrepTaskKind, ModuleId>> = { sequence_conversion: 'plates', roto: 'roto', key: 'key', clean_plate: 'cleanplate', camera_track: 'camera', track_2d: 'track2d' };
 
 /** A button whose disabled state carries the reason, both as a tooltip and visibly. */
 export function ActionButton({

@@ -73,7 +73,7 @@ export async function clearKeyVersion(folder: string, shot: string, version: num
   for (const n of ours) await rm(join(folder, n), { force: true });
 }
 
-class ExrStream {
+export class ExrStream {
   private child: ChildProcessWithoutNullStreams;
   private done: Promise<void>;
   private err = '';

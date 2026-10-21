@@ -4,6 +4,7 @@ import { handoffShot, planFor, plateColorFor, shotState, shotStatus, shotTiming,
 import { partsInOrder, rotoConfidenceSummary, rotoNames } from './roto.js';
 import { camtrackManifest, track2dManifest } from './camtrack.js';
 import { keyManifest } from './key.js';
+import { cleanPlateManifest } from './cleanplate.js';
 
 /**
  * The per-shot output package (master spec §17) and its manifest (§18).
@@ -169,6 +170,7 @@ export function buildManifest(p: Project, shotId: string, input: ManifestInput) 
     cameraTrack: camtrackManifest(state),
     tracks2d: track2dManifest(state),
     key: keyManifest(state),
+    cleanPlate: cleanPlateManifest(state),
     status: shotStatus(state),
     tasks: state.tasks.map((t) => ({ kind: t.kind, state: t.state, version: versionTag(t.version), notes: t.notes, approval: t.approval })),
     approval: state.approval,

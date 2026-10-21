@@ -1,0 +1,92 @@
+/*
+ * The Clean Plate workspace (addendum 10). It uses the Key's viewer,
+ * timeline and control styles (key.css); what is here is its own: the
+ * colours of what is removed and patched, guidance marks on the timeline,
+ * and the steps' small rows.
+ */
+
+.key-link-dot.cp-remove {
+  background: #a46bff;
+}
+.key-link-dot.cp-patch-dot {
+  background: #3fc7a4;
+}
+.key-box.cp-box-remove {
+  stroke: #c08bff;
+}
+.key-box.cp-box-patch {
+  stroke: #3fc7a4;
+  stroke-dasharray: 3 3;
+}
+.cp-seg {
+  display: flex;
+  flex-wrap: wrap;
+}
+.cp-seg button {
+  flex: 1 1 auto;
+}
+.cp-label {
+  margin-top: 4px;
+  font-size: 13.5px;
+}
+.cp-ref {
+  justify-content: space-between;
+}
+.cp-ref > .key-note {
+  flex: 1 1 140px;
+}
+.cp-ref > button {
+  flex: 0 0 auto;
+}
+.cp-patch {
+  align-items: flex-end;
+}
+.cp-patch-from {
+  flex: 0 0 auto;
+}
+.cp-patch-from input {
+  width: 96px;
+  min-height: 32px;
+}
+.cp-patch > .key-tool {
+  flex: 1 1 140px;
+}
+.cp-timeline .key-tick.cp-excluded {
+  opacity: 0.25;
+}
+.cp-timeline .key-tick.cp-preferred {
+  box-shadow: inset 0 4px 0 #3fc7a4;
+}
+.cp-ref-mark {
+  position: absolute;
+  top: -6px;
+  width: 0;
+  height: 0;
+  margin-left: -5px;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 7px solid #8fb4ff;
+  pointer-events: none;
+}
+.cp-stale {
+  bottom: 52px;
+  color: var(--s-needs_review);
+}
+.cp-info .stats {
+  margin-top: 0;
+}
+/* A long shot's ticks must not set the row's width: the strip shrinks, the buttons keep their size. */
+.cp-viewer .key-timeline-row > button,
+.cp-viewer .key-frame {
+  flex: none;
+  white-space: nowrap;
+}
+.cp-timeline {
+  min-width: 80px;
+  gap: 0;
+  overflow: hidden;
+}
+.cp-timeline .key-tick {
+  min-width: 0;
+  border-radius: 0;
+}

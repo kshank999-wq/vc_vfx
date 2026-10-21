@@ -30,6 +30,14 @@ const PATHS: Record<IconName, JSX.Element> = {
       <path d="M8 21h8" />
     </>
   ),
+  cleanplate: (
+    <>
+      <rect x="3" y="4" width="18" height="14" rx="1.5" />
+      <circle cx="11" cy="8.6" r="1.7" strokeDasharray="1.6 1.4" />
+      <path d="M8 18v-3.4a3 3 0 0 1 6 0V18" strokeDasharray="1.6 1.4" />
+      <path d="m15.5 21 5-5" />
+    </>
+  ),
   camera: (
     <>
       <rect x="2.5" y="7" width="13" height="10" rx="1.5" />

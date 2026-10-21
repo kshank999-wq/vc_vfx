@@ -24,11 +24,13 @@ import { InfoSection, ModuleLayout, Stat, StepList, Stats, type StepDef } from '
 import { ActionButton, CameraColour, MODULE_OF, OutputRoot, PlateColorPanel, ReviewMarks, SequencePlan, ShotLog, SourceDetails, TaskCard, type ShotDetailProps } from './ShotDetail';
 import { Viewer } from './Viewer';
 import { KeyInfo, KeyViewer, keyStepDefs, useKeyController, type KeyWorkspaceProps } from './key/KeyWorkspace';
+import { CleanPlateInfo, CleanPlateViewer, cleanPlateStepDefs, useCleanPlateController, type CleanPlateWorkspaceProps } from './cleanplate/CleanPlateWorkspace';
 
 /**
- * The Plates, Key and Deliver tabs (addendum 08). The Key tab places the
- * key workspace's steps, viewer and numbers (key/KeyWorkspace.tsx, addendum
- * 09) in the shell's zones. Roto, Camera Track and 2D Track are their
+ * The Plates, Key, Clean Plate and Deliver tabs (addendum 08). The Key tab
+ * places the key workspace's steps, viewer and numbers (key/KeyWorkspace.tsx,
+ * addendum 09) in the shell's zones; the Clean Plate tab does the same with
+ * cleanplate/CleanPlateWorkspace.tsx (addendum 10). Roto, Camera Track and 2D Track are their
  * workspaces (RotoWorkspace, TrackWorkspace) in the same three-zone layout.
  */
 
@@ -243,6 +245,57 @@ export function KeyModule(props: ModuleScreenProps & { work: KeyWork }) {
     <ModuleLayout label="Key" steps={task ? <StepList steps={keyStepDefs(ctl)} resetKey={shotId} /> : <MissingCard props={props} module="key" />} info={info}>
       {task && ctl.supported ? (
         <KeyViewer ctl={ctl} />
+      ) : (
+        <Viewer api={props.api} project={project} shotId={shotId} projectKey={props.projectKey} canEdit={props.canEdit} frame={props.frame} onFrame={props.onFrame} onClose={props.onClose} onToggleMark={props.onToggleMark} />
+      )}
+    </ModuleLayout>
+  );
+}
+
+// ------------------------------------------------------------------ Clean plate
+
+/** What the Clean Plate tab needs from the app beyond a module screen's props. */
+export type CleanPlateWork = Pick<CleanPlateWorkspaceProps, 'actor' | 'runJob' | 'notify' | 'onCleanPlate'>;
+
+export function CleanPlateModule(props: ModuleScreenProps & { work: CleanPlateWork }) {
+  const { project, shotId } = props;
+  const state = shotState(project, shotId);
+  const shot = handoffShot(project, shotId);
+  const ctl = useCleanPlateController({
+    api: props.api,
+    project,
+    shotId,
+    projectKey: props.projectKey,
+    canEdit: props.canEdit,
+    busy: props.busy,
+    actor: props.work.actor,
+    frame: props.frame,
+    onFrame: props.onFrame,
+    onCleanPlate: props.work.onCleanPlate,
+    runJob: props.work.runJob,
+    notify: props.work.notify,
+    onOpenRoto: (f) => {
+      props.onFrame(f);
+      props.onOpenModule?.('roto');
+    },
+  });
+  if (!state || !shot) return null;
+  const task = state.tasks.find((t) => t.kind === 'clean_plate');
+  const info = (
+    <>
+      {task ? <CleanPlateInfo ctl={ctl} /> : null}
+      {shot.supervisorNotes ? (
+        <InfoSection title="Supervisor notes">
+          <p className="info-line">{shot.supervisorNotes}</p>
+        </InfoSection>
+      ) : null}
+      {task ? <TaskInfo props={props} kind="clean_plate" /> : null}
+    </>
+  );
+  return (
+    <ModuleLayout label="Clean Plate" steps={task ? <StepList steps={cleanPlateStepDefs(ctl)} resetKey={shotId} /> : <MissingCard props={props} module="cleanplate" />} info={info}>
+      {task && ctl.supported ? (
+        <CleanPlateViewer ctl={ctl} />
       ) : (
         <Viewer api={props.api} project={project} shotId={shotId} projectKey={props.projectKey} canEdit={props.canEdit} frame={props.frame} onFrame={props.onFrame} onClose={props.onClose} onToggleMark={props.onToggleMark} />
       )}

@@ -3,6 +3,7 @@ import type { ApiResult, ExternalLink, JobProgress, LicenceStanding, MenuCommand
 import { viewerTimeline } from '../shared/viewer';
 import { createCameraPreview } from './camera-preview';
 import { createKeyPreview } from './key-preview';
+import { createCleanPlatePreview } from './cleanplate-preview';
 import { createRotoPreview } from './roto-preview';
 
 /**
@@ -180,6 +181,7 @@ export function createBrowserBridge(): BrowserBridge {
   const roto = createRotoPreview({ desktopOnly, progress: (p) => progressListeners.forEach((l) => l(p)) });
   const camera = createCameraPreview({ desktopOnly, progress: (p) => progressListeners.forEach((l) => l(p)) });
   const keying = createKeyPreview({ desktopOnly, progress: (p) => progressListeners.forEach((l) => l(p)) });
+  const cleaning = createCleanPlatePreview({ desktopOnly, progress: (p) => progressListeners.forEach((l) => l(p)) });
 
   return {
     command,
@@ -291,8 +293,13 @@ export function createBrowserBridge(): BrowserBridge {
     keySeedRoto: (input) => keying.keySeedRoto(input),
     keyExport: (input) => keying.keyExport(input),
     keyChooseBackground: () => keying.keyChooseBackground(),
+    // Clean plates: the engine runs here on the sample's synthetic panning shot (cleanplate-preview.ts).
+    cleanPlateSession: (input) => cleaning.cleanPlateSession(input),
+    cleanPlateFrame: (input) => cleaning.cleanPlateFrame(input),
+    cleanPlateBuild: (input) => cleaning.cleanPlateBuild(input),
+    cleanPlateExport: (input) => cleaning.cleanPlateExport(input),
     cancelJob: async (jobId) => {
-      if (!camera.cancel(jobId) && !keying.cancel(jobId)) roto.cancel(jobId);
+      if (!camera.cancel(jobId) && !keying.cancel(jobId) && !cleaning.cancel(jobId)) roto.cancel(jobId);
     },
     onProgress: (listener) => {
       progressListeners.add(listener);

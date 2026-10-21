@@ -36,7 +36,7 @@ describe('module tabs', () => {
   it('lists every module in the top toolbar and switches between them', async () => {
     await openSample();
     const tabs = within(screen.getByRole('tablist', { name: 'Modules' })).getAllByRole('tab');
-    expect(tabs.map((t) => t.getAttribute('aria-label'))).toEqual(['Shots', 'Plates', 'Roto', 'Key', 'Camera Track', '2D Track', 'Deliver']);
+    expect(tabs.map((t) => t.getAttribute('aria-label'))).toEqual(['Shots', 'Plates', 'Roto', 'Key', 'Clean Plate', 'Camera Track', '2D Track', 'Deliver']);
     expect(selected('Shots')).toBe(true);
     expect(screen.getByRole('table', { name: 'Shot queue' })).toBeTruthy();
 
@@ -52,17 +52,23 @@ describe('module tabs', () => {
     expect(screen.getByRole('region', { name: 'Package contents' }).textContent).toContain('02_MATTES_ROTO');
   });
 
-  it('switches with ⌘/Ctrl+1…7 and the View menu', async () => {
+  it('switches with ⌘/Ctrl+1…8 and the View menu', async () => {
     let send: (c: MenuCommand) => void = () => undefined;
     await openSample(stubBridge({ onMenu: (l) => ((send = l), () => undefined) }));
     fireEvent.keyDown(window, { key: '3', ctrlKey: true });
     expect(selected('Roto')).toBe(true);
+    fireEvent.keyDown(window, { key: '5', ctrlKey: true });
+    expect(selected('Clean Plate')).toBe(true);
     fireEvent.keyDown(window, { key: '7', metaKey: true });
+    expect(selected('2D Track')).toBe(true);
+    fireEvent.keyDown(window, { key: '8', metaKey: true });
     expect(selected('Deliver')).toBe(true);
     fireEvent.keyDown(window, { key: '1', ctrlKey: true });
     expect(selected('Shots')).toBe(true);
     act(() => send('show-camera'));
     expect(selected('Camera Track')).toBe(true);
+    act(() => send('show-cleanplate'));
+    expect(selected('Clean Plate')).toBe(true);
     act(() => send('show-shots'));
     expect(selected('Shots')).toBe(true);
   });
@@ -82,8 +88,9 @@ describe('module tabs', () => {
 
   it('maps digits and picks the module to open from the shot’s tasks', () => {
     expect(moduleForDigit('1')).toBe('shots');
-    expect(moduleForDigit('7')).toBe('deliver');
-    expect(moduleForDigit('8')).toBeNull();
+    expect(moduleForDigit('5')).toBe('cleanplate');
+    expect(moduleForDigit('8')).toBe('deliver');
+    expect(moduleForDigit('9')).toBeNull();
     const p = sample();
     expect(moduleToOpen(p, '010_030', null)).toBe('track2d');
     expect(moduleToOpen(p, '010_030', 'roto')).toBe('track2d');
@@ -91,6 +98,9 @@ describe('module tabs', () => {
     expect(moduleStatus(p, '010_030', 'roto')).toMatchObject({ kind: 'missing' });
     expect(moduleStatus(p, '010_020', 'roto')).toEqual({ kind: 'task', state: 'pending' });
     expect(moduleStatus(p, '010_020', 'deliver')).toEqual({ kind: 'shot', status: 'ready_for_prep' });
+    expect(moduleStatus(p, '020_010', 'cleanplate')).toEqual({ kind: 'task', state: 'pending' });
+    expect(moduleStatus(p, '010_020', 'cleanplate')).toMatchObject({ kind: 'missing' });
+    expect(moduleToOpen(p, '020_010', 'cleanplate')).toBe('cleanplate');
   });
 });
 
@@ -161,6 +171,30 @@ describe('the Key tab', () => {
     expect(screen.queryByRole('note', { name: 'Keying is coming next' })).toBeNull();
     // The shot's Key task is tracked and approved here.
     expect(screen.getByText('Green/blue-screen key')).toBeTruthy();
+  });
+});
+
+describe('the Clean Plate tab', () => {
+  it('sits between Key and Camera Track and walks the clean-plate steps, with the task in Details', async () => {
+    await openSample();
+    fireEvent.click(within(screen.getByRole('table', { name: 'Shot queue' })).getAllByRole('row').find((r) => r.getAttribute('data-shot') === '020_010')!);
+    fireEvent.click(tab('Clean Plate'));
+    expect(screen.getByRole('main', { name: 'Clean Plate' })).toBeTruthy();
+    expect(tab('Clean Plate').className).not.toContain('missing');
+    const steps = screen.getByRole('complementary', { name: 'Steps' });
+    for (const what of ['Choose what to remove', 'Still or sequence, and alignment', 'Build', 'Review & fix', 'Export clean plate v001']) expect(within(steps).getByText(what)).toBeTruthy();
+    expect(within(steps).getByRole('button', { name: 'Draw a box to remove' })).toBeTruthy();
+    // The task (and the supervisor's note) are in Details, tracked and approved here.
+    const details = screen.getByRole('complementary', { name: 'Details' });
+    expect(within(details).getByText('Remove crew member crossing at frame 1120')).toBeTruthy();
+    expect(within(details).getAllByText('Clean plate').length).toBeGreaterThan(0);
+  });
+
+  it('greys out on a shot without the task and offers to add it', async () => {
+    await openSample();
+    fireEvent.click(tab('Clean Plate'));
+    expect(tab('Clean Plate').className).toContain('missing');
+    expect(screen.getByRole('button', { name: 'Add Clean Plate to this shot' })).toBeTruthy();
   });
 });
 

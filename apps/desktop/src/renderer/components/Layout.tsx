@@ -400,7 +400,7 @@ export function WhatsHere({ onOpen }: { onOpen(id: ModuleId): void }) {
 const TOUR: { target: string; title: string; body: string }[] = [
   { target: '[data-tour="tab-shots"]', title: 'Shots is home', body: 'Every shot in the DIT’s handoff is listed here, with what each one needs and how far it has got. You can always come back with this tab.' },
   { target: '[data-tour="queue"]', title: 'Pick a shot', body: 'Click a shot to select it; its details show on the right. Double-click to open it straight in its next job.' },
-  { target: '[data-tour="tabs"]', title: 'One tab per job', body: 'Plates, Roto, Key, Camera Track, 2D Track and Deliver each work on the selected shot. A dot shows how that job stands; a greyed tab means the shot doesn’t need it yet — open it to add it.' },
+  { target: '[data-tour="tabs"]', title: 'One tab per job', body: 'Plates, Roto, Key, Clean Plate, Camera Track, 2D Track and Deliver each work on the selected shot. A dot shows how that job stands; a greyed tab means the shot doesn’t need it yet — open it to add it.' },
   { target: '[data-tour="tabs"]', title: 'Follow the steps', body: 'Inside each tab, the numbered steps on the left walk you through the job. The picture is in the middle; the numbers that matter are on the right. Done steps get a tick.' },
 ];
 

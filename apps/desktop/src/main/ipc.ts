@@ -26,6 +26,7 @@ import { downloadModel, type FetchLike } from './roto/models';
 import { ortCandidates } from './roto/sam2-ort';
 import { verifyProject } from './verify';
 import { registerKeyHandlers } from './key/ipc-key';
+import { registerCleanPlateHandlers } from './cleanplate/ipc-cleanplate';
 import { trackCommand, trackFrame, trackSession, trackView, type CameraEnv } from './camera/api';
 import { COMMAND_SPECS, type CameraCommand } from '../shared/camera/commands';
 import { checkerboardPdf, checkerboardPixels } from '../shared/camera/calibration';
@@ -489,6 +490,24 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null, isDev
       };
       const choice = window ? await dialog.showOpenDialog(window, options) : await dialog.showOpenDialog(options);
       return choice.canceled ? null : (choice.filePaths[0] ?? null);
+    },
+  });
+
+  // Clean plates (addendum 10): the handlers live in cleanplate/ipc-cleanplate.ts, with the key's rules.
+  registerCleanPlateHandlers({
+    handle,
+    viewerProject,
+    projectFrom,
+    outputRootFor,
+    ensureOutputRoot,
+    licensed: async () => (await capability()) === 'full',
+    readOnlyReason: READ_ONLY_REASON,
+    startJob,
+    endJob,
+    progress: (event, id, label) => progressSender(event.sender, id, label),
+    env: async () => {
+      const t = await currentTools();
+      return { ffmpeg: t.ffmpeg, caps: t.caps, rotoCacheRoot: join(app.getPath('userData'), 'Roto Cache'), cacheRoot: join(app.getPath('userData'), 'Clean Plate Cache'), workerFile: join(__dirname, 'cleanplate-worker.js'), generator: `VC VFX ${app.getVersion()}` };
     },
   });
 

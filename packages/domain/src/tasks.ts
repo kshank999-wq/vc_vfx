@@ -37,7 +37,7 @@ export const PREP_TASKS: Record<PrepTaskKind, PrepTaskInfo> = {
   roto: { label: 'Paint-to-roto', short: 'Roto', folder: '02_MATTES_ROTO', available: true },
   key: { label: 'Green/blue-screen key', short: 'Key', folder: '03_KEYS', available: true },
   despill: { label: 'Despill and background match', short: 'Despill', folder: '03_KEYS', available: true },
-  clean_plate: { label: 'Clean plate', short: 'Clean plate', folder: '04_CLEAN_PLATES', available: false },
+  clean_plate: { label: 'Clean plate', short: 'Clean plate', folder: '04_CLEAN_PLATES', available: true },
   track_2d: { label: '2D / planar track', short: '2D Track', folder: '05_TRACKS_2D', available: true },
   camera_track: { label: 'Camera track / matchmove', short: 'Cam Track', folder: '06_CAMERA_TRACK', available: true },
   sky_replacement: { label: 'Sky isolation / replacement prep', short: 'Sky', folder: '02_MATTES_ROTO', available: false },

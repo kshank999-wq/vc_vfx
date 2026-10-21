@@ -290,8 +290,8 @@ describe('outputs, manifest and project format', () => {
     expect(approveShot(p, SHOT, 'Sup', NOW).ok).toBe(false); // other tasks still open
   });
 
-  it('is project format 4: a version 3 project opens with no key, and keys survive a round trip', () => {
-    expect(PROJECT_VERSION).toBe(4);
+  it('since project format 4: a version 3 project opens with no key, and keys survive a round trip', () => {
+    expect(PROJECT_VERSION).toBe(5);
     expect(PREP_TASKS.key.available).toBe(true);
     expect(PREP_TASKS.despill.available).toBe(true);
     const v3 = JSON.parse(serializeProject(sample()));
@@ -299,7 +299,7 @@ describe('outputs, manifest and project format', () => {
     for (const s of v3.shots) delete s.key;
     const opened = parseProject(JSON.stringify(v3));
     if (!opened.ok) throw new Error(opened.reason);
-    expect(opened.project.version).toBe(4);
+    expect(opened.project.version).toBe(PROJECT_VERSION);
     expect(shotState(opened.project, SHOT)!.key).toBeNull();
     const p = ok(setKeyScreen(sample(), SHOT, { kind: 'blue', source: 'auto', rgb: [0.05, 0.1, 0.5] }, 'ana', NOW));
     const again = parseProject(serializeProject(p));

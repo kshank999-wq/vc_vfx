@@ -14,7 +14,8 @@ changed; the same components do the same work inside new frames.
 
 ## 1. The top toolbar
 
-`Shots · Plates · Roto · Key · Camera Track · 2D Track · Deliver`, each an
+`Shots · Plates · Roto · Key · Clean Plate · Camera Track · 2D Track · Deliver`
+(Clean Plate added with [addendum 10](addendum-10-clean-plate.md)), each an
 icon and a word (`components/Layout.tsx` `ModuleTabs`, definitions in
 `renderer/modules.ts`), then **Help** (the tour), the licence pill (Account)
 and **Settings** on the right. The brand block shows the project's name and an
@@ -29,11 +30,11 @@ unsaved-changes dot.
   opens, and inside offers **Add Roto to this shot** (`TaskMissing`), logged
   like any added task. Plates still shows the source frames without the task,
   with the offer at the top of its steps.
-- ⌘/Ctrl+1…7 switch tabs, in the browser preview too: the renderer owns the
+- ⌘/Ctrl+1…8 switch tabs (Clean Plate is 5), in the browser preview too: the renderer owns the
   keys, and the desktop's new **View** menu lists the tabs (and Previous /
   Next Shot) with their accelerators shown but not registered
   (`registerAccelerator: false`), so nothing fires twice. Menu commands
-  `show-shots` … `show-deliver` and `show-tour` were added to
+  `show-shots` … `show-deliver` (with `show-cleanplate`) and `show-tour` were added to
   `MENU_COMMANDS`; **Help › Show the Tour** reopens the tour.
 
 ## 2. The shot bar
@@ -46,7 +47,7 @@ filtered list, so filters carry over.
 
 Selecting a shot on Shots and clicking a tab opens that tab on it.
 Double-clicking a shot opens the last module used if the shot has that task,
-else its first task module (Plates, Roto, 2D Track, Camera Track, Key), else
+else its first task module (Plates, Roto, 2D Track, Camera Track, Key, Clean Plate), else
 Deliver (`moduleToOpen`).
 
 ## 3. Every module: three zones
@@ -74,6 +75,7 @@ the task's card — state, version, approval, *Submit for review*,
 | **Plates** | 1 Check source & colour (sequence plan, *Read from clip*, source encoding, plate colour) · 2 Generate plates (with the output folder) · 3 Review in the viewer (Wipe / A/B, Mark for correction, then approve) | Frames, format, resolution, plates written, frames marked to fix, source check; the colour decision in one line; marks; task; camera & colour and source files (folded) |
 | **Roto** | 1 Paint the subject (key-frame actions; parts, engine and working size folded) · 2 Propagate · 3 Review problem frames (Next problem, flag, mark reviewed, matte contact sheet) · 4 Export mattes (refine edges folded, EXR) | Frames with a matte, key frames, frames to check, lowest confidence, this frame, mattes exported; the part being painted; task |
 | **Key** | Eight steps ([addendum 09](addendum-09-keying.md)): pick the screen (Auto key / eyedropper, green/blue), key, garbage & holdout, repair with roto, despill against a background reference, light wrap & match (preview only), process & review problem frames, export. The centre is the key viewer (review modes, A/B wipe, eyedropper, box drawing, confidence timeline). | Screen swatch; matte quality of the frame and the shot, frames keyed, problem frames; version and approval; the frame's measurements; the suggested match; the Key (and Despill) task cards |
+| **Clean Plate** | Five steps ([addendum 10](addendum-10-clean-plate.md)): choose what to remove (roto parts, boxes, matte growth) · still or sequence, alignment and reference frame · build · review & fix (next problem, prefer / leave out a frame, patch a region from a chosen frame) · export. The centre is the clean-plate viewer (source, plate, unresolved in red, confidence, what is removed, A/B wipe, a timeline coloured by confidence). | Frames built, mode, seen in other frames, low confidence, alignment residual, problem frames; the camera's motion and exposure; this frame's measurements; version; the Clean plate task card |
 | **Camera Track** | 1 Choose camera & lens (distortion and profiles folded) · 2 Find & track features (tracker settings folded) · 3 Solve · 4 Review errors (worst tracks, delete, 3D view) · 5 Align to LiDAR *(optional)* · 6 Export (scene orientation and formats folded) | RMS error, focal length, frames solved, confidence, tracks, exported; solve number, nodal, warnings, alignment; task |
 | **2D Track** | 1 Draw a surface or point · 2 Track it · 3 Fix drifting frames (corrections, *Hidden by* roto parts) · 4 Preview an insert *(optional)* · 5 Export | Tracks, frames tracked, lowest confidence, lost frames, key frames, exported; the selected track; task |
 | **Deliver** | 1 Verify sources (all shots) · 2 Approve (each task, then the shot) · 3 Package (output folder, Mark delivered, Reopen) · 4 Print shot list *(optional)* | Shot status, tasks approved, source check, package version; all shots' totals; history |
@@ -120,7 +122,7 @@ muted text lightened for contrast on the dark theme. Keyboard shortcuts are in
 the tooltips (⌘ on a Mac, Ctrl elsewhere) and the status bar shows the two
 that matter most.
 
-Keys: ⌘/Ctrl+1…7 tabs; ⌘/Ctrl+↑/↓ shot; ↑/↓ shot on the Shots tab; ←/→
+Keys: ⌘/Ctrl+1…8 tabs; ⌘/Ctrl+↑/↓ shot; ↑/↓ shot on the Shots tab; ←/→
 frame (Shift: ten) in every picture; Space play and B swap in Plates and
 Key; Esc back to Shots (in Camera Track it first cancels a picking tool);
 Roto's I / E / X, [ ], N, F and Camera Track's 3 and Delete as before.
@@ -157,12 +159,12 @@ Help › Show the Tour bring it back.
 `renderer/modules.ts` (module definitions, `moduleStatus`, `moduleToOpen`,
 per-viewer preferences); `components/Layout.tsx` (tabs, shot bar,
 `ModuleLayout`, `StepList`, `Stat`, `TaskMissing`, *What's here*, tour);
-`components/Modules.tsx` (Plates, Key, Deliver); `components/Icons.tsx`;
+`components/Modules.tsx` (Plates, Key, Clean Plate, Deliver); `components/Icons.tsx`;
 `RotoWorkspace` and `TrackWorkspace` (`mode: 'camera' | '2d'`) render their
 own steps and details into `ModuleLayout`; `Viewer` is the frame viewer only,
 its frame controlled by the App; `AiAssistant` renders inline;
 `ShotDetail` exports its pieces (`TaskCard`, `ApprovalPanel`, `SequencePlan`,
 `PlateColorPanel`, `SourceDetails`, `ShotLog`…). Tests:
 `__tests__/layout.test.tsx` (tabs, keys and menu, shot bar, task-missing,
-Key panel, tour and *What's here* persistence); `__tests__/setup.ts` starts
+Key and Clean Plate panels, tour and *What's here* persistence); `__tests__/setup.ts` starts
 renderer tests with the tour dismissed.

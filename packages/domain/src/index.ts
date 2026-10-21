@@ -12,4 +12,5 @@ export * from './color.js';
 export * from './roto.js';
 export * from './camtrack.js';
 export * from './key.js';
+export * from './cleanplate.js';
 export * from './ai-usage.js';

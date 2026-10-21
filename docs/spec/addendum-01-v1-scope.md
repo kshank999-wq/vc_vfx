@@ -23,13 +23,14 @@ is done in another application.
 | §10.1–10.3 | Camera tracking ([addendum 06](addendum-06-camera-tracking.md)): corner detection and pyramidal KLT tracking (forward–backward checked, roto parts and drawn rectangles excluded), an in-house incremental structure-from-motion solver with bundle adjustment (focal and distortion optional, nodal detected), error graph and worst tracks, a camera database with sources and verification flags, project lens profiles and checkerboard calibration, LiDAR / survey import (PLY, E57, LAS, OBJ, XYZ, CSV) with correspondences, similarity alignment, LiDAR-constrained solve and ICP, a coordinate system (units, up axis, origin, ground, scale), and versioned exports into `06_CAMERA_TRACK` for Nuke, Maya, Blender, After Effects, 3ds Max, FBX, Unreal 5, Unity, USD, Houdini, Fusion / Resolve and .chan, with lens STMaps (EXR), JSON, report and README. Project format 3. |
 | §9 | 2D tracking (addendum 06 §7): planar surface tracking from four corners (homography, RANSAC, direct refinement, roto occluders) and point tracking, drop-in preview, per-frame confidence, corrections as keys with local re-tracking; Nuke CornerPin2D, After Effects corner pin script, Mocha-style keyframe text and JSON into `05_TRACKS_2D`. |
 | §6, §7 | Green/blue-screen keying ([addendum 09](addendum-09-keying.md)): one-click auto key in linear light (screen detection robust to uneven lighting, eyedropper, green/blue), colour difference against a clean-plate model of the screen, core and edge mattes with unmixing edge refinement for hair and motion blur, garbage/holdout/repair mattes from roto parts or boxes, Repair with roto seeded from the key, despill replacing the spill with the background reference's light (skin and listed colours protected), light wrap and a suggested colour match as previews and metadata, per-frame confidence and problem frames, versioned exports into `03_KEYS` (16-bit alpha, premultiplied despilled EXR foreground, optional core/edge mattes and light-wrap layer, JSON, README). Project format 4. |
+| §8 | Clean plates / object removal ([addendum 10](addendum-10-clean-plate.md)): the subject from roto parts or drawn boxes (dilated), every frame aligned to a reference by homography (KLT + RANSAC chained, refined directly against the reference, residual measured, static camera detected), exposure matched per frame, the removed area rebuilt by a robust weighted vote of aligned neighbouring and anchor frames, preferred / left-out frames and “take this region from that frame” patches, what no frame sees filled spatially and flagged; a still in the reference frame or a plate per frame (auto from the camera's motion); per-pixel confidence and an unresolved overlay, problem frames; versioned exports into `04_CLEAN_PLATES` (half-float EXR plate or still, 16-bit confidence and unresolved masks, JSON with per-frame alignment, README). Project format 5. |
 
 ## Tracked, not yet automated
 
-Clean plate, sky, background
-removal, texture extraction, lighting analysis, compositor. Each is a task
-kind (`tasks.ts`, `available: false`) that moves through the same review and
-approval states, so its results can be recorded and packaged.
+Sky, background removal, texture extraction, lighting analysis,
+compositor. Each is a task kind (`tasks.ts`, `available: false`) that moves
+through the same review and approval states, so its results can be recorded
+and packaged.
 
 ## Decisions
 
