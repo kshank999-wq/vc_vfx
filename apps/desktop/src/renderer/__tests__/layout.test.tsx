@@ -205,3 +205,21 @@ describe('the first-run tour', () => {
     localStorage.removeItem('vcvfx.whatshere.hidden');
   });
 });
+
+describe('toasts', () => {
+  it('dock in the viewer on a module tab, never over the steps or the details (and its Approve)', async () => {
+    await openSample();
+    fireEvent.click(tab('Plates'));
+    await act(async () => undefined);
+    const notices = document.querySelector('.notices');
+    expect(notices).not.toBeNull();
+    const viewer = screen.getByRole('region', { name: 'Viewer' });
+    expect(viewer.contains(notices)).toBe(true);
+    expect(notices!.closest('.info-panel, .steps-panel')).toBeNull();
+    // Back on the overview there is no viewer; they return to the window.
+    fireEvent.click(tab('Shots'));
+    await act(async () => undefined);
+    expect(document.querySelector('.notices')?.closest('.module-center')).toBeNull();
+    expect(document.querySelector('.notices')).not.toBeNull();
+  });
+});

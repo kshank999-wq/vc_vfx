@@ -734,14 +734,43 @@ table.queue tbody tr.marked td:first-child {
   white-space: nowrap;
 }
 
+/*
+ * Toasts never sit over a side panel: on a module screen they are docked at
+ * the top of the viewer (portalled into .notice-dock); elsewhere they sit at
+ * the top centre of the window, under the tabs. Only the toasts themselves
+ * take the pointer, so the space between them stays clickable.
+ */
 .notices {
   position: fixed;
-  right: 16px;
-  bottom: 44px;
+  top: 112px;
+  left: 50%;
+  transform: translateX(-50%);
   display: grid;
   gap: 8px;
   z-index: 20;
-  max-width: 420px;
+  width: min(420px, calc(100vw - 32px));
+  pointer-events: none;
+}
+.notices.docked {
+  position: static;
+  transform: none;
+  width: 100%;
+}
+.notice-dock {
+  position: absolute;
+  /* Under the viewer's own toolbar (Show / compare), over the top of the picture. */
+  top: 64px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(420px, calc(100% - 24px));
+  z-index: 20;
+  pointer-events: none;
+}
+.notice-dock:empty {
+  display: none;
+}
+.notice {
+  pointer-events: auto;
 }
 .notice {
   display: flex;
@@ -2213,6 +2242,7 @@ input.tiny {
   letter-spacing: 0.04em;
 }
 .module-center {
+  position: relative;
   display: flex;
   flex-direction: column;
   min-width: 0;

@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useState, type ReactNode } from 'react';
 import { SHOT_STATUS_LABELS, TASK_STATE_LABELS, handoffShot, shotState, shotStatus, type Project, type QueueRow } from '@vcvfx/domain';
 import { MODULES, MODULE_IDS, PREF, moduleStatus, readPref, writePref, type ModuleId, type ModuleStatus } from '../modules';
 import { Icon } from './Icons';
@@ -146,6 +146,13 @@ function usePref(key: string): [boolean, (v: boolean) => void] {
   ];
 }
 
+/**
+ * Where toasts go: a module screen offers a dock at the top of its viewer, so
+ * a toast never sits over the steps or the details panel (and its Approve
+ * button). Without a module on screen they fall back to the window.
+ */
+export const NoticeDock = createContext<(el: HTMLElement | null) => void>(() => {});
+
 export interface SidePanel {
   open: boolean;
   onToggle(open: boolean): void;
@@ -161,6 +168,7 @@ export function ModuleLayout({ label, steps, info, ai, children, stepsTitle = 'S
   const [stepsHidden, setStepsHidden] = usePref(PREF.stepsCollapsed);
   const [infoHidden, setInfoHidden] = usePref(PREF.infoCollapsed);
   const right = ai?.open ? 'ai' : 'info';
+  const dock = useContext(NoticeDock);
   return (
     <main className={['module', stepsHidden ? 'steps-hidden' : '', infoHidden ? 'info-hidden' : '', right === 'ai' && !infoHidden ? 'ai-open' : ''].filter(Boolean).join(' ')} aria-label={label}>
       {stepsHidden ? (
@@ -181,6 +189,7 @@ export function ModuleLayout({ label, steps, info, ai, children, stepsTitle = 'S
       )}
       <section className="module-center" aria-label="Viewer">
         {children}
+        <div className="notice-dock" ref={dock} />
       </section>
       {infoHidden ? (
         <button type="button" className="side-strip right" onClick={() => setInfoHidden(false)} title="Show the details" aria-label="Show the details">

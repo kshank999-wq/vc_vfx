@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   PREP_TASKS,
   SAMPLE_HANDOFF,
@@ -40,7 +41,7 @@ import { BulkBar, QueueFilters, QueueTable, type SelectGesture } from './compone
 import { ShotDetail, type ShotDetailProps } from './components/ShotDetail';
 import { AccountDialog, IssuesDialog, PromptDialog, SettingsDialog } from './components/Dialogs';
 import { Icon } from './components/Icons';
-import { ModuleTabs, ShotBar, Tour, WhatsHere, modKey } from './components/Layout';
+import { ModuleTabs, NoticeDock, ShotBar, Tour, WhatsHere, modKey } from './components/Layout';
 import { DeliverModule, KeyModule, PlatesModule, TaskInfo } from './components/Modules';
 import { RotoWorkspace } from './components/RotoWorkspace';
 import { TrackWorkspace } from './components/TrackWorkspace';
@@ -106,11 +107,27 @@ export function App({ api, now = () => new Date() }: { api: VcvfxApi; now?: () =
   const actor = operator || 'Operator';
   const busy = job !== null;
 
+  /** The viewer's toast dock while a module is on screen (null: the window). */
+  const [noticeDock, setNoticeDock] = useState<HTMLElement | null>(null);
+  /** Expiry timers of info and ok notices; paused while the pointer is over one. */
+  const noticeTimers = useRef(new Map<number, ReturnType<typeof setTimeout>>());
+  const dropNotice = useCallback((id: number) => {
+    clearTimeout(noticeTimers.current.get(id));
+    noticeTimers.current.delete(id);
+    setNotices((n) => n.filter((x) => x.id !== id));
+  }, []);
+  const expireNotice = useCallback((id: number, ms: number) => {
+    clearTimeout(noticeTimers.current.get(id));
+    noticeTimers.current.set(id, setTimeout(() => dropNotice(id), ms));
+  }, [dropNotice]);
+  const holdNotice = useCallback((id: number) => {
+    clearTimeout(noticeTimers.current.get(id));
+  }, []);
   const notify = useCallback((kind: Notice['kind'], text: string, action?: Notice['action']) => {
     const id = (noticeSeq += 1);
     setNotices((n) => pushNotice(n, { id, kind, text, ...(action ? { action } : {}) }));
-    if (kind !== 'error') setTimeout(() => setNotices((n) => n.filter((x) => x.id !== id)), NOTICE_MS);
-  }, []);
+    if (kind !== 'error') expireNotice(id, NOTICE_MS);
+  }, [expireNotice]);
 
   // --- start-up -----------------------------------------------------------
   useEffect(() => {
@@ -646,6 +663,7 @@ export function App({ api, now = () => new Date() }: { api: VcvfxApi; now?: () =
   // --- render ---------------------------------------------------------------
   const mod = modKey();
   return (
+    <NoticeDock.Provider value={setNoticeDock}>
     <div className="app">
       <header className="topbar">
         <div className="brand" title={doc?.path ?? undefined}>
@@ -787,24 +805,29 @@ export function App({ api, now = () => new Date() }: { api: VcvfxApi; now?: () =
         )}
       </footer>
 
-      <div className="notices" aria-live="polite">
-        {notices.map((n) => (
-          <div key={n.id} className={`notice ${n.kind}`}>
-            <span>
-              {n.text}
-              {n.count && n.count > 1 ? <b className="notice-count"> ×{n.count}</b> : null}
-            </span>
-            {n.action ? (
-              <button type="button" className="link" onClick={n.action.run}>
-                {n.action.label}
-              </button>
-            ) : null}
-            <button type="button" className="icon" aria-label="Dismiss" onClick={() => setNotices((all) => all.filter((x) => x.id !== n.id))}>
-              ×
-            </button>
+      {(() => {
+        const list = (
+          <div className={noticeDock ? 'notices docked' : 'notices'} aria-live="polite">
+            {notices.map((n) => (
+              <div key={n.id} className={`notice ${n.kind}`} onMouseEnter={() => holdNotice(n.id)} onMouseLeave={() => (n.kind !== 'error' ? expireNotice(n.id, NOTICE_MS / 2) : undefined)}>
+                <span>
+                  {n.text}
+                  {n.count && n.count > 1 ? <b className="notice-count"> ×{n.count}</b> : null}
+                </span>
+                {n.action ? (
+                  <button type="button" className="link" onClick={n.action.run}>
+                    {n.action.label}
+                  </button>
+                ) : null}
+                <button type="button" className="icon" aria-label="Dismiss" onClick={() => dropNotice(n.id)}>
+                  ×
+                </button>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
+        );
+        return noticeDock ? createPortal(list, noticeDock) : list;
+      })()}
 
       {tour && project ? <Tour onClose={() => setTour(false)} /> : null}
       {issues ? <IssuesDialog {...issues} onClose={() => setIssues(null)} /> : null}
@@ -829,6 +852,7 @@ export function App({ api, now = () => new Date() }: { api: VcvfxApi; now?: () =
         <AccountDialog api={api} info={info} account={account} standing={standing} onAccount={setAccount} onStanding={setStanding} onClose={() => setDialog(null)} />
       ) : null}
     </div>
+    </NoticeDock.Provider>
   );
 }
 
