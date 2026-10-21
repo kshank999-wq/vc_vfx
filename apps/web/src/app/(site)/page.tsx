@@ -106,7 +106,11 @@ const ROADMAP: ReadonlyArray<{ title: string; desc: string; v1?: boolean }> = [
     desc: 'Remove a crew member, a rig or a passer-by: frames aligned for the camera’s motion, the background rebuilt from the frames that see it, a still or a plate per frame, and what no frame sees shown for paint; versioned EXR plates with confidence maps.',
     v1: true,
   },
-  { title: 'Background and sky isolation', desc: 'Mattes and plates exported separately for downstream control.' },
+  {
+    title: 'Background and sky isolation',
+    desc: 'Find the sky automatically, or isolate a subject from a box, paint or roto: consistent through the shot, branches, wires and hair kept as soft edges, corrections painted on any frame; the matte, the foreground and the sky or background plate exported separately, versioned.',
+    v1: true,
+  },
   { title: 'Texture extraction', desc: 'Seamless texture prep from set photography and scans.' },
   { title: 'Lightweight node compositor', desc: 'Connect prep stages, preview, and hand off toward Nuke.' },
   { title: 'Lighting and lens analysis', desc: 'Reference-image estimates and Unreal-oriented scene export.' },
@@ -122,8 +126,8 @@ const FAQ = [
     a: 'VC VFX builds its shot queue from the VCDIT handoff specification — the machine-readable file VCDIT writes alongside the VFX folder structure on the drive. VCDIT is the intended way in, and the two are designed to work as a pair.',
   },
   {
-    q: 'Does V1 do roto, tracking, keying or clean plates?',
-    a: 'Roto, yes: paint the subject on a key frame and VC VFX propagates the matte through the shot, flags the frames it is least sure of, and re-propagates your corrections locally. It runs on your own machine. Tracking, yes: camera tracking (solve, LiDAR alignment, exports for Nuke, Maya, Blender, After Effects, Houdini, Fusion / Resolve, Unreal Engine, Unity and USD) and 2D / planar tracking with corner-pin export. Keying, yes: green- and blue-screen keys with roto repairs, despill against a background reference and exports of the alpha and the despilled foreground. Clean plates, yes: remove a rotoscoped subject and VC VFX rebuilds the background from the frames that see it, aligned for the camera’s motion, as a still or a plate per frame, with what no frame sees shown for paint. The rest of the prep can already be requested in the handoff and is tracked in the queue and on the printed shot list, so everyone can see what each shot still needs.',
+    q: 'Does V1 do roto, tracking, keying, clean plates or sky replacement?',
+    a: 'Roto, yes: paint the subject on a key frame and VC VFX propagates the matte through the shot, flags the frames it is least sure of, and re-propagates your corrections locally. It runs on your own machine. Tracking, yes: camera tracking (solve, LiDAR alignment, exports for Nuke, Maya, Blender, After Effects, Houdini, Fusion / Resolve, Unreal Engine, Unity and USD) and 2D / planar tracking with corner-pin export. Keying, yes: green- and blue-screen keys with roto repairs, despill against a background reference and exports of the alpha and the despilled foreground. Clean plates, yes: remove a rotoscoped subject and VC VFX rebuilds the background from the frames that see it, aligned for the camera’s motion, as a still or a plate per frame, with what no frame sees shown for paint. Sky and background isolation, yes: the sky is found by itself and a subject from a box, paint or roto, kept consistent through the shot, with the matte, the foreground and the sky or background plate exported separately. The rest of the prep can already be requested in the handoff and is tracked in the queue and on the printed shot list, so everyone can see what each shot still needs.',
   },
   {
     q: 'Which plate formats are supported?',
@@ -234,7 +238,7 @@ export default async function HomePage() {
                 <span className="chip plate">DPX</span> plates run in V1
               </span>
               <span>
-                <span className="chip">Key</span> keying, roto, clean plates and tracking run in V1 too; the rest of the prep is tracked in the queue
+                <span className="chip">Key</span> keying, roto, clean plates, sky and background isolation and tracking run in V1 too; the rest of the prep is tracked in the queue
               </span>
             </div>
           </div>

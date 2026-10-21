@@ -4,6 +4,7 @@ import { viewerTimeline } from '../shared/viewer';
 import { createCameraPreview } from './camera-preview';
 import { createKeyPreview } from './key-preview';
 import { createCleanPlatePreview } from './cleanplate-preview';
+import { createIsolatePreview } from './isolate-preview';
 import { createRotoPreview } from './roto-preview';
 
 /**
@@ -182,6 +183,7 @@ export function createBrowserBridge(): BrowserBridge {
   const camera = createCameraPreview({ desktopOnly, progress: (p) => progressListeners.forEach((l) => l(p)) });
   const keying = createKeyPreview({ desktopOnly, progress: (p) => progressListeners.forEach((l) => l(p)) });
   const cleaning = createCleanPlatePreview({ desktopOnly, progress: (p) => progressListeners.forEach((l) => l(p)) });
+  const isolating = createIsolatePreview({ desktopOnly, progress: (p) => progressListeners.forEach((l) => l(p)) });
 
   return {
     command,
@@ -298,8 +300,13 @@ export function createBrowserBridge(): BrowserBridge {
     cleanPlateFrame: (input) => cleaning.cleanPlateFrame(input),
     cleanPlateBuild: (input) => cleaning.cleanPlateBuild(input),
     cleanPlateExport: (input) => cleaning.cleanPlateExport(input),
+    // Sky and background isolation: the engine runs here on the sample's synthetic rooftop shot (isolate-preview.ts).
+    isolateSession: (input) => isolating.isolateSession(input),
+    isolateFrame: (input) => isolating.isolateFrame(input),
+    isolateBuild: (input) => isolating.isolateBuild(input),
+    isolateExport: (input) => isolating.isolateExport(input),
     cancelJob: async (jobId) => {
-      if (!camera.cancel(jobId) && !keying.cancel(jobId) && !cleaning.cancel(jobId)) roto.cancel(jobId);
+      if (!camera.cancel(jobId) && !keying.cancel(jobId) && !cleaning.cancel(jobId) && !isolating.cancel(jobId)) roto.cancel(jobId);
     },
     onProgress: (listener) => {
       progressListeners.add(listener);

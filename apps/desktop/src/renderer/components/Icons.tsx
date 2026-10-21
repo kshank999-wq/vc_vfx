@@ -38,6 +38,14 @@ const PATHS: Record<IconName, JSX.Element> = {
       <path d="m15.5 21 5-5" />
     </>
   ),
+  isolate: (
+    <>
+      <rect x="3" y="4" width="18" height="14" rx="1.5" />
+      <path d="M3 13.5h3.5v-3h3v-2h3v4h3v-2h5.5" />
+      <path d="M8 8.2c1.6-.9 3.2-.9 4.8 0" strokeDasharray="1.4 1.3" />
+      <path d="M7 21h10" />
+    </>
+  ),
   camera: (
     <>
       <rect x="2.5" y="7" width="13" height="10" rx="1.5" />

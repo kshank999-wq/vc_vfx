@@ -62,7 +62,19 @@ async function source(project: Project, shotId: string, outputRoot: string | nul
   return rotoFrameSource(project, shotId, outputRoot, { ffmpeg: env.ffmpeg, caps: env.caps, cacheDir: env.frameCache.dir });
 }
 
-export async function engineInfo(env: RotoEnv): Promise<RotoEngineInfo[]> {
+/** Where SAM 2.1's model files are, checked (the model verified in a packaged build); throws why not. */
+export async function sam2Files(env: Pick<RotoEnv, 'userData' | 'packaged' | 'ort'>): Promise<{ ort: string[]; encoder: string; decoder: string }> {
+  const status = await modelStatus(env.userData, env.packaged);
+  if (!status.usable) throw new Error(status.reason ?? 'The SAM 2 model is not available.');
+  if (env.packaged) {
+    const verified = await verifyModel(env.userData);
+    if (!verified.ok) throw new Error(verified.reason);
+  }
+  const dir = modelDir(env.userData, SAM2_MODEL);
+  return { ort: env.ort, encoder: join(dir, SAM2_MODEL.files[0]!.name), decoder: join(dir, SAM2_MODEL.files[1]!.name) };
+}
+
+export async function engineInfo(env: Pick<RotoEnv, 'userData' | 'packaged' | 'ort'>): Promise<RotoEngineInfo[]> {
   const status = await modelStatus(env.userData, env.packaged);
   const ort = loadOrt(env.ort);
   const samReason = !ort.ok ? ort.reason : status.reason;
@@ -156,17 +168,7 @@ export async function rotoRun(
   const src = await source(project, req.shotId, outputRoot, env);
   if (!src.ok) throw new Error(src.reason);
   const working = workingSize(src.spec.plate, doc.workingWidth);
-  let sam2: { ort: string[]; encoder: string; decoder: string } | undefined;
-  if (part.engine.id === 'sam2') {
-    const status = await modelStatus(env.userData, env.packaged);
-    if (!status.usable) throw new Error(status.reason ?? 'The SAM 2 model is not available.');
-    if (env.packaged) {
-      const verified = await verifyModel(env.userData);
-      if (!verified.ok) throw new Error(verified.reason);
-    }
-    const dir = modelDir(env.userData, SAM2_MODEL);
-    sam2 = { ort: env.ort, encoder: join(dir, SAM2_MODEL.files[0]!.name), decoder: join(dir, SAM2_MODEL.files[1]!.name) };
-  }
+  const sam2 = part.engine.id === 'sam2' ? await sam2Files(env) : undefined;
   return runRotoJob(
     {
       frames: src.spec,

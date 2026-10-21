@@ -36,7 +36,7 @@ describe('module tabs', () => {
   it('lists every module in the top toolbar and switches between them', async () => {
     await openSample();
     const tabs = within(screen.getByRole('tablist', { name: 'Modules' })).getAllByRole('tab');
-    expect(tabs.map((t) => t.getAttribute('aria-label'))).toEqual(['Shots', 'Plates', 'Roto', 'Key', 'Clean Plate', 'Camera Track', '2D Track', 'Deliver']);
+    expect(tabs.map((t) => t.getAttribute('aria-label'))).toEqual(['Shots', 'Plates', 'Roto', 'Key', 'Clean Plate', 'Sky & BG', 'Camera Track', '2D Track', 'Deliver']);
     expect(selected('Shots')).toBe(true);
     expect(screen.getByRole('table', { name: 'Shot queue' })).toBeTruthy();
 
@@ -52,16 +52,18 @@ describe('module tabs', () => {
     expect(screen.getByRole('region', { name: 'Package contents' }).textContent).toContain('02_MATTES_ROTO');
   });
 
-  it('switches with ⌘/Ctrl+1…8 and the View menu', async () => {
+  it('switches with ⌘/Ctrl+1…9 and the View menu', async () => {
     let send: (c: MenuCommand) => void = () => undefined;
     await openSample(stubBridge({ onMenu: (l) => ((send = l), () => undefined) }));
     fireEvent.keyDown(window, { key: '3', ctrlKey: true });
     expect(selected('Roto')).toBe(true);
     fireEvent.keyDown(window, { key: '5', ctrlKey: true });
     expect(selected('Clean Plate')).toBe(true);
-    fireEvent.keyDown(window, { key: '7', metaKey: true });
-    expect(selected('2D Track')).toBe(true);
+    fireEvent.keyDown(window, { key: '6', ctrlKey: true });
+    expect(selected('Sky & BG')).toBe(true);
     fireEvent.keyDown(window, { key: '8', metaKey: true });
+    expect(selected('2D Track')).toBe(true);
+    fireEvent.keyDown(window, { key: '9', metaKey: true });
     expect(selected('Deliver')).toBe(true);
     fireEvent.keyDown(window, { key: '1', ctrlKey: true });
     expect(selected('Shots')).toBe(true);
@@ -69,6 +71,8 @@ describe('module tabs', () => {
     expect(selected('Camera Track')).toBe(true);
     act(() => send('show-cleanplate'));
     expect(selected('Clean Plate')).toBe(true);
+    act(() => send('show-isolate'));
+    expect(selected('Sky & BG')).toBe(true);
     act(() => send('show-shots'));
     expect(selected('Shots')).toBe(true);
   });
@@ -89,8 +93,10 @@ describe('module tabs', () => {
   it('maps digits and picks the module to open from the shot’s tasks', () => {
     expect(moduleForDigit('1')).toBe('shots');
     expect(moduleForDigit('5')).toBe('cleanplate');
-    expect(moduleForDigit('8')).toBe('deliver');
-    expect(moduleForDigit('9')).toBeNull();
+    expect(moduleForDigit('6')).toBe('isolate');
+    expect(moduleForDigit('9')).toBe('deliver');
+    expect(moduleForDigit('0')).toBeNull();
+    expect(moduleForDigit('10')).toBeNull();
     const p = sample();
     expect(moduleToOpen(p, '010_030', null)).toBe('track2d');
     expect(moduleToOpen(p, '010_030', 'roto')).toBe('track2d');
@@ -101,6 +107,10 @@ describe('module tabs', () => {
     expect(moduleStatus(p, '020_010', 'cleanplate')).toEqual({ kind: 'task', state: 'pending' });
     expect(moduleStatus(p, '010_020', 'cleanplate')).toMatchObject({ kind: 'missing' });
     expect(moduleToOpen(p, '020_010', 'cleanplate')).toBe('cleanplate');
+    // Sky & BG works on two tasks: either puts the tab on the shot.
+    expect(moduleStatus(p, '030_010', 'isolate')).toEqual({ kind: 'task', state: 'pending' });
+    expect(moduleStatus(p, '020_010', 'isolate')).toMatchObject({ kind: 'missing' });
+    expect(moduleToOpen(p, '030_010', null)).toBe('isolate');
   });
 });
 
@@ -113,7 +123,7 @@ describe('the shot bar', () => {
     expect(bar.textContent).toContain('Scene 12A');
     expect(bar.textContent).toContain('Take 4');
     expect(bar.textContent).toContain('Ready for Prep');
-    expect(bar.textContent).toContain('1 of 3');
+    expect(bar.textContent).toContain('1 of 4');
     expect((within(bar).getByRole('button', { name: 'Previous shot' }) as HTMLButtonElement).disabled).toBe(true);
 
     fireEvent.click(within(bar).getByRole('button', { name: 'Next shot' }));
@@ -121,9 +131,11 @@ describe('the shot bar', () => {
     expect(selected('Plates')).toBe(true);
     fireEvent.keyDown(window, { key: 'ArrowDown', ctrlKey: true });
     expect(shotBarName()).toBe('020_010');
+    fireEvent.keyDown(window, { key: 'ArrowDown', ctrlKey: true });
+    expect(shotBarName()).toBe('030_010');
     expect((within(screen.getByRole('region', { name: 'Current shot' })).getByRole('button', { name: 'Next shot' }) as HTMLButtonElement).disabled).toBe(true);
     fireEvent.keyDown(window, { key: 'ArrowUp', metaKey: true });
-    expect(shotBarName()).toBe('010_030');
+    expect(shotBarName()).toBe('020_010');
     fireEvent.change(screen.getByLabelText('Go to shot'), { target: { value: '010_020' } });
     expect(shotBarName()).toBe('010_020');
     // The Shots tab follows: the same shot is selected there.
@@ -195,6 +207,32 @@ describe('the Clean Plate tab', () => {
     fireEvent.click(tab('Clean Plate'));
     expect(tab('Clean Plate').className).toContain('missing');
     expect(screen.getByRole('button', { name: 'Add Clean Plate to this shot' })).toBeTruthy();
+  });
+});
+
+describe('the Sky & BG tab', () => {
+  it('sits between Clean Plate and Camera Track and walks the isolation steps, with the task in Details', async () => {
+    await openSample();
+    fireEvent.click(within(screen.getByRole('table', { name: 'Shot queue' })).getAllByRole('row').find((r) => r.getAttribute('data-shot') === '030_010')!);
+    fireEvent.click(tab('Sky & BG'));
+    expect(screen.getByRole('main', { name: 'Sky & BG' })).toBeTruthy();
+    expect(tab('Sky & BG').className).not.toContain('missing');
+    const steps = screen.getByRole('complementary', { name: 'Steps' });
+    for (const what of ['What to isolate: the sky', 'Find the sky', 'Build', 'Review & fix', 'Export sky v001']) expect(within(steps).getByText(what)).toBeTruthy();
+    expect(within(steps).getByText('This shot also wants its subject isolated: open to switch.')).toBeTruthy();
+    // The sky's task (and the supervisor's note) are in Details, tracked and approved here.
+    const details = screen.getByRole('complementary', { name: 'Details' });
+    expect(within(details).getByText('Rooftop pan; keep the tree and the power line in front of the new sky')).toBeTruthy();
+    expect(within(details).getAllByText('Sky isolation / replacement prep').length).toBeGreaterThan(0);
+  });
+
+  it('greys out on a shot with neither task and offers to add either', async () => {
+    await openSample();
+    fireEvent.click(tab('Sky & BG'));
+    expect(tab('Sky & BG').className).toContain('missing');
+    expect(screen.getByRole('button', { name: 'Add Sky isolation / replacement prep to this shot' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Add Background removal to this shot' }));
+    expect(tab('Sky & BG').className).not.toContain('missing');
   });
 });
 

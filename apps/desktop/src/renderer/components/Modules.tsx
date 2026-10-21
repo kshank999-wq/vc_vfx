@@ -18,19 +18,21 @@ import {
 } from '@vcvfx/domain';
 import type { VcvfxApi } from '../../shared/bridge';
 import { canApproveShot, canDeliver, canPackage, canReopen } from '../actions';
-import { MODULES, type ModuleId } from '../modules';
+import { MODULES, moduleTasks, type ModuleId } from '../modules';
 import { Icon } from './Icons';
 import { InfoSection, ModuleLayout, Stat, StepList, Stats, type StepDef } from './Layout';
 import { ActionButton, CameraColour, MODULE_OF, OutputRoot, PlateColorPanel, ReviewMarks, SequencePlan, ShotLog, SourceDetails, TaskCard, type ShotDetailProps } from './ShotDetail';
 import { Viewer } from './Viewer';
 import { KeyInfo, KeyViewer, keyStepDefs, useKeyController, type KeyWorkspaceProps } from './key/KeyWorkspace';
 import { CleanPlateInfo, CleanPlateViewer, cleanPlateStepDefs, useCleanPlateController, type CleanPlateWorkspaceProps } from './cleanplate/CleanPlateWorkspace';
+import { IsolateInfo, IsolateViewer, isolateStepDefs, useIsolateController, type IsolateWorkspaceProps } from './isolate/IsolateWorkspace';
 
 /**
- * The Plates, Key, Clean Plate and Deliver tabs (addendum 08). The Key tab
+ * The Plates, Key, Clean Plate, Sky & BG and Deliver tabs (addendum 08). The Key tab
  * places the key workspace's steps, viewer and numbers (key/KeyWorkspace.tsx,
  * addendum 09) in the shell's zones; the Clean Plate tab does the same with
- * cleanplate/CleanPlateWorkspace.tsx (addendum 10). Roto, Camera Track and 2D Track are their
+ * cleanplate/CleanPlateWorkspace.tsx (addendum 10), and Sky & BG with
+ * isolate/IsolateWorkspace.tsx (addendum 11). Roto, Camera Track and 2D Track are their
  * workspaces (RotoWorkspace, TrackWorkspace) in the same three-zone layout.
  */
 
@@ -67,16 +69,24 @@ export function TaskInfo({ props, kind }: { props: ShotDetailProps; kind: PrepTa
 /** The compact "this shot has no such task" card for the top of a steps panel. */
 function MissingCard({ props, module }: { props: ShotDetailProps; module: ModuleId }) {
   const state = shotState(props.project, props.shotId);
-  const task = MODULES[module].task!;
+  const kinds = moduleTasks(module);
   const reason = !props.canEdit ? 'Read-only: adding a task needs an active subscription.' : state?.stage !== 'prep' ? `The shot is ${state?.stage}; reopen it first.` : null;
   return (
     <div className="missing-card" role="status">
       <p>
         <b>{state?.vfxShotId ?? props.shotId}</b> has no {MODULES[module].label} task yet. You can look at its frames; add the task to work on it here.
       </p>
-      <button type="button" className="primary" disabled={Boolean(reason)} title={reason ?? undefined} onClick={() => props.onAddTask(task)}>
-        Add {MODULES[module].label} to this shot
-      </button>
+      {kinds.length === 1 ? (
+        <button type="button" className="primary" disabled={Boolean(reason)} title={reason ?? undefined} onClick={() => props.onAddTask(kinds[0]!)}>
+          Add {MODULES[module].label} to this shot
+        </button>
+      ) : (
+        kinds.map((k, i) => (
+          <button key={k} type="button" className={i === 0 ? 'primary' : undefined} disabled={Boolean(reason)} title={reason ?? undefined} onClick={() => props.onAddTask(k)}>
+            Add {PREP_TASKS[k].label} to this shot
+          </button>
+        ))
+      )}
     </div>
   );
 }
@@ -296,6 +306,58 @@ export function CleanPlateModule(props: ModuleScreenProps & { work: CleanPlateWo
     <ModuleLayout label="Clean Plate" steps={task ? <StepList steps={cleanPlateStepDefs(ctl)} resetKey={shotId} /> : <MissingCard props={props} module="cleanplate" />} info={info}>
       {task && ctl.supported ? (
         <CleanPlateViewer ctl={ctl} />
+      ) : (
+        <Viewer api={props.api} project={project} shotId={shotId} projectKey={props.projectKey} canEdit={props.canEdit} frame={props.frame} onFrame={props.onFrame} onClose={props.onClose} onToggleMark={props.onToggleMark} />
+      )}
+    </ModuleLayout>
+  );
+}
+
+// ------------------------------------------------------------------ Sky & BG
+
+/** What the Sky & BG tab needs from the app beyond a module screen's props. */
+export type IsolateWork = Pick<IsolateWorkspaceProps, 'actor' | 'runJob' | 'notify' | 'onIsolate'>;
+
+export function IsolateModule(props: ModuleScreenProps & { work: IsolateWork }) {
+  const { project, shotId } = props;
+  const state = shotState(project, shotId);
+  const shot = handoffShot(project, shotId);
+  const ctl = useIsolateController({
+    api: props.api,
+    project,
+    shotId,
+    projectKey: props.projectKey,
+    canEdit: props.canEdit,
+    busy: props.busy,
+    actor: props.work.actor,
+    frame: props.frame,
+    onFrame: props.onFrame,
+    onIsolate: props.work.onIsolate,
+    runJob: props.work.runJob,
+    notify: props.work.notify,
+    onOpenRoto: (f) => {
+      props.onFrame(f);
+      props.onOpenModule?.('roto');
+    },
+    onAddTask: (kind) => props.onAddTask(kind),
+  });
+  if (!state || !shot) return null;
+  const any = ctl.has.sky || ctl.has.background;
+  const info = (
+    <>
+      {ctl.hasTask ? <IsolateInfo ctl={ctl} /> : null}
+      {shot.supervisorNotes ? (
+        <InfoSection title="Supervisor notes">
+          <p className="info-line">{shot.supervisorNotes}</p>
+        </InfoSection>
+      ) : null}
+      {ctl.hasTask ? <TaskInfo props={props} kind={ctl.kind} /> : null}
+    </>
+  );
+  return (
+    <ModuleLayout label="Sky & BG" steps={any ? <StepList steps={isolateStepDefs(ctl)} resetKey={`${shotId}|${ctl.target}`} /> : <MissingCard props={props} module="isolate" />} info={info}>
+      {any && ctl.supported ? (
+        <IsolateViewer ctl={ctl} />
       ) : (
         <Viewer api={props.api} project={project} shotId={shotId} projectKey={props.projectKey} canEdit={props.canEdit} frame={props.frame} onFrame={props.onFrame} onClose={props.onClose} onToggleMark={props.onToggleMark} />
       )}

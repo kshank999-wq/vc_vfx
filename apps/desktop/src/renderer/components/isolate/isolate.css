@@ -1,0 +1,52 @@
+/*
+ * The Sky & BG workspace (addendum 11). It uses the Key's viewer, timeline
+ * and control styles (key.css) and the Clean Plate's steps and timeline marks
+ * (cleanplate.css); what is here is its own: paint strokes and their
+ * swatches, the subject's box, and the painted-frame dots.
+ */
+
+.iso-paint > .key-tool {
+  flex: 1 1 120px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.iso-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex: none;
+}
+.iso-swatch.include,
+.key-link-dot.iso-dot {
+  background: #4fd18b;
+}
+.iso-swatch.exclude {
+  background: #3fb6ff;
+}
+.key-link-dot.iso-dot.correction {
+  background: #ffb547;
+}
+.key-box.iso-box {
+  stroke: #ffb547;
+}
+.iso-stroke {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.45;
+}
+.iso-stroke.include {
+  stroke: #4fd18b;
+}
+.iso-stroke.exclude {
+  stroke: #3fb6ff;
+}
+.iso-stroke.drawing {
+  opacity: 0.6;
+}
+.key-stage.tool-paint {
+  cursor: crosshair;
+}

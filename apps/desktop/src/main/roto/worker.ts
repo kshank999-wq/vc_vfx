@@ -2,11 +2,9 @@ import { parentPort } from 'node:worker_threads';
 import type { RotoPropagationResult } from '@vcvfx/domain';
 import { CancelledError, runRoto, type RotoRunRequest, type SegmentationEngine } from '../../shared/roto/engine';
 import { resizeMask } from '../../shared/roto/image';
-import { Sam2Engine } from '../../shared/roto/sam2';
-import { TrackEngine } from '../../shared/roto/track';
+import { segmentationEngine, type Sam2Files } from './engines';
 import { exportMattes, type ExportJob, type ExportResult } from './export';
 import { FrameReader, type RotoFrameSpec } from './frames';
-import { loadOrt, OrtSam2Runtime } from './sam2-ort';
 import { MaskStore } from './store';
 
 /**
@@ -23,7 +21,7 @@ export interface RunJob {
   store: string;
   version: number;
   engine: 'track' | 'sam2';
-  sam2?: { ort: string[]; encoder: string; decoder: string; threads?: number };
+  sam2?: Sam2Files;
   request: RotoRunRequest;
 }
 
@@ -33,13 +31,7 @@ export type WorkerOut =
   | { type: 'done'; results?: RotoPropagationResult[]; exported?: ExportResult }
   | { type: 'error'; message: string; cancelled: boolean };
 
-async function engineFor(job: RunJob): Promise<SegmentationEngine> {
-  if (job.engine === 'track') return new TrackEngine();
-  if (!job.sam2) throw new Error('SAM 2 needs its model files');
-  const loaded = loadOrt(job.sam2.ort);
-  if (!loaded.ok) throw new Error(`${loaded.reason} (${loaded.detail})`);
-  return new Sam2Engine(await OrtSam2Runtime.create(loaded.ort, job.sam2.encoder, job.sam2.decoder, job.sam2.threads));
-}
+const engineFor = (job: RunJob): Promise<SegmentationEngine> => segmentationEngine(job.engine, job.sam2);
 
 export async function handle(message: Exclude<WorkerIn, { type: 'cancel' }>, signal: AbortSignal, post: (m: WorkerOut) => void): Promise<void> {
   try {

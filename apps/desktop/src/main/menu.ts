@@ -94,6 +94,7 @@ export async function buildMenu(getWindow: () => BrowserWindow | null, isDevelop
             ['Roto', 'show-roto'],
             ['Key', 'show-key'],
             ['Clean Plate', 'show-cleanplate'],
+            ['Sky & BG', 'show-isolate'],
             ['Camera Track', 'show-camera'],
             ['2D Track', 'show-track2d'],
             ['Deliver', 'show-deliver'],

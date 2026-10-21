@@ -21,12 +21,13 @@ import { viewerFrame, viewerSources } from './viewer';
 import type { FfmpegInfo } from '../shared/bridge';
 import { noteRecent, readSettings, updateSettings } from './settings';
 import { join } from 'node:path';
-import { engineInfo, rotoExport, rotoFrame, rotoMask, rotoRun, rotoSession, type RotoEnv } from './roto/api';
+import { engineInfo, rotoExport, sam2Files, rotoFrame, rotoMask, rotoRun, rotoSession, type RotoEnv } from './roto/api';
 import { downloadModel, type FetchLike } from './roto/models';
 import { ortCandidates } from './roto/sam2-ort';
 import { verifyProject } from './verify';
 import { registerKeyHandlers } from './key/ipc-key';
 import { registerCleanPlateHandlers } from './cleanplate/ipc-cleanplate';
+import { registerIsolateHandlers } from './isolate/ipc-isolate';
 import { trackCommand, trackFrame, trackSession, trackView, type CameraEnv } from './camera/api';
 import { COMMAND_SPECS, type CameraCommand } from '../shared/camera/commands';
 import { checkerboardPdf, checkerboardPixels } from '../shared/camera/calibration';
@@ -508,6 +509,34 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null, isDev
     env: async () => {
       const t = await currentTools();
       return { ffmpeg: t.ffmpeg, caps: t.caps, rotoCacheRoot: join(app.getPath('userData'), 'Roto Cache'), cacheRoot: join(app.getPath('userData'), 'Clean Plate Cache'), workerFile: join(__dirname, 'cleanplate-worker.js'), generator: `VC VFX ${app.getVersion()}` };
+    },
+  });
+
+  // Sky isolation and background removal (addendum 11): handlers in isolate/ipc-isolate.ts, with the clean plate's rules;
+  // a subject's engines are roto's (Track, and SAM 2.1 when its model is installed).
+  registerIsolateHandlers({
+    handle,
+    viewerProject,
+    projectFrom,
+    outputRootFor,
+    ensureOutputRoot,
+    licensed: async () => (await capability()) === 'full',
+    readOnlyReason: READ_ONLY_REASON,
+    startJob,
+    endJob,
+    progress: (event, id, label) => progressSender(event.sender, id, label),
+    env: async () => {
+      const t = await currentTools();
+      return {
+        ffmpeg: t.ffmpeg,
+        caps: t.caps,
+        rotoCacheRoot: join(app.getPath('userData'), 'Roto Cache'),
+        cacheRoot: join(app.getPath('userData'), 'Isolate Cache'),
+        workerFile: join(__dirname, 'isolate-worker.js'),
+        generator: `VC VFX ${app.getVersion()}`,
+        engines: async () => (await engineInfo(await rotoEnv())).map((e) => ({ id: e.id, label: e.label, available: e.available, reason: e.reason })),
+        sam2: async () => sam2Files(await rotoEnv()),
+      };
     },
   });
 

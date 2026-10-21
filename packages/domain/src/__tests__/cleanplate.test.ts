@@ -272,8 +272,8 @@ describe('approval, versions and outputs', () => {
     expect(cleanPlateManifest(shotState(sample(), SHOT)!)).toBeNull();
   });
 
-  it('is project format 5: a version 4 project opens with no clean plate, and plates survive a round trip', () => {
-    expect(PROJECT_VERSION).toBe(5);
+  it('since project format 5: a version 4 project opens with no clean plate, and plates survive a round trip', () => {
+    expect(PROJECT_VERSION).toBe(6);
     expect(PREP_TASKS.clean_plate.available).toBe(true);
     expect(PREP_TASKS.clean_plate.folder).toBe('04_CLEAN_PLATES');
     const v4 = JSON.parse(serializeProject(sample()));
@@ -281,14 +281,14 @@ describe('approval, versions and outputs', () => {
     for (const s of v4.shots) delete s.cleanPlate;
     const opened = parseProject(JSON.stringify(v4));
     if (!opened.ok) throw new Error(opened.reason);
-    expect(opened.project.version).toBe(5);
+    expect(opened.project.version).toBe(PROJECT_VERSION);
     expect(shotState(opened.project, SHOT)!.cleanPlate).toBeNull();
     // Older still: a version 3 project (no key either) opens too.
     const v3 = JSON.parse(JSON.stringify(v4));
     v3.version = 3;
     for (const s of v3.shots) delete s.key;
     const opened3 = parseProject(JSON.stringify(v3));
-    expect(opened3.ok && opened3.project.version).toBe(5);
+    expect(opened3.ok && opened3.project.version).toBe(PROJECT_VERSION);
     let p = withBox();
     p = ok(addCleanPlatePatch(p, SHOT, { rect: box, sourceFrame: 1200 }, 'ana', NOW));
     p = ok(recordCleanPlateRun(p, SHOT, result(p, [1001, 1002]), 'ana', NOW));

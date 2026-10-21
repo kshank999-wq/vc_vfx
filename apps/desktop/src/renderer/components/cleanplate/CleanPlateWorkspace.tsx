@@ -314,7 +314,7 @@ export type CleanPlateController = ReturnType<typeof useCleanPlateController>;
 // Small controls (as the Key's)
 // ---------------------------------------------------------------------------
 
-function Slider({ label, value, min, max, step, unit, disabled, hint, onCommit }: { label: string; value: number; min: number; max: number; step: number; unit?: string; disabled: boolean; hint?: string; onCommit(v: number): void }) {
+export function Slider({ label, value, min, max, step, unit, disabled, hint, onCommit }: { label: string; value: number; min: number; max: number; step: number; unit?: string; disabled: boolean; hint?: string; onCommit(v: number): void }) {
   const [draft, setDraft] = useState(value);
   useEffect(() => setDraft(value), [value]);
   const commit = () => draft !== value && onCommit(draft);
@@ -330,11 +330,12 @@ function Slider({ label, value, min, max, step, unit, disabled, hint, onCommit }
   );
 }
 
-function Seg<T extends string>({ value, options, onChange, disabled, label }: { value: T; options: readonly (readonly [T, string])[]; onChange(v: T): void; disabled?: boolean; label: string }) {
+/** A segmented choice; an option's third element turns that option off. */
+export function Seg<T extends string>({ value, options, onChange, disabled, label }: { value: T; options: readonly (readonly [T, string] | readonly [T, string, boolean])[]; onChange(v: T): void; disabled?: boolean; label: string }) {
   return (
     <div className="seg cp-seg" role="group" aria-label={label}>
-      {options.map(([v, l]) => (
-        <button key={v} type="button" className={v === value ? 'on' : undefined} aria-pressed={v === value} disabled={disabled} onClick={() => onChange(v)}>
+      {options.map(([v, l, off]) => (
+        <button key={v} type="button" className={v === value ? 'on' : undefined} aria-pressed={v === value} disabled={disabled || Boolean(off)} onClick={() => onChange(v)}>
           {l}
         </button>
       ))}
@@ -342,9 +343,9 @@ function Seg<T extends string>({ value, options, onChange, disabled, label }: { 
   );
 }
 
-function Check({ label, checked, disabled, onChange }: { label: string; checked: boolean; disabled?: boolean; onChange(v: boolean): void }) {
+export function Check({ label, checked, disabled, onChange, hint }: { label: string; checked: boolean; disabled?: boolean; onChange(v: boolean): void; hint?: string }) {
   return (
-    <label className="key-check">
+    <label className="key-check" title={hint}>
       <input type="checkbox" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} />
       <span>{label}</span>
     </label>
@@ -851,7 +852,7 @@ export function CleanPlateViewer({ ctl }: { ctl: CleanPlateController }) {
 // The numbers (right)
 // ---------------------------------------------------------------------------
 
-function Big({ label, value, unit, tone, title }: { label: string; value: ReactNode; unit?: string; tone?: 'ok' | 'warn' | 'bad' | undefined; title?: string }) {
+export function Big({ label, value, unit, tone, title }: { label: string; value: ReactNode; unit?: string; tone?: 'ok' | 'warn' | 'bad' | undefined; title?: string }) {
   return (
     <div className={`stat${tone ? ` ${tone}` : ''}${typeof value === 'string' && value.length > 6 ? ' long' : ''}`} title={title}>
       <span className="stat-value">

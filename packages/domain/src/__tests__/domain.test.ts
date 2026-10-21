@@ -45,7 +45,7 @@ describe('handoff parsing', () => {
     const r = parseHandoff(JSON.stringify(SAMPLE_HANDOFF));
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.handoff.shots).toHaveLength(3);
+    expect(r.handoff.shots).toHaveLength(4);
     expect(r.handoff.shots[0]!.tasks.map((t) => t.kind)).toEqual(['sequence_conversion', 'key', 'roto']);
     expect(r.warnings.some((w) => w.message.includes('010_030'))).toBe(true);
   });
@@ -157,8 +157,9 @@ describe('approval model', () => {
 describe('queue and shot list', () => {
   it('sorts naturally and filters', () => {
     const p = sample();
-    expect(queueRows(p).map((r) => r.shot.shotId)).toEqual(['010_020', '010_030', '020_010']);
-    expect(queueRows(p, { circledOnly: true })).toHaveLength(2);
+    expect(queueRows(p).map((r) => r.shot.shotId)).toEqual(['010_020', '010_030', '020_010', '030_010']);
+    expect(queueRows(p, { circledOnly: true })).toHaveLength(3);
+    expect(queueRows(p, { task: 'sky_replacement' }).map((r) => r.shot.shotId)).toEqual(['030_010']);
     expect(queueRows(p, { task: 'camera_track' }).map((r) => r.shot.shotId)).toEqual(['020_010']);
     expect(queueRows(p, { search: 'monitor' }).map((r) => r.shot.shotId)).toEqual(['010_030']);
   });
