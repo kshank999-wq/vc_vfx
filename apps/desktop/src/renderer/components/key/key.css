@@ -1,0 +1,447 @@
+/*
+ * The Key workspace (addendum 09). Uses the app's tokens and its step / stat
+ * styles (styles.css); what is here is the key's own: the three zones when
+ * the workspace stands alone, the viewer, the timeline and the small controls.
+ */
+
+.key-workspace {
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  display: grid;
+  grid-template-columns: clamp(300px, 21vw, 380px) minmax(0, 1fr) clamp(280px, 20vw, 380px);
+  background: #0b0d10;
+}
+.key-zone {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  background: var(--panel);
+}
+.key-zone-steps {
+  border-right: 1px solid var(--border-strong);
+  padding: 12px 14px 20px;
+}
+.key-zone-info {
+  border-left: 1px solid var(--border-strong);
+  padding: 14px;
+}
+.key-zone-centre {
+  display: flex;
+  flex-direction: column;
+  background: #0b0d10;
+  overflow: hidden;
+}
+.key-missing {
+  margin: auto;
+  max-width: 460px;
+  display: grid;
+  gap: 12px;
+  text-align: center;
+  padding: 40px;
+  color: var(--muted);
+}
+
+/* ---------------------------------------------------------------- steps */
+.key-steps .step-body .key-row,
+.key-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.key-row > button,
+.key-row > select {
+  flex: 1 1 auto;
+}
+.key-tool.on {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.key-slider {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 56px;
+  grid-template-rows: auto auto;
+  column-gap: 8px;
+  row-gap: 2px;
+  align-items: center;
+}
+.key-slider-label {
+  grid-column: 1 / -1;
+  font-size: 14px;
+  color: var(--muted);
+}
+.key-slider input[type='range'] {
+  width: 100%;
+  min-height: 28px;
+  accent-color: var(--accent);
+}
+.key-slider-value {
+  text-align: right;
+  font-size: 13px;
+}
+.key-check {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-height: 30px;
+  font-size: 14.5px;
+}
+.key-check input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+}
+.key-field {
+  display: grid;
+  gap: 4px;
+  font-size: 14px;
+  color: var(--muted);
+}
+.key-field select {
+  width: 100%;
+}
+.key-note {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.4;
+}
+.warn-text {
+  margin: 0;
+  color: var(--s-needs_review);
+  font-size: 13.5px;
+}
+.key-swatch-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.key-swatch {
+  display: inline-block;
+  width: 34px;
+  height: 34px;
+  border-radius: 6px;
+  border: 1px solid var(--border-strong);
+  flex: none;
+}
+.key-swatch.small {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+}
+.key-swatch.big {
+  width: 56px;
+  height: 56px;
+  border-radius: 10px;
+}
+.key-links {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.key-link {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  font-size: 13.5px;
+}
+.key-link.off {
+  opacity: 0.55;
+}
+.key-link-name {
+  flex: 1 1 140px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.key-link .key-check {
+  min-height: 0;
+  font-size: 13px;
+}
+.key-link-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex: none;
+}
+.key-link-dot.garbage {
+  background: #dc463c;
+}
+.key-link-dot.holdout {
+  background: #5096ff;
+}
+.key-link-dot.repair {
+  background: #c86eff;
+}
+button.small {
+  min-height: 28px;
+  padding: 2px 8px;
+  font-size: 13px;
+}
+button.danger {
+  color: var(--danger);
+}
+
+/* ---------------------------------------------------------------- viewer */
+.key-viewer {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.key-viewer-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+  flex-wrap: wrap;
+}
+.key-viewer-bar .spacer {
+  flex: 1;
+}
+.key-viewer-bar > button.on {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.key-modes {
+  display: flex;
+  flex-wrap: wrap;
+}
+.key-modes button {
+  min-height: 34px;
+  font-size: 14px;
+}
+.key-stage {
+  position: relative;
+  flex: 1;
+  min-height: 240px;
+  margin: 10px;
+  background: #050607;
+  border-radius: 6px;
+  overflow: hidden;
+  touch-action: none;
+}
+.key-stage.tool-pick {
+  cursor: crosshair;
+}
+.key-stage.tool-box {
+  cursor: cell;
+}
+.key-stage.tool-wipe {
+  cursor: ew-resize;
+}
+.key-canvas,
+.key-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.key-canvas {
+  object-fit: contain;
+  image-rendering: auto;
+}
+.key-overlay {
+  pointer-events: none;
+}
+.key-box {
+  fill: none;
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+  stroke-dasharray: 6 4;
+}
+.key-box.garbage {
+  stroke: #ff6b5e;
+}
+.key-box.holdout {
+  stroke: #6aa8ff;
+}
+.key-box.repair,
+.key-box.repair-box {
+  stroke: #d08bff;
+}
+.key-box.drawing {
+  stroke: var(--accent);
+  stroke-dasharray: none;
+  fill: rgba(242, 163, 58, 0.12);
+}
+.key-wipe {
+  stroke: var(--accent);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+.key-picker {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+.key-sample {
+  fill: var(--accent);
+  stroke: #000;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+.key-message,
+.key-hint,
+.key-busy {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 14px;
+  border-radius: 8px;
+  background: rgba(15, 17, 21, 0.86);
+  border: 1px solid var(--border-strong);
+  font-size: 15px;
+  color: var(--text);
+  max-width: 80%;
+  text-align: center;
+}
+.key-message {
+  top: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 17px;
+}
+.key-hint {
+  bottom: 12px;
+  color: var(--muted);
+}
+.key-busy {
+  top: 10px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.key-problems {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  display: grid;
+  gap: 4px;
+  max-height: calc(100% - 20px);
+  overflow: auto;
+  width: min(320px, 45%);
+  background: rgba(15, 17, 21, 0.9);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+}
+.key-problems button {
+  width: 100%;
+  justify-content: flex-start;
+  text-align: left;
+  gap: 8px;
+  font-size: 13px;
+  white-space: normal;
+}
+.key-problems button.on {
+  border-color: var(--accent);
+}
+.key-problems .mono {
+  color: var(--danger);
+  font-weight: 700;
+}
+
+/* ---------------------------------------------------------------- timeline */
+.key-timeline-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px 8px;
+}
+.key-timeline {
+  position: relative;
+  flex: 1;
+  height: 34px;
+  display: flex;
+  gap: 1px;
+  align-items: stretch;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px;
+  cursor: pointer;
+  touch-action: none;
+}
+.key-tick {
+  flex: 1;
+  min-width: 1px;
+  border-radius: 1px;
+  background: #2a2f3a;
+}
+.key-tick.problem {
+  box-shadow: inset 0 -5px 0 #ff5a4a;
+}
+.key-playhead {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 3px;
+  margin-left: -1px;
+  background: var(--accent);
+  border-radius: 2px;
+  pointer-events: none;
+}
+.key-frame {
+  min-width: 52px;
+  text-align: center;
+  font-size: 16px;
+  font-weight: 700;
+}
+.key-view-label {
+  margin: 0;
+  padding: 0 12px 8px;
+  font-size: 12.5px;
+}
+
+/* ---------------------------------------------------------------- info */
+.key-info .stats {
+  margin-top: 12px;
+}
+.key-screen-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+}
+.key-screen-card > div {
+  display: grid;
+  gap: 2px;
+}
+.key-kv {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  gap: 4px 10px;
+  margin: 0;
+  font-size: 14px;
+}
+.key-kv dt {
+  color: var(--muted);
+}
+.key-kv dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.key-info h4 {
+  margin: 14px 0 6px;
+  font-size: 13px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+}

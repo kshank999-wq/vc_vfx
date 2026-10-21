@@ -25,6 +25,7 @@ import { engineInfo, rotoExport, rotoFrame, rotoMask, rotoRun, rotoSession, type
 import { downloadModel, type FetchLike } from './roto/models';
 import { ortCandidates } from './roto/sam2-ort';
 import { verifyProject } from './verify';
+import { registerKeyHandlers } from './key/ipc-key';
 import { trackCommand, trackFrame, trackSession, trackView, type CameraEnv } from './camera/api';
 import { COMMAND_SPECS, type CameraCommand } from '../shared/camera/commands';
 import { checkerboardPdf, checkerboardPixels } from '../shared/camera/calibration';
@@ -458,6 +459,37 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null, isDev
     } catch (error) {
       return fail(error);
     }
+  });
+
+  // Green/blue-screen keying (addendum 09): the handlers live in key/ipc-key.ts, with the same rules as roto's.
+  registerKeyHandlers({
+    handle,
+    viewerProject,
+    projectFrom,
+    outputRootFor,
+    ensureOutputRoot,
+    licensed: async () => (await capability()) === 'full',
+    readOnlyReason: READ_ONLY_REASON,
+    startJob,
+    endJob,
+    progress: (event, id, label) => progressSender(event.sender, id, label),
+    env: async () => {
+      const t = await currentTools();
+      return { ffmpeg: t.ffmpeg, caps: t.caps, rotoCacheRoot: join(app.getPath('userData'), 'Roto Cache'), keyCacheRoot: join(app.getPath('userData'), 'Key Cache'), workerFile: join(__dirname, 'key-worker.js'), generator: `VC VFX ${app.getVersion()}` };
+    },
+    chooseImage: async () => {
+      const window = parent();
+      const options: Electron.OpenDialogOptions = {
+        title: 'Choose a background plate or representative background frame',
+        properties: ['openFile'],
+        filters: [
+          { name: 'Images', extensions: ['exr', 'png', 'jpg', 'jpeg', 'tif', 'tiff', 'dpx'] },
+          { name: 'All files', extensions: ['*'] },
+        ],
+      };
+      const choice = window ? await dialog.showOpenDialog(window, options) : await dialog.showOpenDialog(options);
+      return choice.canceled ? null : (choice.filePaths[0] ?? null);
+    },
   });
 
   // Camera and 2D tracking (addendum 06). Looking is allowed read-only; commands that change the

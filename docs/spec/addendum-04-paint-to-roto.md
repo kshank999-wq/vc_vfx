@@ -10,8 +10,10 @@ This addendum records what was built, how, what is proved and what is not.
 
 ## 1. What the operator does
 
-Open a shot with a Paint-to-roto task (**Paint roto…** in the shot panel, or
-the **Roto** tab of the viewer; a shot without the task offers to add it).
+Open a shot with a Paint-to-roto task in the **Roto** tab of the top toolbar
+([addendum 08](addendum-08-layout.md); *Open Roto* in the shot panel); a shot
+without the task offers to add it. The steps below are the tab's numbered
+steps: 1 Paint, 2 Propagate, 3 Review (with Correct), 4 Export.
 
 1. **Paint** on a frame with **Include** (green) over the subject and
    **Exclude** (red) over what is not; **Eraser** removes paint. `[` and `]`

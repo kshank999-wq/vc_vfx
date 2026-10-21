@@ -2,6 +2,7 @@ import { PROJECT_EXTENSION, parseProject, plateColorFor, shotListHtml, shotState
 import type { ApiResult, ExternalLink, JobProgress, LicenceStanding, MenuCommand, OpenedFile, Settings, VcvfxApi, ViewerFrame, ViewerFrameRequest, ViewerSources } from '../shared/bridge';
 import { viewerTimeline } from '../shared/viewer';
 import { createCameraPreview } from './camera-preview';
+import { createKeyPreview } from './key-preview';
 import { createRotoPreview } from './roto-preview';
 
 /**
@@ -178,6 +179,7 @@ export function createBrowserBridge(): BrowserBridge {
   const progressListeners = new Set<(p: JobProgress) => void>();
   const roto = createRotoPreview({ desktopOnly, progress: (p) => progressListeners.forEach((l) => l(p)) });
   const camera = createCameraPreview({ desktopOnly, progress: (p) => progressListeners.forEach((l) => l(p)) });
+  const keying = createKeyPreview({ desktopOnly, progress: (p) => progressListeners.forEach((l) => l(p)) });
 
   return {
     command,
@@ -279,8 +281,18 @@ export function createBrowserBridge(): BrowserBridge {
     trackCommand: (input) => camera.command(input),
     chooseLidarFile: () => camera.chooseLidar(),
     saveCalibrationTarget: (input) => camera.calibrationTarget(input),
+    // Keying: the keyer runs here on the sample's synthetic green-screen shot (key-preview.ts).
+    keySession: (input) => keying.keySession(input),
+    keyDetect: (input) => keying.keyDetect(input),
+    keyFrame: (input) => keying.keyFrame(input),
+    keySample: (input) => keying.keySample(input),
+    keyProcess: (input) => keying.keyProcess(input),
+    keyMatch: (input) => keying.keyMatch(input),
+    keySeedRoto: (input) => keying.keySeedRoto(input),
+    keyExport: (input) => keying.keyExport(input),
+    keyChooseBackground: () => keying.keyChooseBackground(),
     cancelJob: async (jobId) => {
-      if (!camera.cancel(jobId)) roto.cancel(jobId);
+      if (!camera.cancel(jobId) && !keying.cancel(jobId)) roto.cancel(jobId);
     },
     onProgress: (listener) => {
       progressListeners.add(listener);

@@ -10,9 +10,12 @@ how, what is proved and what is not.
 
 ## 1. What the operator does
 
-Open a shot with a Camera track or 2D track task (**Track…** in the shot
-panel, or the **Track** tab of the viewer, next to View and Roto; a shot
-without the task offers to add it). The workspace has two sub-modes.
+Open a shot with a Camera track or 2D track task in the **Camera Track** or
+**2D Track** tab of the top toolbar ([addendum 08](addendum-08-layout.md);
+*Open Camera Track* / *Open 2D Track* in the shot panel); a shot without the
+task offers to add it. The two sub-modes below are those two tabs, and their
+numbered lists are the tabs' steps (coordinate system now sits inside
+Export).
 
 **Camera solve**
 

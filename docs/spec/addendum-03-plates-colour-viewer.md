@@ -162,8 +162,10 @@ length from the files and its pixel format from the first frame.
 
 ## 4. The frame viewer and contact sheet
 
-Double-click a shot (or **View frames** in its panel). The viewer takes the
-main area; the queue narrows to shot, frames and status and can be collapsed.
+Double-click a shot (or **View frames** in its panel). Since
+[addendum 08](addendum-08-layout.md) the viewer is the picture of the
+**Plates** tab (and of Key), between its steps and its details; the shot bar
+above it replaces the narrowed queue.
 
 - **Show**: the source, or a plate version found in the shot's `01_PLATES`.
 - **Compare**: Single, **Wipe** (source left, plate right, drag across the

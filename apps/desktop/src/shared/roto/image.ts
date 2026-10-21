@@ -250,19 +250,18 @@ export function boxFilter(src: Float32Array, w: number, h: number, r: number): F
       if (sub >= 0) sum -= src[row + sub]!;
     }
   }
-  // Vertical running sums.
-  for (let x = 0; x < w; x += 1) {
-    let sum = 0;
-    for (let y = 0; y <= Math.min(r, h - 1); y += 1) sum += tmp[y * w + x]!;
-    for (let y = 0; y < h; y += 1) {
-      const lo = Math.max(0, y - r);
-      const hi = Math.min(h - 1, y + r);
-      out[y * w + x] = sum / (hi - lo + 1);
-      const add = y + r + 1;
-      const sub = y - r;
-      if (add < h) sum += tmp[add * w + x]!;
-      if (sub >= 0) sum -= tmp[sub * w + x]!;
-    }
+  // Vertical running sums, a row at a time (one running sum per column, the
+  // same additions in the same order as column by column, but cache-friendly).
+  const sums = new Float64Array(w);
+  for (let y = 0; y <= Math.min(r, h - 1); y += 1) for (let x = 0; x < w; x += 1) sums[x]! += tmp[y * w + x]!;
+  for (let y = 0; y < h; y += 1) {
+    const count = Math.min(h - 1, y + r) - Math.max(0, y - r) + 1;
+    const row = y * w;
+    for (let x = 0; x < w; x += 1) out[row + x] = sums[x]! / count;
+    const add = y + r + 1;
+    const sub = y - r;
+    if (add < h) for (let x = 0, a = add * w; x < w; x += 1) sums[x]! += tmp[a + x]!;
+    if (sub >= 0) for (let x = 0, s = sub * w; x < w; x += 1) sums[x]! -= tmp[s + x]!;
   }
   return out;
 }
