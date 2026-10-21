@@ -7,6 +7,8 @@
  * Stripe keys exist, so the `has*` helpers let pages degrade instead of throw.
  */
 
+import { AI_EFFORTS, DEFAULT_AI_EFFORT, DEFAULT_AI_MODEL, DEFAULT_MONTHLY_CREDITS, isAiModel, type AiEffort, type AiModel } from '@vcvfx/domain';
+
 const read = (name: string): string | undefined => {
   const value = process.env[name]?.trim();
   return value && value.length > 0 ? value : undefined;
@@ -84,7 +86,33 @@ export const env = {
   get siteUrl(): string {
     return resolveSiteUrl(process.env['NEXT_PUBLIC_SITE_URL']);
   },
+  /** Server only. The AI tracking assistant's Anthropic key (addendum 07). */
+  get anthropicApiKey(): string {
+    return required('ANTHROPIC_API_KEY');
+  },
+  /** The model the assistant calls: one of the domain's AI_MODELS; anything else falls back to the default. */
+  get aiModel(): AiModel {
+    const value = optional('AI_MODEL', DEFAULT_AI_MODEL);
+    return isAiModel(value) ? value : DEFAULT_AI_MODEL;
+  },
+  get aiEffort(): AiEffort {
+    const value = optional('AI_EFFORT', DEFAULT_AI_EFFORT);
+    return (AI_EFFORTS as readonly string[]).includes(value) ? (value as AiEffort) : DEFAULT_AI_EFFORT;
+  },
+  /** Credits per account per calendar month (1 credit = $0.05 of model cost). */
+  get aiMonthlyCredits(): number {
+    const parsed = Number.parseFloat(optional('AI_MONTHLY_CREDITS', String(DEFAULT_MONTHLY_CREDITS)));
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : DEFAULT_MONTHLY_CREDITS;
+  },
+  /** Output tokens per call (thinking + reply), the cap on what the desktop may ask for. */
+  get aiMaxOutputTokens(): number {
+    const parsed = Number.parseInt(optional('AI_MAX_OUTPUT_TOKENS', '32000'), 10);
+    return Number.isFinite(parsed) && parsed >= 1024 ? Math.min(parsed, 64_000) : 32_000;
+  },
 } as const;
+
+/** The AI tracking assistant can work: accounts (licence, metering) and an Anthropic key. */
+export const hasAi = (): boolean => hasSupabase() && Boolean(read('ANTHROPIC_API_KEY'));
 
 /** Accounts can work: the public Supabase pair and the service key are set. */
 export const hasSupabase = (): boolean =>

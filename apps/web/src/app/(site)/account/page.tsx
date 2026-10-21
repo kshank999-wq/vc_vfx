@@ -1,7 +1,10 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { licenseLive, type LicenseStatus, type Platform } from '@vcvfx/domain';
-import { hasStripe, hasSupabase } from '@/lib/env';
+import { resetsOnLabel, type AiAllowance } from '@vcvfx/domain';
+import { callerStanding, monthAllowance } from '@/lib/ai';
+import { liveAiDeps } from '@/lib/ai-live';
+import { hasAi, hasStripe, hasSupabase } from '@/lib/env';
 import { formatPrice } from '@/lib/plans';
 import { adminClient, currentUser } from '@/lib/supabase';
 import { Devices } from './devices';
@@ -89,6 +92,14 @@ export default async function AccountPage() {
   const builds = (buildRows ?? []) as BuildRow[];
   const live = licenses.filter((l) => licenseLive({ status: l.status, expiresAt: l.expires_at }, now));
   const hasOrders = (orders ?? []).length > 0;
+  let ai: AiAllowance | null = null;
+  if (hasAi() && (live.length > 0 || profile?.is_admin)) {
+    try {
+      ai = await monthAllowance(await callerStanding(user.id, client, now), client, liveAiDeps.config(), now);
+    } catch {
+      ai = null;
+    }
+  }
 
   return (
     <div className="shell">
@@ -165,6 +176,30 @@ export default async function AccountPage() {
             </div>
           )}
         </section>
+
+        {ai ? (
+          <section>
+            <h2>AI tracking assistant</h2>
+            <article className="card">
+              <dl className="kv">
+                <dt>This month</dt>
+                <dd>{ai.limit === null ? `${ai.used.toFixed(1)} credits used (not metered)` : `${ai.used.toFixed(1)} of ${ai.limit} credits used`}</dd>
+                {ai.remaining !== null ? (
+                  <>
+                    <dt>Left</dt>
+                    <dd>{ai.remaining.toFixed(1)} credits</dd>
+                  </>
+                ) : null}
+                <dt>Resets</dt>
+                <dd>{resetsOnLabel(ai.resetsAt)}</dd>
+              </dl>
+              <p className="lede small" style={{ marginTop: 12 }}>
+                The assistant in the desktop app’s Track workspace uses credits as it works: one credit is five US cents of AI model time. Your footage stays on your
+                computer unless you allow the assistant to see frames for a project.
+              </p>
+            </article>
+          </section>
+        ) : null}
 
         {licenses.length > 0 ? (
           <section>

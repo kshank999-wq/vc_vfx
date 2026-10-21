@@ -4,6 +4,7 @@ import type { ViewerFrame, ViewerLayer, ViewerSources, VcvfxApi } from '../../sh
 import { clampFrame, viewerTimeline } from '../../shared/viewer';
 import { RotoWorkspace, type RotoWorkspaceProps } from './RotoWorkspace';
 import { TrackWorkspace, type TrackWorkspaceProps } from './TrackWorkspace';
+import { AiAssistant } from './AiAssistant';
 
 /**
  * The frame viewer and contact sheet (master spec §5.2, §15.4; addendum 03).
@@ -300,7 +301,10 @@ export function Viewer({ api, project, shotId, projectKey, canEdit, onClose, onT
       </header>
 
       {mode === 'track' ? (
-        <TrackWorkspace api={api} project={project} shotId={shotId} projectKey={projectKey} canEdit={canEdit} frame={frame} onFrame={(f) => (timeline ? setFrame(clampFrame(timeline, f)) : setFrame(f))} {...track} />
+        <>
+          <TrackWorkspace api={api} project={project} shotId={shotId} projectKey={projectKey} canEdit={canEdit} frame={frame} onFrame={(f) => (timeline ? setFrame(clampFrame(timeline, f)) : setFrame(f))} {...track} />
+          <AiAssistant api={api} project={project} shotId={shotId} projectKey={projectKey} canEdit={canEdit} actor={track.actor} onTrack={track.onTrack} notify={track.notify} onFrame={(f) => (timeline ? setFrame(clampFrame(timeline, f)) : setFrame(f))} />
+        </>
       ) : !isView ? (
         <RotoWorkspace api={api} project={project} shotId={shotId} projectKey={projectKey} canEdit={canEdit} frame={frame} onFrame={(f) => (timeline ? setFrame(clampFrame(timeline, f)) : setFrame(f))} {...roto} />
       ) : (
