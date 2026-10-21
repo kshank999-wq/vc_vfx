@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
-import type { JobProgress, MenuCommand, VcvfxApi } from '../shared/bridge';
+import type { AiRunEvent, JobProgress, MenuCommand, VcvfxApi } from '../shared/bridge';
 
 /**
  * The only bridge between the renderer and the operating system: one
@@ -37,6 +37,16 @@ const api: VcvfxApi = {
   trackCommand: (input) => ipcRenderer.invoke('job:track-command', input),
   chooseLidarFile: () => ipcRenderer.invoke('track:choose-lidar'),
   saveCalibrationTarget: (input) => ipcRenderer.invoke('track:calibration-target', input),
+  aiTrackRun: (input) => ipcRenderer.invoke('ai:track-run', input),
+  aiTrackAck: (ack) => ipcRenderer.invoke('ai:track-ack', ack),
+  aiTrackCancel: (runId) => ipcRenderer.invoke('ai:track-cancel', runId),
+  onAiEvent: (listener) => {
+    const wrapped = (_event: IpcRendererEvent, e: AiRunEvent) => listener(e);
+    ipcRenderer.on('ai:event', wrapped);
+    return () => ipcRenderer.removeListener('ai:event', wrapped);
+  },
+  aiAllowance: () => ipcRenderer.invoke('ai:allowance'),
+  aiFrames: (input) => ipcRenderer.invoke('ai:frames', input),
   cancelJob: (jobId) => ipcRenderer.invoke('job:cancel', jobId),
   onProgress: (listener) => {
     const wrapped = (_event: IpcRendererEvent, progress: JobProgress) => listener(progress);

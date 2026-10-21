@@ -1,4 +1,4 @@
-import { app, dialog, ipcMain, net, shell, type BrowserWindow, type IpcMainInvokeEvent } from 'electron';
+import { app, dialog, ipcMain, nativeImage, net, shell, type BrowserWindow, type IpcMainInvokeEvent } from 'electron';
 import { readFile, stat } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { z } from 'zod';
@@ -29,6 +29,10 @@ import { trackCommand, trackFrame, trackSession, trackView, type CameraEnv } fro
 import { COMMAND_SPECS, type CameraCommand } from '../shared/camera/commands';
 import { checkerboardPdf, checkerboardPixels } from '../shared/camera/calibration';
 import { encodePng } from './roto/png';
+import { resolveFrameUrl } from './frame-cache';
+import { fetchAllowance, siteModelClient } from './ai/client';
+import { ackAiRun, cancelAiRun, runAiTrack, type AiServiceDeps } from './ai/service';
+import type { AiRunEvent } from '../shared/bridge';
 
 /**
  * IPC handlers. Every argument from the renderer is validated here with zod,
@@ -548,6 +552,91 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null, isDev
     } catch (error) {
       return fail(error);
     }
+  });
+
+  // The AI tracking assistant (addendum 07). The loop runs here beside the camera worker; the
+  // project stays the renderer's, which applies every change the assistant asks for (and logs it).
+  // Model turns go to vc-vfx.com with the account's token; frames go only where the artist
+  // allowed it for this project on this computer.
+  const site = { siteUrl: SITE_URL, token: cloud.accessToken };
+  const aiModel = siteModelClient(site);
+  const aiInput = z.object({
+    ...trackInput,
+    runId: z.string().min(1).max(100),
+    operator: z.string().min(1).max(200),
+    instruction: z.string().trim().min(1).max(4000),
+    notes: z.array(z.string().max(500)).max(10).optional(),
+    framesAllowed: z.boolean(),
+    exportAllowed: z.boolean(),
+    creditCap: z.number().min(1).max(400),
+    maxTurns: z.number().int().min(1).max(80),
+    focalRange: z.object({ min: z.number().positive().max(2000), max: z.number().positive().max(2000) }).nullable().optional(),
+    conversationId: z.string().max(100).nullable().optional(),
+  });
+  handle('ai:track-run', aiInput, async (event, input) => {
+    if ((await capability()) !== 'full') return fail(READ_ONLY_REASON);
+    if (!isCloudConfigured()) return fail(cloud.NOT_CONFIGURED);
+    try {
+      const req = input;
+      // The renderer's word is not enough to send footage: the stored per-project choice must agree.
+      const framesAllowed = req.framesAllowed && Boolean((await readSettings()).aiFrames?.[req.projectKey]);
+      const actor = `${req.operator} (AI assistant)`;
+      const contents = event.sender;
+      const rootFor = async (project: Project, exporting: boolean) => (exporting ? await ensureOutputRoot(req.projectKey, project, false) : await outputRootFor(req.projectKey));
+      const deps: AiServiceDeps = {
+        model: aiModel,
+        canEdit: async () => (await capability()) === 'full',
+        readOnlyReason: READ_ONLY_REASON,
+        session: async (project, r) => trackSession(project, { shotId: r.shotId, ...(r.workingWidth ? { workingWidth: r.workingWidth } : {}) }, await outputRootFor(r.projectKey), await cameraEnv()),
+        command: async (project, r, command, o) => {
+          const exporting = command.verb === 'export_camera' || command.verb === 'track2d_export';
+          const root = await rootFor(project, exporting);
+          if (exporting && !root) return { ok: false, error: 'No output root was chosen, so nothing was written.' };
+          return trackCommand(project, { shotId: r.shotId, projectKey: r.projectKey, operator: actor, command, ...(r.workingWidth ? { workingWidth: r.workingWidth } : {}) }, root, await cameraEnv(), { ...(o.signal ? { signal: o.signal } : {}), ...(o.onProgress ? { onProgress: o.onProgress } : {}) });
+        },
+        view: async (project, r, clouds) => trackView(project, { shotId: r.shotId, projectKey: r.projectKey, clouds }, await cameraEnv()),
+        roto: async (project, r, partId, from, directions, signal) => rotoRun(project, { shotId: r.shotId, projectKey: r.projectKey, partId, from, directions }, await outputRootFor(r.projectKey), await rotoEnv(), { ...(signal ? { signal } : {}) }),
+        frame: async (project, r, frame, maxWidth) => trackFrame(project, { text: serializeProject(project), shotId: r.shotId, projectKey: r.projectKey, frame, maxWidth }, await outputRootFor(r.projectKey), await cameraEnv()),
+        image: async (vf, maxWidth, draw) => {
+          const file = resolveFrameUrl(vf.url, frameCache.dir);
+          if (!file) throw new Error('The frame is not in the cache.');
+          let img = nativeImage.createFromPath(file);
+          if (img.isEmpty()) throw new Error('The frame could not be decoded.');
+          if (img.getSize().width > maxWidth) img = img.resize({ width: maxWidth, quality: 'good' });
+          const size = img.getSize();
+          if (draw) {
+            const bitmap = img.toBitmap();
+            draw(bitmap, size);
+            img = nativeImage.createFromBitmap(bitmap, { width: size.width, height: size.height });
+          }
+          return { mediaType: 'image/jpeg', data: img.toJPEG(82).toString('base64'), width: size.width, height: size.height };
+        },
+        send: (e: AiRunEvent) => {
+          if (!contents.isDestroyed()) contents.send('ai:event', e);
+        },
+      };
+      return ok(await runAiTrack(input.text, { ...req, framesAllowed }, deps));
+    } catch (error) {
+      return fail(error);
+    }
+  });
+  handle(
+    'ai:track-ack',
+    z.object({ runId: z.string().max(100), seq: z.number().int().positive(), ok: z.boolean(), text: projectText.optional(), error: z.string().max(2000).optional(), accepted: z.boolean().optional(), corners: z.array(z.tuple([z.number().finite(), z.number().finite()])).length(4).optional(), note: z.string().max(500).optional() }),
+    async (_e, ack) => ackAiRun(ack),
+  );
+  handle('ai:track-cancel', z.string().max(100), async (_e, runId) => cancelAiRun(runId));
+  handle('ai:allowance', none, async () => {
+    try {
+      if (!isCloudConfigured()) throw new Error(cloud.NOT_CONFIGURED);
+      return ok(await fetchAllowance(site));
+    } catch (error) {
+      return fail(error);
+    }
+  });
+  handle('ai:frames', z.object({ projectKey: z.string().min(1).max(4200), allowed: z.boolean().optional() }), async (_e, input) => {
+    if (input.allowed !== undefined) await updateSettings((s) => ({ ...s, aiFrames: { ...(s.aiFrames ?? {}), [input.projectKey]: input.allowed! } }));
+    return Boolean((await readSettings()).aiFrames?.[input.projectKey]);
   });
 
   handle('job:cancel', jobId, async (_e, id) => cancelJob(id));

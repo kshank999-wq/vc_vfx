@@ -18,6 +18,7 @@ export interface FakeState {
   licenses: FakeRow[];
   device_activations: FakeRow[];
   stripe_webhook_events: FakeRow[];
+  ai_usage: FakeRow[];
   authUsers: Array<{ id: string; email: string }>;
   writes: Array<{ table: string; operation: 'insert' | 'upsert' | 'update' }>;
 }
@@ -76,6 +77,10 @@ class FakeQuery {
   }
   is(column: string, value: unknown): this {
     this.filters.push((row) => (row[column] ?? null) === value);
+    return this;
+  }
+  gte(column: string, value: string | number): this {
+    this.filters.push((row) => row[column] !== undefined && row[column] !== null && (row[column] as string | number) >= value);
     return this;
   }
   in(column: string, values: unknown[]): this {
@@ -182,6 +187,7 @@ export const createFakeSupabase = (seed: Partial<FakeState> = {}): FakeSupabase 
     licenses: seed.licenses ?? [],
     device_activations: seed.device_activations ?? [],
     stripe_webhook_events: seed.stripe_webhook_events ?? [],
+    ai_usage: seed.ai_usage ?? [],
     authUsers: seed.authUsers ?? [],
     writes: [],
   };

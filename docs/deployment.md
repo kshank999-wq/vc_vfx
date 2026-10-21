@@ -40,6 +40,11 @@ read lazily at the point of use.
    | `RESEND_FROM_ADDRESS` | `VC VFX <noreply@vc-vfx.com>` (the default) |
    | `RELEASE_BUCKET` | `releases` (the default) |
    | `RELEASE_DOWNLOAD_TTL_SECONDS` | `900` (the default) |
+   | `ANTHROPIC_API_KEY` | `sk-ant-…` — the AI tracking assistant (addendum 07); server only. Without it `/api/ai/*` answer 503 |
+   | `AI_MODEL` | `claude-opus-5-5` (the default) or `claude-sonnet-5-5`; anything else falls back to the default |
+   | `AI_EFFORT` | `high` (the default); `low` \| `medium` \| `high` \| `xhigh` \| `max` |
+   | `AI_MONTHLY_CREDITS` | `400` (the default): credits per account per calendar month, 1 credit = $0.05 of model cost |
+   | `AI_MAX_OUTPUT_TOKENS` | `32000` (the default; capped at 64000): output tokens per model turn |
 
    `NEXT_PUBLIC_*` values are inlined at build time: **redeploy** after changing
    them.
@@ -183,6 +188,8 @@ colour-pipeline tests against the new binary.
 | `GET /api/licenses/standing` | Bearer | `{standing: {status, expiresAt} \| null}` |
 | `GET /api/releases` | public | `{builds: [{platform, version, minimumOsVersion, releaseNotes, publishedAt, sha256, sizeBytes}]}` |
 | `GET /api/downloads/{windows\|macos}` | Bearer or cookie | `{url, version, sha256, minimumOsVersion, expiresInSeconds}` |
+| `POST /api/ai/track-agent` body `{system, tools, messages, maxTokens?, shotRef?, sessionId?}` | Bearer | 200 NDJSON stream (`start`, `block`/`delta`…, `final` \| `error`) · 400 · 401 · 402 `{error, remaining: 0, resetsAt}` · 403 no live licence · 413 · 503 not configured |
+| `GET /api/ai/allowance` | Bearer or cookie | `{used, limit, remaining, resetsAt, model, licensed}` (limit/remaining null for admins) |
 
 Without a `serial`, activation uses the account's best live licence. Serials
 look like `VFX-XXXXX-XXXXX-XXXXX-XXXXX`.
