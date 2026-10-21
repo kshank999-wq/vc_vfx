@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { newCamTrackDocument, resetsOnLabel, serializeProject, shotState, type CamTrackDocument, type Project, type Result } from '@vcvfx/domain';
 import type { AiAllowanceInfo, AiRunEvent, ViewerFrame, VcvfxApi } from '../../shared/bridge';
 import { runTrackAgent, type AgentEvent, type StopReason } from '../../shared/ai/agent';
@@ -10,8 +10,9 @@ import type { TrackMutation } from './TrackWorkspace';
 import './ai-assistant.css';
 
 /**
- * The AI tracking assistant's panel (addendum 07 §7), docked on the right of
- * the Track workspace. The artist says what they want (or picks a preset);
+ * The AI tracking assistant's panel (addendum 07 §7), on the right of the
+ * Camera Track and 2D Track tabs (addendum 08: the right panel switches
+ * between Details and the assistant). The artist says what they want (or picks a preset);
  * the assistant drives the same tracking commands they use, and every call
  * and its log entry appears here as it happens. Stop at any time; Undo
  * reverts the run. The final report says what was done, the numbers, the
@@ -33,6 +34,8 @@ export interface AiAssistantProps {
   onTrack(fn: TrackMutation): boolean;
   notify(kind: 'ok' | 'error' | 'info', text: string): void;
   onFrame(frame: number): void;
+  /** Hide the panel (back to the details). */
+  onClose?(): void;
 }
 
 type Item =
@@ -108,7 +111,7 @@ function brief(input: unknown): string {
 
 const credits$ = (c: number) => `$${(c * 0.05).toFixed(2)}`;
 
-export function AiAssistant({ api, project, shotId, projectKey, canEdit, actor, onTrack, notify, onFrame }: AiAssistantProps) {
+export function AiAssistant({ api, project, shotId, projectKey, canEdit, actor, onTrack, notify, onFrame, onClose }: AiAssistantProps) {
   const demo = !api.aiTrackRun;
   const state = shotState(project, shotId);
   const hasCam = Boolean(state?.tasks.some((t) => t.kind === 'camera_track'));
@@ -116,13 +119,6 @@ export function AiAssistant({ api, project, shotId, projectKey, canEdit, actor, 
   const projectRef = useRef(project);
   projectRef.current = project;
 
-  const [open, setOpen] = useState<boolean>(() => {
-    try {
-      return localStorage.getItem('vcvfx.ai.open') !== '0';
-    } catch {
-      return true;
-    }
-  });
   const [instruction, setInstruction] = useState('');
   const [frames, setFrames] = useState(false);
   const [exportOk, setExportOk] = useState(false);
@@ -140,28 +136,12 @@ export function AiAssistant({ api, project, shotId, projectKey, canEdit, actor, 
   const [pending, setPending] = useState<Pending | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [undoable, setUndoable] = useState<{ doc: CamTrackDocument | null; created2d: string[] } | null>(null);
-  const [top, setTop] = useState(52);
-  const dockRef = useRef<HTMLDivElement | null>(null);
   const listRef = useRef<HTMLOListElement | null>(null);
   const runIdRef = useRef<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const nextId = useRef(1);
   const createdRef = useRef<string[]>([]);
   const framesTouched = useRef(false);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('vcvfx.ai.open', open ? '1' : '0');
-    } catch {
-      // per-viewer convenience only
-    }
-  }, [open]);
-
-  // Sit below the viewer's header bar.
-  useLayoutEffect(() => {
-    const bar = dockRef.current?.closest('.viewer')?.querySelector('.viewer-bar');
-    if (bar) setTop(Math.round(bar.getBoundingClientRect().height));
-  }, [open]);
 
   useEffect(() => {
     let alive = true;
@@ -354,25 +334,17 @@ export function AiAssistant({ api, project, shotId, projectKey, canEdit, actor, 
     void start(p.instruction, p.id);
   };
 
-  if (!open)
-    return (
-      <div className="ai-dock" ref={dockRef} style={{ top }}>
-        <button type="button" className="ai-tab" onClick={() => setOpen(true)} title="AI tracking assistant">
-          AI assistant{running ? ' ●' : ''}
-        </button>
-      </div>
-    );
-
   return (
-    <div className="ai-dock open" ref={dockRef} style={{ top }}>
       <aside className="ai-panel" aria-label="AI assistant">
         <header className="ai-head">
-          <h3>AI assistant</h3>
+          <h3>AI tracking assistant</h3>
           {demo ? <span className="ai-tag">Demo</span> : null}
           <span className="spacer" />
-          <button type="button" className="link" onClick={() => setOpen(false)} aria-label="Hide the AI assistant" title="Hide">
-            ✕
-          </button>
+          {onClose ? (
+            <button type="button" className="link" onClick={onClose} aria-label="Hide the AI assistant" title="Back to the details">
+              ✕
+            </button>
+          ) : null}
         </header>
 
         <div className="ai-scroll">
@@ -520,7 +492,6 @@ export function AiAssistant({ api, project, shotId, projectKey, canEdit, actor, 
           ) : null}
         </div>
       </aside>
-    </div>
   );
 }
 
@@ -617,7 +588,7 @@ function ReportCard({ report, onFrame }: { report: FinishReport; onFrame(f: numb
           </ul>
         </>
       ) : null}
-      <p className="muted small">The assistant cannot approve. Review the solve, then approve the task in the shot panel if you agree.</p>
+      <p className="muted small">The assistant cannot approve. Review the solve, then approve the task in the Details panel if you agree.</p>
     </section>
   );
 }
