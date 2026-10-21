@@ -20,7 +20,7 @@ import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve, dirname, relative, sep } from 'node:path';
+import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const VERSION = '1.20.1';
@@ -49,9 +49,11 @@ for (const [name, integrity] of Object.entries(PACKAGES)) {
   writeFileSync(tgz, bytes);
   const dest = join(out, name);
   mkdirSync(dest, { recursive: true });
-  // Relative paths and cwd rather than -C: Git for Windows' GNU tar reads
-  // "C:\..." as a remote host ("Cannot connect to C: resolve failed").
-  execFileSync('tar', ['-xzf', relative(dest, tgz).split(sep).join('/'), '--strip-components=1'], { cwd: dest });
+  // Fed on stdin with cwd set, never as a path: Git for Windows' GNU tar
+  // reads any "C:\..." argument as a remote host ("Cannot connect to C:"),
+  // and a relative path still starts with a drive letter when the temp
+  // folder and the checkout are on different drives (as on GitHub's runners).
+  execFileSync('tar', ['-xzf', '-', '--strip-components=1'], { cwd: dest, input: bytes, maxBuffer: 512 * 1024 * 1024 });
   console.log(`${name}@${VERSION}: ${(bytes.length / 1e6).toFixed(1)} MB, integrity ok`);
 }
 
