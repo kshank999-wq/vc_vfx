@@ -4,6 +4,7 @@ import {
   PREP_TASK_KINDS,
   SHOT_STATUSES,
   SHOT_STATUS_LABELS,
+  TASK_STATE_LABELS,
   scenesOf,
   statusCounts,
   type PrepTaskKind,
@@ -13,6 +14,28 @@ import {
   type ShotStatus,
 } from '@vcvfx/domain';
 import { deliveredRange, requiredPrep } from '../../shared/queue';
+import { MODULES, moduleStatus, type ModuleId } from '../modules';
+import { Icon } from './Icons';
+
+const PROGRESS: ModuleId[] = ['plates', 'roto', 'key', 'camera', 'track2d', 'deliver'];
+
+/** One icon per module, coloured by how its task stands on this shot (faint: the shot does not need it). */
+export function ModuleProgress({ project, shotId, onOpen }: { project: Project; shotId: string; onOpen?: (id: ModuleId) => void }) {
+  return (
+    <span className="progress-icons">
+      {PROGRESS.map((id) => {
+        const s = moduleStatus(project, shotId, id);
+        const tone = s.kind === 'task' ? `task-state-${s.state}` : s.kind === 'shot' ? `status-${s.status}` : 'absent';
+        const label = `${MODULES[id].label}: ${s.kind === 'task' ? TASK_STATE_LABELS[s.state] : s.kind === 'shot' ? SHOT_STATUS_LABELS[s.status] : 'not needed'}`;
+        return (
+          <span key={id} className={`progress-icon ${tone}`} title={label} aria-label={label} role="img" onDoubleClick={onOpen ? (e) => (e.stopPropagation(), onOpen(id)) : undefined}>
+            <Icon name={id} size={18} />
+          </span>
+        );
+      })}
+    </span>
+  );
+}
 
 export function StatusPill({ status }: { status: ShotStatus }) {
   return <span className={`pill status-${status}`}>{SHOT_STATUS_LABELS[status]}</span>;
@@ -158,7 +181,7 @@ export function QueueTable({
   selected: string | null;
   marked?: string[];
   onSelect: (shotId: string, gesture: SelectGesture) => void;
-  /** Double-click: open the shot in the frame viewer. */
+  /** Double-click: open the shot in a module tab. */
   onOpen?: (shotId: string) => void;
   /** Beside the viewer: shot, frames and status only. */
   compact?: boolean;
@@ -172,16 +195,16 @@ export function QueueTable({
     return <div className="queue-empty">No shots match these filters.</div>;
   }
   return (
-    <table className={`queue${compact ? ' compact' : ''}`} aria-label="Shot queue">
+    <table className={`queue${compact ? ' compact' : ''}`} aria-label="Shot queue" data-tour="queue">
       <thead>
         <tr>
           <th className="col-shot">Shot</th>
           <th>Scene / Setup</th>
           <th className="num">Take</th>
           <th className="num">Frames</th>
-          <th>Required prep</th>
+          <th className="col-prep">Prep</th>
+          <th title="Plates · Roto · Key · Camera Track · 2D Track · Deliver">Progress</th>
           <th>Status</th>
-          <th>Approval</th>
           <th>Source</th>
         </tr>
       </thead>
@@ -202,7 +225,7 @@ export function QueueTable({
             }}
             onClick={(e) => onSelect(shot.shotId, e.shiftKey ? 'range' : e.metaKey || e.ctrlKey ? 'toggle' : 'single')}
             onDoubleClick={() => onOpen?.(shot.shotId)}
-            title={onOpen && !compact ? 'Double-click to view frames' : undefined}
+            title={onOpen && !compact ? 'Click to select · double-click to open it in its next job' : undefined}
           >
             <td className="col-shot">
               <CircleDot circled={shot.circled} />
@@ -225,11 +248,13 @@ export function QueueTable({
                 <td className="num">{frames}</td>
               );
             })()}
-            <td>{requiredPrep(project, shot, state)}</td>
+            <td className="col-prep">{requiredPrep(project, shot, state)}</td>
             <td>
+              <ModuleProgress project={project} shotId={shot.shotId} />
+            </td>
+            <td title={state.approval ? `Approved by ${state.approval.by}` : undefined}>
               <StatusPill status={status} />
             </td>
-            <td className={state.approval ? '' : 'muted'}>{state.approval ? state.approval.by : '—'}</td>
             <td>
               <span className={`verify verify-${state.sourceVerified}`}>{VERIFY_LABEL[state.sourceVerified]}</span>
             </td>

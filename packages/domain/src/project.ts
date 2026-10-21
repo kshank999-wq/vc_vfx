@@ -18,6 +18,7 @@ import {
 } from './color.js';
 import { RotoDocumentSchema } from './roto-schema.js';
 import { CamTrackDocumentSchema, Track2dDocumentSchema } from './camtrack-schema.js';
+import { KeyDocumentSchema } from './key-schema.js';
 import { CameraBodySchema, LensProfileSchema } from './camera-db.js';
 
 /**
@@ -39,11 +40,12 @@ export const PROJECT_FORMAT = 'vcvfx-project';
  * 2: shots carry a paint-to-roto document (`roto`).
  * 3: shots carry a camera-track (`camtrack`) and a 2D-track (`track2d`)
  *    document; the project carries its lens profiles and custom cameras.
+ * 4: shots carry a green/blue-screen key document (`key`; addendum 09).
  * An older project opens (the new fields empty) and is saved as the current
  * version; an older VC VFX refuses a newer project rather than silently
  * dropping what it does not know about.
  */
-export const PROJECT_VERSION = 3;
+export const PROJECT_VERSION = 4;
 export const PROJECT_EXTENSION = 'vcvfx';
 
 export const ApprovalSchema = z.object({ by: z.string().min(1), at: z.string() });
@@ -159,6 +161,8 @@ export const ShotStateSchema = z.object({
   camtrack: CamTrackDocumentSchema.nullable().default(null),
   /** 2D / planar tracks (§9). Null until the first track. */
   track2d: Track2dDocumentSchema.nullable().default(null),
+  /** Green/blue-screen key (§6, §7). Null until keying starts. Mattes and foregrounds are files, never here. */
+  key: KeyDocumentSchema.nullable().default(null),
 });
 export type ShotState = z.infer<typeof ShotStateSchema>;
 
@@ -221,6 +225,7 @@ export function createProject(handoff: Handoff, handoffPath: string, actor: stri
     roto: null,
     camtrack: null,
     track2d: null,
+    key: null,
   }));
   return log(
     { format: PROJECT_FORMAT, version: PROJECT_VERSION, createdAt: at, updatedAt: at, handoffPath, handoff, plateColorDefault: 'acescg', shots, lensProfiles: [], customCameras: [], log: [] },
@@ -241,8 +246,8 @@ export function parseProject(text: string): { ok: true; project: Project } | { o
 
 /**
  * Bring an older project up to `PROJECT_VERSION`. The schema's defaults have
- * already filled what an older project lacks (`roto`, `camtrack`, `track2d`
- * null; no lens profiles); this records the version it is now saved as.
+ * already filled what an older project lacks (`roto`, `camtrack`, `track2d`,
+ * `key` null; no lens profiles); this records the version it is now saved as.
  */
 export function migrateProject(p: Project): Project {
   return p.version === PROJECT_VERSION ? p : { ...p, version: PROJECT_VERSION };
@@ -394,6 +399,14 @@ export function approveTask(p: Project, shotId: string, kind: PrepTaskKind, appr
     }
     if (kind === 'track_2d' && s.track2d && s.track2d.tracks.some((t) => t.frames.length > 1) && !s.track2d.exports.some((e) => e.version === task.version)) {
       return `Export the 2D tracks of ${'v' + String(task.version).padStart(3, '0')} first; approval approves the files a vendor receives`;
+    }
+    // A key made here is approved as files too: the export of this key version (with the despilled foreground, for despill).
+    const keyVersion = s.tasks.find((t) => t.kind === 'key')?.version ?? 1;
+    if (kind === 'key' && s.key && s.key.frames.length > 0 && !s.key.exports.some((e) => e.version === task.version)) {
+      return `Export key ${'v' + String(task.version).padStart(3, '0')} first; approval approves the files a vendor receives`;
+    }
+    if (kind === 'despill' && s.key && s.key.frames.length > 0 && !s.key.exports.some((e) => e.version === keyVersion && e.despill)) {
+      return `Export key ${'v' + String(keyVersion).padStart(3, '0')} with the despilled foreground first; approval approves the files a vendor receives`;
     }
     return { ...s, tasks: s.tasks.map((t) => (t.kind === kind ? { ...t, state: 'approved' as const, approval: { by: approver.trim(), at } } : t)) };
   });

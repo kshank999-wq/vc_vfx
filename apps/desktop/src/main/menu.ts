@@ -85,6 +85,23 @@ export async function buildMenu(getWindow: () => BrowserWindow | null, isDevelop
     {
       label: 'View',
       submenu: [
+        // The module tabs (addendum 08). The renderer owns these keys, so the
+        // browser preview has them too; the menu shows them without registering.
+        ...(
+          [
+            ['Shots', 'show-shots'],
+            ['Plates', 'show-plates'],
+            ['Roto', 'show-roto'],
+            ['Key', 'show-key'],
+            ['Camera Track', 'show-camera'],
+            ['2D Track', 'show-track2d'],
+            ['Deliver', 'show-deliver'],
+          ] as const
+        ).map(([label, command], i) => ({ label, accelerator: `CmdOrCtrl+${i + 1}`, registerAccelerator: false, click: send(command) })),
+        { type: 'separator' },
+        { label: 'Previous Shot', accelerator: 'CmdOrCtrl+Up', registerAccelerator: false, click: send('previous-shot') },
+        { label: 'Next Shot', accelerator: 'CmdOrCtrl+Down', registerAccelerator: false, click: send('next-shot') },
+        { type: 'separator' },
         ...(isDevelopment ? ([{ role: 'reload' }, { role: 'toggleDevTools' }, { type: 'separator' }] satisfies MenuItemConstructorOptions[]) : []),
         { role: 'resetZoom' },
         { role: 'zoomIn' },
@@ -97,6 +114,8 @@ export async function buildMenu(getWindow: () => BrowserWindow | null, isDevelop
     {
       role: 'help',
       submenu: [
+        { label: 'Show the Tour', click: send('show-tour') },
+        { type: 'separator' },
         { label: 'VC VFX Website', click: () => void shell.openExternal(SITE_URL) },
         { label: 'Check for Updates…', click: () => void checkForUpdatesInteractive(getWindow()) },
         ...(isMac ? [] : ([{ type: 'separator' }, { label: 'About VC VFX', click: about }] satisfies MenuItemConstructorOptions[])),

@@ -26,7 +26,15 @@ import {
   type TaskState,
 } from '@vcvfx/domain';
 import { canApproveShot, canApproveTask, canDeliver, canPackage, canReopen, canSetTask, READ_ONLY_TITLE, type Allowed } from '../actions';
+import { MODULES, type ModuleId } from '../modules';
+import { Icon } from './Icons';
 import { CircleDot, StatusPill } from './Queue';
+
+/**
+ * The shot's details (Shots tab, right) and the pieces of it the module tabs
+ * reuse: a task's state and actions, approval and packaging, the sequence
+ * plan, plate colour, source and camera details, and the shot's log.
+ */
 
 export interface ShotDetailHandlers {
   onTaskState(kind: PrepTaskKind, state: Exclude<TaskState, 'approved'>): void;
@@ -47,15 +55,11 @@ export interface ShotDetailHandlers {
   onRevealOutput(): void;
   /** The plate colour choice and/or the operator's reading of the source encoding (null: the handoff's). */
   onPlateColor(change: { choice?: ShotPlateColor; encoding?: ColorEncodingId | null }): void;
-  /** Open the frame viewer on this shot. */
-  onView(): void;
-  /** Open the roto workspace on this shot (addendum 04). */
-  onRoto?(): void;
-  /** Open the Track workspace on this shot (addendum 06). */
-  onTrack?(): void;
+  /** Open one of the module tabs on this shot (addendum 08). */
+  onOpenModule?(id: ModuleId): void;
 }
 
-interface Props extends ShotDetailHandlers {
+export interface ShotDetailProps extends ShotDetailHandlers {
   project: Project;
   shotId: string;
   now: Date;
@@ -64,8 +68,13 @@ interface Props extends ShotDetailHandlers {
   outputRoot: string | null;
 }
 
+export type TaskCtx = Pick<ShotDetailProps, 'project' | 'shotId' | 'now' | 'canEdit' | 'busy' | 'onTaskState' | 'onApproveTask' | 'onTaskNotes' | 'onGeneratePlates' | 'onOpenModule'>;
+
+/** Which module tab works on a task, if any. */
+export const MODULE_OF: Partial<Record<PrepTaskKind, ModuleId>> = { sequence_conversion: 'plates', roto: 'roto', key: 'key', camera_track: 'camera', track_2d: 'track2d' };
+
 /** A button whose disabled state carries the reason, both as a tooltip and visibly. */
-function ActionButton({
+export function ActionButton({
   allowed,
   onClick,
   children,
@@ -73,6 +82,7 @@ function ActionButton({
   canEdit,
   busy,
   showReason,
+  className,
 }: {
   allowed: Allowed;
   onClick: () => void;
@@ -81,20 +91,25 @@ function ActionButton({
   canEdit: boolean;
   busy: boolean;
   showReason?: boolean;
+  className?: string;
 }) {
   const reason = !canEdit ? READ_ONLY_TITLE : !allowed.allowed ? allowed.reason : busy ? 'Another job is running.' : undefined;
   const disabled = Boolean(reason);
   return (
     <span className="action">
-      <button type="button" className={primary ? 'primary' : undefined} disabled={disabled} title={reason} onClick={onClick}>
+      <button type="button" className={[primary ? 'primary' : '', className ?? ''].filter(Boolean).join(' ') || undefined} disabled={disabled} title={reason} onClick={onClick}>
         {children}
       </button>
-      {showReason && disabled && reason ? <span className="reason" role="note">{reason}</span> : null}
+      {showReason && disabled && reason ? (
+        <span className="reason" role="note">
+          {reason}
+        </span>
+      ) : null}
     </span>
   );
 }
 
-function NotesField({ value, onCommit, disabled, label, placeholder }: { value: string; onCommit: (v: string) => void; disabled: boolean; label: string; placeholder?: string }) {
+export function NotesField({ value, onCommit, disabled, label, placeholder }: { value: string; onCommit: (v: string) => void; disabled: boolean; label: string; placeholder?: string }) {
   const [draft, setDraft] = useState(value);
   useEffect(() => setDraft(value), [value]);
   return (
@@ -113,7 +128,7 @@ function NotesField({ value, onCommit, disabled, label, placeholder }: { value: 
   );
 }
 
-const KV = ({ rows }: { rows: [string, ReactNode][] }) => (
+export const KV = ({ rows }: { rows: [string, ReactNode][] }) => (
   <dl className="kv">
     {rows.map(([k, v]) => (
       <div key={k} className="kv-row">
@@ -141,7 +156,8 @@ const NEXT_STATES: Record<TaskState, { state: Exclude<TaskState, 'approved'>; la
   approved: [{ state: 'needs_correction', label: 'Reopen (new version)' }],
 };
 
-function TaskCard({ task, props }: { task: TaskRecord; props: Props }) {
+/** One task: its state, version and approval, what can be done next, and its notes. */
+export function TaskCard({ task, props, inModule }: { task: TaskRecord; props: TaskCtx; /** Shown inside the task's own module: no "open" or plate button. */ inModule?: boolean }) {
   const { project, shotId, now, canEdit, busy } = props;
   const info = PREP_TASKS[task.kind];
   const stage = shotState(project, shotId)?.stage ?? 'prep';
@@ -153,13 +169,18 @@ function TaskCard({ task, props }: { task: TaskRecord; props: Props }) {
       : task.state === 'approved'
         ? { allowed: false, reason: 'These plates are approved. Reopen the task to make a new version.' }
         : { allowed: true };
+  const module = MODULE_OF[task.kind];
   return (
     <li className={`task task-${task.state}`}>
       <div className="task-head">
         <span className="task-name">{info.label}</span>
         <span className={`pill task-state-${task.state}`}>{TASK_STATE_LABELS[task.state]}</span>
         <span className="muted mono">{versionTag(task.version)}</span>
-        {!info.available ? <span className="tag" title="Done in another application and tracked here">tracked</span> : null}
+        {!info.available ? (
+          <span className="tag" title="Done in another application and tracked here">
+            tracked
+          </span>
+        ) : null}
       </div>
       {task.approval ? (
         <div className="approval-line">
@@ -167,20 +188,15 @@ function TaskCard({ task, props }: { task: TaskRecord; props: Props }) {
         </div>
       ) : null}
       <div className="task-actions">
-        {plates ? (
+        {module && props.onOpenModule && !inModule ? (
+          <button type="button" className={task.state === 'pending' || task.state === 'needs_correction' ? 'primary' : undefined} onClick={() => props.onOpenModule!(module)} title={`Open the ${MODULES[module].label} tab on this shot`}>
+            <Icon name={module} size={18} /> Open {MODULES[module].label}
+          </button>
+        ) : null}
+        {plates && !inModule ? (
           <ActionButton allowed={platesAllowed} onClick={props.onGeneratePlates} canEdit={canEdit} busy={busy}>
             Generate plates
           </ActionButton>
-        ) : null}
-        {task.kind === 'roto' && props.onRoto ? (
-          <button type="button" className={task.state === 'pending' ? 'primary' : undefined} onClick={props.onRoto} title="Paint, propagate, review and export mattes">
-            {task.state === 'pending' ? 'Paint roto…' : 'Open roto…'}
-          </button>
-        ) : null}
-        {(task.kind === 'camera_track' || task.kind === 'track_2d') && props.onTrack ? (
-          <button type="button" className={task.state === 'pending' ? 'primary' : undefined} onClick={props.onTrack} title={task.kind === 'camera_track' ? 'Track features, solve the camera, align to LiDAR, export' : 'Track a surface or a point, preview an insert, export'}>
-            {task.state === 'pending' ? 'Track…' : 'Open track…'}
-          </button>
         ) : null}
         {NEXT_STATES[task.state].map((n) => (
           <ActionButton key={n.state} allowed={canSetTask(project, shotId, task.kind, n.state, now)} onClick={() => props.onTaskState(task.kind, n.state)} canEdit={canEdit} busy={busy}>
@@ -221,24 +237,238 @@ function VfxIdField({ value, handoffId, disabled, onCommit }: { value: string | 
   );
 }
 
-export function ShotDetail(props: Props) {
+/** Shot approval, packaging and delivery, and where the package goes. */
+export function ApprovalPanel(props: ShotDetailProps) {
   const { project, shotId, now, canEdit, busy } = props;
+  const state = shotState(project, shotId);
+  if (!state) return null;
+  const approve = canApproveShot(project, shotId, now);
+  return (
+    <section className="panel approval">
+      <div className="approval-state">
+        {state.approval ? (
+          <>
+            Shot approved by <strong>{state.approval.by}</strong> <span className="muted">{state.approval.at.replace('T', ' ').slice(0, 16)}</span>
+          </>
+        ) : (
+          <span className="muted">Shot not approved</span>
+        )}
+        {state.stage !== 'prep' ? (
+          <span className="tag">
+            {state.stage} {versionTag(state.packageVersion)}
+          </span>
+        ) : null}
+      </div>
+      <div className="shot-actions">
+        {state.approval ? null : (
+          <ActionButton allowed={approve} onClick={props.onApproveShot} canEdit={canEdit} busy={busy} primary showReason>
+            Approve shot…
+          </ActionButton>
+        )}
+        <ActionButton allowed={canPackage(project, shotId, now)} onClick={props.onPackage} canEdit={canEdit} busy={busy}>
+          {state.packageVersion > 0 ? 'Package again' : 'Package'}
+        </ActionButton>
+        <ActionButton allowed={canDeliver(project, shotId, now)} onClick={props.onDeliver} canEdit={canEdit} busy={busy}>
+          Mark delivered
+        </ActionButton>
+        <ActionButton allowed={canReopen(project, shotId, now)} onClick={props.onReopen} canEdit={canEdit} busy={busy}>
+          Reopen
+        </ActionButton>
+      </div>
+      <OutputRoot {...props} />
+    </section>
+  );
+}
+
+export function OutputRoot(props: Pick<ShotDetailProps, 'project' | 'shotId' | 'outputRoot' | 'busy' | 'onChangeOutputRoot' | 'onRevealOutput'>) {
+  const state = shotState(props.project, props.shotId);
+  return (
+    <div className="output-root">
+      <span className="muted">Output folder</span>
+      <span className={props.outputRoot ? 'mono path' : 'path muted'} title={props.outputRoot ?? undefined}>
+        {props.outputRoot ?? 'not chosen yet — asked the first time'}
+      </span>
+      <button type="button" className="link" onClick={props.onChangeOutputRoot} disabled={props.busy}>
+        {props.outputRoot ? 'Change' : 'Choose'}
+      </button>
+      {props.outputRoot && state && state.packageVersion > 0 ? (
+        <button type="button" className="link" onClick={props.onRevealOutput}>
+          Reveal
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+/** The frames the plates will cover, their format and file names. */
+export function SequencePlan({ project, shotId, busy, onProbe }: Pick<ShotDetailProps, 'project' | 'shotId' | 'busy' | 'onProbe'>) {
+  const shot = handoffShot(project, shotId);
+  const state = shotState(project, shotId);
+  if (!shot || !state) return null;
+  const output = outputFor(project.handoff, shot);
+  const plan = planFor(project, shot);
+  const name = state.vfxShotId ?? shot.shotId;
+  const plateVersion = state.tasks.find((t) => t.kind === 'sequence_conversion')?.version ?? 1;
+  return plan ? (
+    <KV
+      rows={[
+        ['Source in–out', <span className="num">{formatRange(plan.sourceIn, plan.sourceOut)}</span>],
+        ['Delivered in–out', <span className="num">{formatRange(plan.deliveredIn, plan.deliveredOut)}</span>],
+        ['Editorial in–out', <span className="num">{formatRange(plan.editorialIn, plan.editorialOut)}</span>],
+        ['Handles · frames', <span className="num">{`${plan.handles} · ${plan.frameCount}`}</span>],
+        ['Format', `${plan.format.toUpperCase()} ${plan.bitDepth}-bit${output.compression ? ` · ${output.compression}` : ''}`],
+        ['File pattern', <span className="mono">{framePattern(name, 'plate', plateVersion, plan.format)}</span>],
+      ]}
+    />
+  ) : (
+    <div className="range-unknown">
+      <p className="muted">
+        Frame range unknown. The handoff does not give one{project.handoff.origin ? ' (VCDIT sends none)' : ''}, and the clip has not been read yet. Plates cover the whole take once it is read.
+      </p>
+      {onProbe ? (
+        <button type="button" onClick={onProbe} disabled={busy}>
+          Read from clip
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+export function CameraColour({ project, shotId }: { project: Project; shotId: string }) {
+  const shot = handoffShot(project, shotId);
+  if (!shot) return null;
+  const cam = shot.camera;
+  const color = shot.color;
+  return (
+    <KV
+      rows={[
+        ['Camera', [cam.body, cam.sensorMode].filter(Boolean).join(' · ')],
+        ['Film back', cam.filmBackMm ? `${cam.filmBackMm.width} × ${cam.filmBackMm.height} mm` : ''],
+        ['Lens', [cam.lens, cam.focalLengthMm ? `${cam.focalLengthMm} mm` : ''].filter(Boolean).join(' · ')],
+        ['Focus · iris', [cam.focusDistance, cam.iris].filter(Boolean).join(' · ')],
+        ['Source colour', color.sourceColorSpace],
+        ['Gamma', color.gamma],
+        ['Working · display', [color.workingColorSpace, color.displayTransform].filter(Boolean).join(' · ')],
+        ['Look (never baked)', color.lookReference],
+      ]}
+    />
+  );
+}
+
+export function SourceDetails({ project, shotId }: { project: Project; shotId: string }) {
+  const shot = handoffShot(project, shotId);
+  const state = shotState(project, shotId);
+  if (!shot || !state) return null;
+  const timing = shotTiming(project, shot);
+  return (
+    <>
+      <KV
+        rows={[
+          ['Timecode', timing?.timecodeIn ? `${timing.timecodeIn}${shot.timecodeOut ? ` – ${shot.timecodeOut}` : ''}` : ''],
+          [
+            'Frames (source)',
+            timing ? (
+              <span className="num">
+                {formatRange(timing.frameIn, timing.frameOut)}
+                {timing.from === 'probe' ? <span className="muted"> · whole clip, read with ffprobe</span> : null}
+              </span>
+            ) : (
+              'unknown'
+            ),
+          ],
+          ['Frame rate', `${timing?.frameRate ?? shot.frameRate} fps${!timing && project.handoff.origin ? ' (production setting)' : ''}`],
+          ['Resolution', timing?.resolution ? `${timing.resolution.width} × ${timing.resolution.height}` : ''],
+          ['Codec', state.probe?.codec],
+          ['Unit · day', [shot.unit, shot.shootDay].filter(Boolean).join(' · ')],
+          ['Roll · clip', [shot.cameraRoll, shot.clip].filter(Boolean).join(' · ')],
+          ['Flagged by', shot.flaggedBy],
+          ['Path', <span className="mono path">{shot.sourcePath}</span>],
+          ...(shot.sourceFiles?.length ? ([['Other files', <span className="mono path">{shot.sourceFiles.map((f) => f.split('/').pop()).join(', ')}</span>]] as [string, ReactNode][]) : []),
+          ['Verification', <span className={`verify verify-${state.sourceVerified}`}>{state.sourceVerified}</span>],
+        ]}
+      />
+      {shot.checksums.length ? (
+        <ul className="checksums">
+          {shot.checksums.map((c) => (
+            <li key={`${c.path}-${c.algorithm}`}>
+              <span className="tag">{c.algorithm}</span>
+              <span className="mono hash" title={c.value}>
+                {c.value}
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="muted small">No checksums in the handoff.</p>
+      )}
+      {shot.references.length ? (
+        <>
+          <h4>References</h4>
+          <ul className="refs">
+            {shot.references.map((r) => (
+              <li key={r.path}>
+                <span className="tag">{r.kind.replace(/_/g, ' ')}</span> <span className="mono path">{r.path}</span>
+                {r.notes ? <span className="muted"> — {r.notes}</span> : null}
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : null}
+    </>
+  );
+}
+
+/** The shot's operation log, newest first. */
+export function ShotLog({ project, shotId, limit }: { project: Project; shotId: string; limit?: number }) {
+  const all = project.log.filter((l) => l.shotId === shotId).slice().reverse();
+  const log = limit ? all.slice(0, limit) : all;
+  return (
+    <ol className="log">
+      {log.map((l, i) => (
+        <li key={`${l.at}-${i}`}>
+          <span className="mono muted">{l.at.replace('T', ' ').slice(0, 16)}</span>
+          <span className="log-action">{l.action}</span>
+          <span className="muted">{l.actor}</span>
+          {l.detail ? <span className="log-detail">{l.detail}</span> : null}
+        </li>
+      ))}
+      {log.length === 0 ? <li className="muted">Nothing yet.</li> : null}
+      {limit && all.length > limit ? <li className="muted">…and {all.length - limit} earlier (all of it on the Shots tab).</li> : null}
+    </ol>
+  );
+}
+
+export function ReviewMarks({ project, shotId }: { project: Project; shotId: string }) {
+  const state = shotState(project, shotId);
+  if (!state?.reviewMarks.length) return null;
+  return (
+    <div className="review-marks">
+      <span className="label">Marked for correction</span>
+      <ul>
+        {state.reviewMarks.map((m) => (
+          <li key={m.frame}>
+            <span className="mono">{m.frame}</span>{' '}
+            <span className="muted">
+              {m.viewing} · {m.by}
+            </span>
+            {m.note ? <span> — {m.note}</span> : null}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+export function ShotDetail(props: ShotDetailProps) {
+  const { project, shotId, canEdit, busy } = props;
   const shot = handoffShot(project, shotId);
   const state = shotState(project, shotId);
   const [newTask, setNewTask] = useState<PrepTaskKind | ''>('');
   if (!shot || !state) return <aside className="detail empty">Select a shot.</aside>;
 
-  const output = outputFor(project.handoff, shot);
-  const plan = planFor(project, shot);
-  const timing = shotTiming(project, shot);
   const name = state.vfxShotId ?? shot.shotId;
   const status = shotStatus(state);
-  const plateVersion = state.tasks.find((t) => t.kind === 'sequence_conversion')?.version ?? 1;
-  const approve = canApproveShot(project, shotId, now);
   const missingKinds = PREP_TASK_KINDS.filter((k) => !state.tasks.some((t) => t.kind === k));
-  const log = project.log.filter((l) => l.shotId === shotId).slice().reverse();
-  const cam = shot.camera;
-  const color = shot.color;
 
   return (
     <aside className="detail" aria-label={`Shot ${shot.shotId}`}>
@@ -247,10 +477,6 @@ export function ShotDetail(props: Props) {
           <CircleDot circled={shot.circled} />
           <h2>{name}</h2>
           <StatusPill status={status} />
-          <span className="spacer" />
-          <button type="button" onClick={props.onView} title="Open the frame viewer and contact sheet (or double-click the row)">
-            View frames
-          </button>
         </div>
         <div className="detail-sub">
           Scene {shot.scene}
@@ -260,57 +486,24 @@ export function ShotDetail(props: Props) {
           {shot.clip ? ` · ${shot.clip}` : ''}
           {state.vfxShotId ? <span className="muted"> · handoff ID {shot.shotId}</span> : null}
         </div>
+        {props.onOpenModule ? (
+          <div className="open-in">
+            <button type="button" onClick={() => props.onOpenModule!('plates')} title="Look at the frames: source and plates, A/B, contact sheet (or double-click the row)">
+              <Icon name="plates" size={18} /> View frames
+            </button>
+            <button type="button" onClick={() => props.onOpenModule!('deliver')} title="Verify, approve, package and print">
+              <Icon name="deliver" size={18} /> Deliver
+            </button>
+          </div>
+        ) : null}
         <VfxIdField value={state.vfxShotId} handoffId={shot.shotId} disabled={!canEdit || busy} onCommit={props.onSetVfxShotId} />
       </header>
 
-      <section className="panel approval">
-        <div className="approval-state">
-          {state.approval ? (
-            <>
-              Shot approved by <strong>{state.approval.by}</strong> <span className="muted">{state.approval.at.replace('T', ' ').slice(0, 16)}</span>
-            </>
-          ) : (
-            <span className="muted">Shot not approved</span>
-          )}
-          {state.stage !== 'prep' ? <span className="tag">{state.stage} {versionTag(state.packageVersion)}</span> : null}
-        </div>
-        <div className="shot-actions">
-          {state.approval ? null : (
-            <ActionButton allowed={approve} onClick={props.onApproveShot} canEdit={canEdit} busy={busy} primary showReason>
-              Approve shot…
-            </ActionButton>
-          )}
-          <ActionButton allowed={canPackage(project, shotId, now)} onClick={props.onPackage} canEdit={canEdit} busy={busy}>
-            {state.packageVersion > 0 ? 'Package again' : 'Package'}
-          </ActionButton>
-          <ActionButton allowed={canDeliver(project, shotId, now)} onClick={props.onDeliver} canEdit={canEdit} busy={busy}>
-            Mark delivered
-          </ActionButton>
-          <ActionButton allowed={canReopen(project, shotId, now)} onClick={props.onReopen} canEdit={canEdit} busy={busy}>
-            Reopen
-          </ActionButton>
-        </div>
-        <div className="output-root">
-          <span className="muted">Output root</span>
-          <span className="mono path" title={props.outputRoot ?? undefined}>
-            {props.outputRoot ?? 'not chosen — asked on first package'}
-          </span>
-          <button type="button" className="link" onClick={props.onChangeOutputRoot} disabled={busy}>
-            {props.outputRoot ? 'Change' : 'Choose'}
-          </button>
-          {props.outputRoot && state.packageVersion > 0 ? (
-            <button type="button" className="link" onClick={props.onRevealOutput}>
-              Reveal
-            </button>
-          ) : null}
-        </div>
-      </section>
+      <ApprovalPanel {...props} />
 
       <section className="panel">
         <h3>Prep tasks</h3>
-        {state.tasks.length === 0 ? (
-          <p className="muted">No prep tasks yet. Add one below — or Shift/Ctrl-click several shots in the queue to add a task to all of them.</p>
-        ) : null}
+        {state.tasks.length === 0 ? <p className="muted">No prep tasks yet. Add one below — or Shift/Ctrl-click several shots in the list to add a task to all of them.</p> : null}
         <ul className="tasks">
           {state.tasks.map((t) => (
             <TaskCard key={t.kind} task={t} props={props} />
@@ -348,145 +541,36 @@ export function ShotDetail(props: Props) {
           <p>{shot.supervisorNotes ?? <span className="muted">—</span>}</p>
         </div>
         <NotesField label="Shot notes" value={state.notes} disabled={!canEdit} placeholder="Prep notes for this shot" onCommit={props.onShotNotes} />
-        {state.reviewMarks.length ? (
-          <div className="review-marks">
-            <span className="label">Marked for correction</span>
-            <ul>
-              {state.reviewMarks.map((m) => (
-                <li key={m.frame}>
-                  <span className="mono">{m.frame}</span> <span className="muted">{m.viewing} · {m.by}</span>
-                  {m.note ? <span> — {m.note}</span> : null}
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
+        <ReviewMarks project={project} shotId={shotId} />
       </section>
 
       <section className="panel">
         <h3>Sequence plan</h3>
-        {plan ? (
-          <KV
-            rows={[
-              ['Source in–out', <span className="num">{formatRange(plan.sourceIn, plan.sourceOut)}</span>],
-              ['Delivered in–out', <span className="num">{formatRange(plan.deliveredIn, plan.deliveredOut)}</span>],
-              ['Editorial in–out', <span className="num">{formatRange(plan.editorialIn, plan.editorialOut)}</span>],
-              ['Handles · frames', <span className="num">{`${plan.handles} · ${plan.frameCount}`}</span>],
-              ['Format', `${plan.format.toUpperCase()} ${plan.bitDepth}-bit${output.compression ? ` · ${output.compression}` : ''}`],
-              ['File pattern', <span className="mono">{framePattern(name, 'plate', plateVersion, plan.format)}</span>],
-            ]}
-          />
-        ) : (
-          <div className="range-unknown">
-            <p className="muted">
-              Frame range unknown. The handoff does not give one{project.handoff.origin ? ' (VCDIT sends none)' : ''}, and the clip has not been read yet. Plates
-              cover the whole take once it is read.
-            </p>
-            {props.onProbe ? (
-              <button type="button" onClick={props.onProbe} disabled={busy}>
-                Read from clip
-              </button>
-            ) : null}
-          </div>
-        )}
+        <SequencePlan {...props} />
       </section>
 
       <PlateColorPanel {...props} />
 
       <section className="panel">
         <h3>Camera &amp; colour</h3>
-        <KV
-          rows={[
-            ['Camera', [cam.body, cam.sensorMode].filter(Boolean).join(' · ')],
-            ['Film back', cam.filmBackMm ? `${cam.filmBackMm.width} × ${cam.filmBackMm.height} mm` : ''],
-            ['Lens', [cam.lens, cam.focalLengthMm ? `${cam.focalLengthMm} mm` : ''].filter(Boolean).join(' · ')],
-            ['Focus · iris', [cam.focusDistance, cam.iris].filter(Boolean).join(' · ')],
-            ['Source colour', color.sourceColorSpace],
-            ['Gamma', color.gamma],
-            ['Working · display', [color.workingColorSpace, color.displayTransform].filter(Boolean).join(' · ')],
-            ['Look (never baked)', color.lookReference],
-          ]}
-        />
+        <CameraColour project={project} shotId={shotId} />
       </section>
 
       <section className="panel">
         <h3>Source</h3>
-        <KV
-          rows={[
-            ['Timecode', timing?.timecodeIn ? `${timing.timecodeIn}${shot.timecodeOut ? ` – ${shot.timecodeOut}` : ''}` : ''],
-            [
-              'Frames (source)',
-              timing ? (
-                <span className="num">
-                  {formatRange(timing.frameIn, timing.frameOut)}
-                  {timing.from === 'probe' ? <span className="muted"> · whole clip, read with ffprobe</span> : null}
-                </span>
-              ) : (
-                'unknown'
-              ),
-            ],
-            ['Frame rate', `${timing?.frameRate ?? shot.frameRate} fps${!timing && project.handoff.origin ? ' (production setting)' : ''}`],
-            ['Resolution', timing?.resolution ? `${timing.resolution.width} × ${timing.resolution.height}` : ''],
-            ['Codec', state.probe?.codec],
-            ['Unit · day', [shot.unit, shot.shootDay].filter(Boolean).join(' · ')],
-            ['Roll · clip', [shot.cameraRoll, shot.clip].filter(Boolean).join(' · ')],
-            ['Flagged by', shot.flaggedBy],
-            ['Path', <span className="mono path">{shot.sourcePath}</span>],
-            ...(shot.sourceFiles?.length
-              ? ([['Other files', <span className="mono path">{shot.sourceFiles.map((f) => f.split('/').pop()).join(', ')}</span>]] as [string, ReactNode][])
-              : []),
-            ['Verification', <span className={`verify verify-${state.sourceVerified}`}>{state.sourceVerified}</span>],
-          ]}
-        />
-        {shot.checksums.length ? (
-          <ul className="checksums">
-            {shot.checksums.map((c) => (
-              <li key={`${c.path}-${c.algorithm}`}>
-                <span className="tag">{c.algorithm}</span>
-                <span className="mono hash" title={c.value}>
-                  {c.value}
-                </span>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="muted small">No checksums in the handoff.</p>
-        )}
-        {shot.references.length ? (
-          <>
-            <h4>References</h4>
-            <ul className="refs">
-              {shot.references.map((r) => (
-                <li key={r.path}>
-                  <span className="tag">{r.kind.replace(/_/g, ' ')}</span> <span className="mono path">{r.path}</span>
-                  {r.notes ? <span className="muted"> — {r.notes}</span> : null}
-                </li>
-              ))}
-            </ul>
-          </>
-        ) : null}
+        <SourceDetails project={project} shotId={shotId} />
       </section>
 
       <section className="panel">
         <h3>Operation log</h3>
-        <ol className="log">
-          {log.map((l, i) => (
-            <li key={`${l.at}-${i}`}>
-              <span className="mono muted">{l.at.replace('T', ' ').slice(0, 16)}</span>
-              <span className="log-action">{l.action}</span>
-              <span className="muted">{l.actor}</span>
-              {l.detail ? <span className="log-detail">{l.detail}</span> : null}
-            </li>
-          ))}
-          {log.length === 0 ? <li className="muted">Nothing yet.</li> : null}
-        </ol>
+        <ShotLog project={project} shotId={shotId} />
       </section>
     </aside>
   );
 }
 
 /** Plate colour (spec §4, addendum 03): what the plates' pixels will be, said in one line. */
-function PlateColorPanel(props: Props) {
+export function PlateColorPanel(props: Pick<ShotDetailProps, 'project' | 'shotId' | 'canEdit' | 'busy' | 'onPlateColor'> & { bare?: boolean }) {
   const { project, shotId, canEdit, busy } = props;
   const shot = handoffShot(project, shotId);
   const state = shotState(project, shotId);
@@ -501,19 +585,12 @@ function PlateColorPanel(props: Props) {
   const output = outputFor(project.handoff, shot);
   const autoLabel = output.format === 'exr' ? (exrDefault === 'as_shot' ? 'As shot' : `Convert to ${ENCODINGS[exrDefault].label.replace(/ \(.*\)$/, '')}`) : 'As shot';
   const written = state.plates.find((r) => r.version === (task?.version ?? 1));
-  return (
-    <section className="panel plate-colour">
-      <h3>Plate colour</h3>
+  const body = (
+    <>
       <div className="pc-grid">
         <label>
           <span className="muted">Source encoding</span>
-          <select
-            aria-label="Source encoding"
-            value={state.sourceEncoding ?? ''}
-            disabled={disabled}
-            title={title}
-            onChange={(e) => props.onPlateColor({ encoding: (e.target.value || null) as ColorEncodingId | null })}
-          >
+          <select aria-label="Source encoding" value={state.sourceEncoding ?? ''} disabled={disabled} title={title} onChange={(e) => props.onPlateColor({ encoding: (e.target.value || null) as ColorEncodingId | null })}>
             <option value="">{parsed.encoding ? `From handoff: ${ENCODINGS[parsed.encoding].label}` : `From handoff: unknown${shot.color.sourceColorSpace ? ` (“${shot.color.sourceColorSpace}”)` : ''}`}</option>
             {COLOR_ENCODINGS.map((id) => (
               <option key={id} value={id}>
@@ -548,6 +625,13 @@ function PlateColorPanel(props: Props) {
         </p>
       ) : null}
       <p className="muted small">The transform and its LUT are written to 09_PROJECT_DATA with the plates. Display looks are never applied to plates.</p>
+    </>
+  );
+  if (props.bare) return <div className="plate-colour">{body}</div>;
+  return (
+    <section className="panel plate-colour">
+      <h3>Plate colour</h3>
+      {body}
     </section>
   );
 }

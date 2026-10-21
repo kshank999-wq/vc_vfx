@@ -340,6 +340,15 @@ export const MENU_COMMANDS = [
   'account',
   'next-shot',
   'previous-shot',
+  // View › the module tabs (addendum 08), and Help › Show the tour.
+  'show-shots',
+  'show-plates',
+  'show-roto',
+  'show-key',
+  'show-camera',
+  'show-track2d',
+  'show-deliver',
+  'show-tour',
 ] as const;
 export type MenuCommand = (typeof MENU_COMMANDS)[number] | `open-recent:${string}`;
 

@@ -1,45 +1,12 @@
-/* The AI tracking assistant's panel (addendum 07 §7): docked on the right of the Track workspace. */
-
-.viewer {
-  position: relative;
-}
-
-.ai-dock {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  z-index: 20;
-  display: flex;
-  pointer-events: none;
-}
-.ai-dock > * {
-  pointer-events: auto;
-}
-.ai-dock:not(.open) {
-  align-items: center;
-}
-.ai-tab {
-  writing-mode: vertical-rl;
-  transform: rotate(180deg);
-  border-radius: 0 6px 6px 0;
-  border-right: none;
-  padding: 12px 6px;
-  background: var(--panel-2);
-  color: var(--accent);
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  box-shadow: 0 0 0 1px var(--border);
-}
+/* The AI tracking assistant's panel (addendum 07 §7): the right panel of the Camera Track and 2D Track tabs (addendum 08). */
 
 .ai-panel {
-  width: 360px;
-  max-width: 92vw;
-  height: 100%;
+  flex: 1;
+  width: 100%;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   background: var(--panel);
-  border-left: 1px solid var(--border-strong);
-  box-shadow: -8px 0 24px rgba(0, 0, 0, 0.35);
 }
 .ai-head {
   display: flex;
@@ -50,11 +17,11 @@
 }
 .ai-head h3 {
   margin: 0;
-  font-size: 13px;
+  font-size: 16px;
   font-weight: 650;
 }
 .ai-tag {
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 650;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -67,7 +34,7 @@
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: 10px 12px 16px;
+  padding: 12px 14px 18px;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   align-content: start;
@@ -84,8 +51,8 @@
   border-radius: 6px;
   background: var(--accent-soft);
   border: 1px solid rgba(242, 163, 58, 0.35);
-  font-size: 12px;
-  line-height: 1.4;
+  font-size: 14px;
+  line-height: 1.45;
 }
 .ai-callout.warn {
   background: rgba(224, 122, 107, 0.12);
@@ -133,7 +100,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 12px;
+  font-size: 14px;
 }
 .ai-spinner {
   width: 12px;
@@ -159,7 +126,7 @@
   padding: 0;
   display: grid;
   gap: 6px;
-  font-size: 12px;
+  font-size: 14px;
 }
 .ai-activity li {
   line-height: 1.4;
@@ -231,7 +198,7 @@
 }
 .ai-command code {
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 12.5px;
   color: var(--text);
   opacity: 0.85;
 }
@@ -241,7 +208,7 @@
 }
 
 .ai-ended {
-  font-size: 12px;
+  font-size: 14px;
   padding: 7px 10px;
   border-radius: 6px;
   border: 1px solid var(--border);
@@ -258,7 +225,7 @@
   border-radius: 8px;
   padding: 10px 12px;
   background: var(--raised);
-  font-size: 12.5px;
+  font-size: 14px;
 }
 .ai-report p {
   margin: 0;
@@ -266,11 +233,11 @@
 .ai-report h4,
 .ai-confirm h4 {
   margin: 0;
-  font-size: 13px;
+  font-size: 15px;
 }
 .ai-report h5 {
   margin: 6px 0 0;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 650;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -287,7 +254,7 @@
   justify-content: space-between;
 }
 .ai-badge {
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 600;
   border-radius: 10px;
   padding: 1px 8px;
@@ -312,13 +279,13 @@
   padding: 4px 8px;
 }
 .ai-stats dt {
-  font-size: 10.5px;
+  font-size: 12.5px;
   color: var(--muted);
 }
 .ai-stats dd {
   margin: 0;
   font-family: var(--mono);
-  font-size: 12.5px;
+  font-size: 15px;
 }
 .ai-frames-list button.link {
   font-family: var(--mono);

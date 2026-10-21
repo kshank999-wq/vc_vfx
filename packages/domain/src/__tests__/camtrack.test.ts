@@ -191,11 +191,11 @@ describe('project format 3', () => {
     expect(parsed.ok).toBe(true);
     if (!parsed.ok) return;
     expect(parsed.project.version).toBe(PROJECT_VERSION);
-    expect(PROJECT_VERSION).toBe(3);
+    expect(PROJECT_VERSION).toBe(4);
     expect(parsed.project.lensProfiles).toEqual([]);
     expect(parsed.project.shots.every((s) => s.camtrack === null && s.track2d === null)).toBe(true);
     const newer = JSON.parse(serializeProject(p));
-    newer.version = 4;
+    newer.version = PROJECT_VERSION + 1;
     expect(parseProject(JSON.stringify(newer))).toMatchObject({ ok: false });
   });
 
