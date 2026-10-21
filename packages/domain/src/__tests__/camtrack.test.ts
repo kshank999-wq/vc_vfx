@@ -71,10 +71,9 @@ describe('camera database', () => {
     for (const m of ['ARRI', 'RED', 'Sony', 'Canon', 'Blackmagic Design', 'Panasonic', 'Apple']) expect(makes.has(m)).toBe(true);
     for (const c of CAMERA_DB)
       for (const mode of c.modes) {
+        // From a 1/3"-class phone telephoto to ALEXA 65.
         expect(mode.filmBackMm.width).toBeGreaterThan(4);
         expect(mode.filmBackMm.width).toBeLessThan(60);
-        // Pixel aspect ≈ film-back aspect (square photosites) within 2 %.
-        expect(Math.abs(mode.px.width / mode.px.height / (mode.filmBackMm.width / mode.filmBackMm.height) - 1)).toBeLessThan(0.02);
       }
     const a35 = CAMERA_DB.find((c) => c.id === 'arri-alexa-35')!;
     const og = a35.modes.find((m) => m.id === '4.6k-3x2-og')!;

@@ -39,18 +39,12 @@ import { BulkBar, QueueFilters, QueueTable, type SelectGesture } from './compone
 import { ShotDetail } from './components/ShotDetail';
 import { Viewer, type ViewerMode } from './components/Viewer';
 import { AccountDialog, IssuesDialog, PromptDialog, SettingsDialog } from './components/Dialogs';
+import { NOTICE_MS, pushNotice, type Notice } from './notices';
 
 interface Doc {
   project: Project;
   path: string | null;
   dirty: boolean;
-}
-
-interface Notice {
-  id: number;
-  kind: 'info' | 'error' | 'ok';
-  text: string;
-  action?: { label: string; run: () => void };
 }
 
 interface Prompt {
@@ -105,8 +99,8 @@ export function App({ api, now = () => new Date() }: { api: VcvfxApi; now?: () =
 
   const notify = useCallback((kind: Notice['kind'], text: string, action?: Notice['action']) => {
     const id = (noticeSeq += 1);
-    setNotices((n) => [...n.slice(-3), { id, kind, text, ...(action ? { action } : {}) }]);
-    if (kind !== 'error') setTimeout(() => setNotices((n) => n.filter((x) => x.id !== id)), 8000);
+    setNotices((n) => pushNotice(n, { id, kind, text, ...(action ? { action } : {}) }));
+    if (kind !== 'error') setTimeout(() => setNotices((n) => n.filter((x) => x.id !== id)), NOTICE_MS);
   }, []);
 
   // --- start-up -----------------------------------------------------------
@@ -723,7 +717,10 @@ export function App({ api, now = () => new Date() }: { api: VcvfxApi; now?: () =
       <div className="notices" aria-live="polite">
         {notices.map((n) => (
           <div key={n.id} className={`notice ${n.kind}`}>
-            <span>{n.text}</span>
+            <span>
+              {n.text}
+              {n.count && n.count > 1 ? <b className="notice-count"> ×{n.count}</b> : null}
+            </span>
             {n.action ? (
               <button type="button" className="link" onClick={n.action.run}>
                 {n.action.label}

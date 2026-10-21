@@ -1,6 +1,6 @@
 import { handoffShot, shotState, type LogEntry, type Project, type Result, type ShotState } from './project.js';
 import { versionTag } from './frames.js';
-import { CameraBodySchema, LensProfileSchema, findLensProfile, matchCamera, type CameraBody, type LensProfile } from './camera-db.js';
+import { CameraBodySchema, LensProfileSchema, findLensProfile, matchCamera, type CameraBodyInput, type LensProfile } from './camera-db.js';
 import {
   CAMTRACK_FORMAT_VERSION,
   CamExportSchema,
@@ -82,18 +82,21 @@ export function newCamTrackDocument(p: Project, shotId: string): CamTrackDocumen
   const resolution = shot?.resolution ?? shotState(p, shotId)?.probe?.resolution;
   const match = matchCamera({ body: cam.body, sensorMode: cam.sensorMode, filmBackMm: cam.filmBackMm, resolution }, p.customCameras);
   let camera: CamTrackDocument['camera'] = null;
+  const handoffText = [cam.body, cam.sensorMode].filter(Boolean).join(' · ') || null;
   if (cam.filmBackMm) {
+    const sameMode = match && Math.abs(match.mode.filmBackMm.width - cam.filmBackMm.width) < 0.1 ? match.mode : null;
     camera = {
       source: 'handoff',
-      cameraId: match?.camera.id ?? null,
-      modeId: match && Math.abs(match.mode.filmBackMm.width - cam.filmBackMm.width) < 0.1 ? match.mode.id : null,
-      label: [cam.body, cam.sensorMode].filter(Boolean).join(' · ') || 'From the handoff',
+      cameraId: match?.confident ? match.camera.id : null,
+      modeId: match?.confident && sameMode ? sameMode.id : null,
+      label: handoffText || 'From the handoff',
       filmBackMm: cam.filmBackMm,
       sensorPx: null,
       verified: false,
       note: 'Film back from the handoff',
+      handoffText,
     };
-  } else if (match) {
+  } else if (match?.confident) {
     camera = {
       source: 'handoff',
       cameraId: match.camera.id,
@@ -103,22 +106,27 @@ export function newCamTrackDocument(p: Project, shotId: string): CamTrackDocumen
       sensorPx: match.mode.px,
       verified: match.mode.verified,
       note: match.why,
+      handoffText,
     };
   }
   const profile = findLensProfile(p.lensProfiles, { cameraId: camera?.cameraId ?? null, lens: cam.lens, focalMm: cam.focalLengthMm ?? null });
   const doc = CamTrackDocumentSchema.parse({ formatVersion: CAMTRACK_FORMAT_VERSION });
+  // A fixed-lens camera (drone, phone) gives the focal when the slate does not.
+  const fixed = match?.confident && camera?.cameraId === match.camera.id ? match.camera.fixedFocalMm : null;
+  const focalMm = cam.focalLengthMm ?? fixed ?? null;
+  const modeSqueeze = match?.confident && camera?.modeId === match.mode.id ? match.mode.anamorphicSqueeze : 1;
   return {
     ...doc,
     camera,
     lens: {
       ...doc.lens,
-      name: cam.lens ?? '',
-      focalMm: cam.focalLengthMm ?? null,
-      // A focal length from the slate is a good start, not gospel (zoom marks, focus breathing).
-      focalMode: cam.focalLengthMm && camera ? 'approx' : 'unknown',
+      name: cam.lens ?? (fixed ? `${match!.camera.make} ${match!.camera.model} (fixed lens)` : ''),
+      focalMm,
+      // A focal length from the slate is a good start, not gospel (zoom marks, focus breathing); a fixed lens's is derived.
+      focalMode: focalMm && camera ? 'approx' : 'unknown',
       profileId: profile?.id ?? null,
       distortion: profile ? { ...profile.distortion } : doc.lens.distortion,
-      squeeze: profile?.squeeze ?? 1,
+      squeeze: profile?.squeeze ?? modeSqueeze,
     },
   };
 }
@@ -264,7 +272,7 @@ export function lensProfileId(p: Project, camera: string, lens: string, focalMm:
   return id;
 }
 
-export function addCustomCamera(p: Project, camera: Omit<CameraBody, 'custom'>, actor: string, now: Date): Result {
+export function addCustomCamera(p: Project, camera: Omit<CameraBodyInput, 'custom'>, actor: string, now: Date): Result {
   const parsed = CameraBodySchema.safeParse({ ...camera, custom: true });
   if (!parsed.success) return { ok: false, reason: `The camera is not usable: ${parsed.error.issues[0]?.message ?? 'bad data'}` };
   const c = parsed.data;
