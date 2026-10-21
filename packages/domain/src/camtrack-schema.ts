@@ -39,6 +39,8 @@ export const CameraSelectionSchema = z.object({
   sensorPx: z.object({ width: z.number().int().positive(), height: z.number().int().positive() }).nullable().default(null),
   verified: z.boolean().default(false),
   note: z.string().default(''),
+  /** The handoff's camera text this was matched from (body · sensor mode), when it was. */
+  handoffText: z.string().nullable().default(null),
 });
 export type CameraSelection = z.infer<typeof CameraSelectionSchema>;
 

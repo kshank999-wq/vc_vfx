@@ -7,6 +7,7 @@ import {
   activeSolve,
   camtrackLocked,
   camtrackTaskVersion,
+  handoffShot,
   newCamTrackDocument,
   serializeProject,
   shotState,
@@ -28,6 +29,7 @@ import { CV_TO_GL } from '../../shared/camera/geometry';
 import { mul3 } from '../../shared/camera/linalg';
 import { homographyFromQuads } from '../../shared/camera/planar';
 import { PointCloudView, type CloudLayer } from './PointCloudView';
+import { CameraPicker } from './CameraPicker';
 
 /**
  * The Track workspace (master spec §9, §10; addendum 06 §9): the viewer's
@@ -667,7 +669,8 @@ export function TrackWorkspace(props: TrackWorkspaceProps) {
   })();
   const camera = doc.camera;
   const bodies = [...project.customCameras, ...CAMERA_DB];
-  const body = bodies.find((b) => b.id === camera?.cameraId);
+  const handoffCam = handoffShot(project, shotId)?.camera;
+  const handoffCameraText = [handoffCam?.body, handoffCam?.sensorMode].filter(Boolean).join(' · ') || null;
   const exportedCam = doc.exports.find((x) => x.version === camVersion);
   const exported2d = t2d?.exports.find((x) => x.version === t2dVersion);
 
@@ -721,40 +724,14 @@ export function TrackWorkspace(props: TrackWorkspaceProps) {
           <>
             <details open>
               <summary>Camera &amp; lens</summary>
-              <label className="field-col">
-                <span className="muted small">Camera</span>
-                <select
-                  aria-label="Camera body"
-                  value={camera?.cameraId ?? ''}
-                  disabled={!canCam}
-                  onChange={(e) => {
-                    const b = bodies.find((x) => x.id === e.target.value);
-                    if (b) void run('Setting the camera', { verb: 'set_camera', cameraId: b.id, modeId: b.modes[0]!.id });
-                  }}
-                >
-                  <option value="">{camera ? camera.label : 'Choose a camera…'}</option>
-                  {bodies.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.make} {b.model}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {body ? (
-                <label className="field-col">
-                  <span className="muted small">Recording mode</span>
-                  <select aria-label="Recording mode" value={camera?.modeId ?? ''} disabled={!canCam} onChange={(e) => void run('Setting the camera', { verb: 'set_camera', cameraId: body.id, modeId: e.target.value })}>
-                    {body.modes.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.name} — {m.filmBackMm.width} × {m.filmBackMm.height} mm{m.verified ? '' : ' (unverified)'}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              ) : null}
-              <p className="muted small hint">
-                {camera ? `Film back ${camera.filmBackMm.width} × ${camera.filmBackMm.height} mm · ${camera.verified ? 'verified' : 'not verified against the manufacturer'}` : 'No camera: a nominal 36 mm film back is used and the focal length is solved in pixels.'}
-              </p>
+              <CameraPicker
+                bodies={bodies}
+                camera={camera}
+                disabled={!canCam}
+                handoffText={handoffCameraText}
+                onPick={(cameraId, modeId) => void run('Setting the camera', { verb: 'set_camera', cameraId, modeId })}
+                onCustom={(custom) => void run('Adding the camera', { verb: 'set_camera', custom })}
+              />
               <div className="track-grid">
                 <label>
                   <span className="muted small">Focal (mm)</span>
