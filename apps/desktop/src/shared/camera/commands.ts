@@ -7,6 +7,8 @@ import {
   camNextId,
   camtrackNames,
   createTrack2d,
+  CameraBodySchema,
+  defaultMode,
   findCamera,
   focalMillimetres,
   focalPixels,
@@ -22,6 +24,7 @@ import {
   versionTag,
   type CamExport,
   type CameraBody,
+  type CameraBodyInput,
   type CamTrackChange,
   type CamTrackDocument,
   type CameraExportFormat,
@@ -84,8 +87,8 @@ export type CameraCommand =
   | { verb: 'detect_features'; frame: number; region?: Rect; maxFeatures?: number }
   | { verb: 'track_features'; from: number; to: number }
   | { verb: 'delete_tracks'; ids?: number[]; maxErrorPx?: number; minLength?: number; region?: Rect & { frame: number } }
-  | { verb: 'set_camera'; cameraId?: string; modeId?: string; filmBackMm?: { width: number; height: number }; label?: string }
-  | { verb: 'add_custom_camera'; camera: Omit<CameraBody, 'custom'> }
+  | { verb: 'set_camera'; cameraId?: string; modeId?: string; filmBackMm?: { width: number; height: number }; label?: string; custom?: Omit<CameraBodyInput, 'custom'> }
+  | { verb: 'add_custom_camera'; camera: Omit<CameraBodyInput, 'custom'> }
   | { verb: 'set_lens'; name?: string; focalMm?: number | null; focalMode?: 'known' | 'approx' | 'unknown'; distortion?: Partial<Record<'k1' | 'k2' | 'k3' | 'p1' | 'p2', number>>; refine?: Partial<Record<'focal' | 'k1k2' | 'k3' | 'p1p2', boolean>>; profileId?: string | null; squeeze?: number }
   | { verb: 'set_track_settings'; maxFeatures?: number; workingWidth?: number; minDistance?: number; quality?: number; fbThreshold?: number }
   | { verb: 'set_masks'; excludeRotoParts?: string[]; rects?: (Rect & { mode: 'include' | 'exclude' })[] }
@@ -116,7 +119,7 @@ export const COMMAND_SPECS: Record<CommandVerb, { summary: string; heavy: boolea
   detect_features: { summary: 'Detect new features in a region of one frame and track them both ways through the shot', heavy: true, mutates: true, scope: 'camera' },
   track_features: { summary: 'Track (with fresh detections) over a frame range and add the tracks', heavy: true, mutates: true, scope: 'camera' },
   delete_tracks: { summary: 'Delete tracks by id, by solve error above a threshold, by length below a minimum, or inside a rectangle on a frame', heavy: false, mutates: true, scope: 'camera' },
-  set_camera: { summary: 'Choose the camera body and recording mode (film back) from the database, or type a film back', heavy: false, mutates: true, scope: 'camera' },
+  set_camera: { summary: 'Choose the camera body and recording mode (film back) from the database, add and choose a custom body (sensor mm and pixels), or type a film back. A fixed-lens camera (drone, phone) also sets the starting focal length; an anamorphic mode sets the squeeze', heavy: false, mutates: true, scope: 'camera' },
   add_custom_camera: { summary: "Add a camera body to the project's database", heavy: false, mutates: true, scope: 'camera' },
   set_lens: { summary: 'Set the lens: focal length and whether it is known, distortion, a lens profile, which intrinsics the solve refines', heavy: false, mutates: true, scope: 'camera' },
   set_track_settings: { summary: 'Tracker settings: features, working size, spacing, quality, forward–backward threshold', heavy: false, mutates: true, scope: 'camera' },
@@ -146,7 +149,7 @@ export type ProjectOp =
   | { op: 'camtrack'; change: CamTrackChange }
   | { op: 'note'; command: string; summary: string }
   | { op: 'lens_profile'; profile: Omit<LensProfile, 'at' | 'by'> }
-  | { op: 'custom_camera'; camera: Omit<CameraBody, 'custom'> }
+  | { op: 'custom_camera'; camera: Omit<CameraBodyInput, 'custom'> }
   | { op: 'track2d_create'; input: { name: string; kind: Track2dKind; frame: number; points: [number, number][] } }
   | { op: 'track2d_key'; trackId: string; frame: number; points: [number, number][] }
   | { op: 'track2d_remove_key'; trackId: string; frame: number }
@@ -498,17 +501,39 @@ async function run(s: CameraSession, cmd: CameraCommand): Promise<CommandOutcome
     // ----- camera, lens, settings -------------------------------------------
     case 'set_camera': {
       let camera: CamTrackDocument['camera'];
+      let body: CameraBody | undefined;
+      const ops: ProjectOp[] = [];
       if (cmd.filmBackMm) {
         if (!(cmd.filmBackMm.width > 1 && cmd.filmBackMm.width < 100 && cmd.filmBackMm.height > 1 && cmd.filmBackMm.height < 100)) return fail('A film back is a width and height in millimetres (1 – 100)');
-        camera = { source: 'manual', cameraId: null, modeId: null, label: cmd.label ?? `Film back ${cmd.filmBackMm.width} × ${cmd.filmBackMm.height} mm`, filmBackMm: cmd.filmBackMm, sensorPx: null, verified: false, note: 'Typed in' };
+        camera = { source: 'manual', cameraId: null, modeId: null, label: cmd.label ?? `Film back ${cmd.filmBackMm.width} × ${cmd.filmBackMm.height} mm`, filmBackMm: cmd.filmBackMm, sensorPx: null, verified: false, note: 'Typed in', handoffText: null };
       } else {
-        const body = cmd.cameraId ? findCamera(cmd.cameraId, s.customCameras) : undefined;
+        if (cmd.custom) {
+          const parsed = CameraBodySchema.safeParse({ ...cmd.custom, custom: true });
+          if (!parsed.success) return fail(`The camera is not usable: ${parsed.error.issues[0]?.message ?? 'bad data'}`);
+          body = parsed.data;
+          ops.push({ op: 'custom_camera', camera: cmd.custom });
+        } else body = cmd.cameraId ? findCamera(cmd.cameraId, s.customCameras) : undefined;
         if (!body) return fail(`No camera ${cmd.cameraId ?? ''} in the database`);
-        const mode = body.modes.find((m) => m.id === cmd.modeId) ?? body.modes[0]!;
-        camera = { source: body.custom ? 'custom' : 'database', cameraId: body.id, modeId: mode.id, label: `${body.make} ${body.model} · ${mode.name}`, filmBackMm: mode.filmBackMm, sensorPx: mode.px, verified: mode.verified, note: body.source };
+        const mode = body.modes.find((m) => m.id === cmd.modeId) ?? defaultMode(body);
+        camera = { source: body.custom ? 'custom' : 'database', cameraId: body.id, modeId: mode.id, label: `${body.make} ${body.model} · ${mode.name}`, filmBackMm: mode.filmBackMm, sensorPx: mode.px, verified: mode.verified, note: mode.notes || body.verifiedNotes || body.source, handoffText: null };
       }
-      const summary = `${camera.label}: film back ${camera.filmBackMm.width} × ${camera.filmBackMm.height} mm${camera.verified ? ' (verified)' : ''}`;
-      return ok(summary, { camera }, [change(s, 'set_camera', summary, { ...doc, camera })]);
+      let lens = doc.lens;
+      const extra: string[] = [];
+      if (body?.fixedFocalMm && body.id !== doc.camera?.cameraId) {
+        // A fixed lens: its focal is the start (derived from the 35 mm equivalent unless the notes say otherwise).
+        lens = { ...lens, focalMm: body.fixedFocalMm, focalMode: 'approx', name: `${body.make} ${body.model} (fixed lens)`, profileId: null };
+        extra.push(`fixed lens ${body.fixedFocalMm} mm (approximate)`);
+      } else if (body && !body.fixedFocalMm && /\(fixed lens\)$/.test(lens.name)) {
+        // Leaving a fixed-lens camera: its focal no longer applies.
+        lens = { ...lens, name: '', focalMm: null, focalMode: 'unknown' };
+      }
+      const squeeze = body ? (body.modes.find((m) => m.id === camera.modeId)?.anamorphicSqueeze ?? 1) : 1;
+      if (squeeze !== lens.squeeze && (squeeze !== 1 || !lens.profileId)) {
+        lens = { ...lens, squeeze };
+        extra.push(`squeeze ${squeeze}×`);
+      }
+      const summary = `${camera.label}: film back ${camera.filmBackMm.width} × ${camera.filmBackMm.height} mm${camera.verified ? ' (verified)' : ''}${extra.length ? `; ${extra.join(', ')}` : ''}`;
+      return ok(summary, { camera, lens }, [...ops, change(s, 'set_camera', summary, { ...doc, camera, lens })]);
     }
     case 'add_custom_camera':
       return ok(`Added ${cmd.camera.make} ${cmd.camera.model} to the project's cameras`, { id: cmd.camera.id }, [{ op: 'custom_camera', camera: cmd.camera }]);

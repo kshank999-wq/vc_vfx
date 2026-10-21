@@ -786,7 +786,7 @@ table.queue tbody tr.marked td:first-child {
   display: grid;
   gap: 8px;
   z-index: 20;
-  max-width: 460px;
+  max-width: 420px;
 }
 .notice {
   display: flex;
@@ -802,6 +802,13 @@ table.queue tbody tr.marked td:first-child {
 }
 .notice span {
   flex: 1;
+  /* A long message scrolls inside its toast rather than covering the viewer. */
+  max-height: 6.4em;
+  overflow: auto;
+}
+.notice-count {
+  color: var(--muted);
+  font-weight: 600;
 }
 .notice.ok {
   border-left-color: var(--ok);
@@ -1864,10 +1871,143 @@ input.tiny {
 .track-transport {
   padding-bottom: 10px;
 }
+.cloud-frame-all {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 3px 8px;
+  background: rgba(20, 22, 26, 0.85);
+}
+.cloud-frame-all kbd {
+  margin-left: 4px;
+  padding: 0 4px;
+  border: 1px solid var(--border-strong);
+  border-radius: 3px;
+  font-size: 10px;
+  color: var(--muted);
+}
 .cloud-legend i {
   display: inline-block;
   width: 8px;
   height: 8px;
   border-radius: 50%;
   margin-right: 4px;
+}
+
+/* ---------------------------------------------------------------- camera picker (addendum 06, camera database) */
+.camera-picker {
+  display: grid;
+  gap: 7px;
+}
+.camera-list {
+  position: fixed;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  background: var(--raised);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+.camera-chips {
+  padding: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.camera-rows {
+  overflow: auto;
+  padding-bottom: 4px;
+}
+.camera-group {
+  position: sticky;
+  top: 0;
+  padding: 6px 10px 3px;
+  font-size: 10.5px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: var(--raised);
+}
+.camera-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0 8px;
+  align-items: center;
+  padding: 4px 10px 4px 16px;
+  cursor: default;
+}
+.camera-row .camera-meta {
+  grid-column: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.camera-row .verify-badge {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+}
+.camera-row.active {
+  background: var(--accent-soft);
+}
+.camera-row.current .camera-name {
+  color: var(--accent);
+}
+.camera-row.custom-row {
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+  padding-top: 7px;
+}
+.camera-none {
+  padding: 6px 16px;
+  margin: 0;
+}
+.verify-badge {
+  position: relative;
+  display: inline-block;
+  padding: 0 5px;
+  border: 1px solid #b8862f;
+  border-radius: 3px;
+  color: #e9b65c;
+  font-size: 10px;
+  line-height: 15px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  cursor: help;
+  vertical-align: 1px;
+}
+.verify-pop {
+  display: block;
+  position: fixed;
+  z-index: 45;
+  width: 290px;
+  padding: 8px 10px;
+  background: var(--raised);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  color: var(--text);
+  font-size: 11.5px;
+  line-height: 1.4;
+  letter-spacing: 0;
+  text-transform: none;
+  white-space: normal;
+  cursor: auto;
+}
+.verify-pop a {
+  color: var(--accent);
+}
+.camera-custom {
+  display: grid;
+  gap: 7px;
+  padding: 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--panel-2);
+}
+.matched-from {
+  color: var(--ok);
+}
+.matched-from.muted {
+  color: var(--muted);
 }

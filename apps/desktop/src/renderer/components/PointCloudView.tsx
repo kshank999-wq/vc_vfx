@@ -113,6 +113,61 @@ interface Buffers {
   count: number;
 }
 
+export interface SceneFit {
+  target: number[];
+  dist: number;
+  yaw: number;
+  pitch: number;
+  /** The content's centre and robust radius (80th percentile), to tell when it has moved. */
+  centre: number[];
+  radius: number;
+}
+
+/**
+ * Where to look from to see the scene: the cameras, the track points and (a
+ * sample of) the clouds, between the camera path and the points, from behind
+ * the cameras and a little above, far enough for the 80th-percentile radius
+ * (so stray points do not shrink the view).
+ */
+export function fitScene(clouds: readonly Pick<CloudLayer, 'positions'>[], tracks: { positions: Float32Array } | null, cameras: readonly { position: number[]; rotation: number[] }[]): SceneFit | null {
+  const pts: number[] = [];
+  const sample = (pos: Float32Array, max: number) => {
+    const step = 3 * Math.max(1, Math.floor(pos.length / 3 / max));
+    for (let i = 0; i + 2 < pos.length; i += step) if (Number.isFinite(pos[i]!) && Number.isFinite(pos[i + 1]!) && Number.isFinite(pos[i + 2]!)) pts.push(pos[i]!, pos[i + 1]!, pos[i + 2]!);
+  };
+  for (const c of cameras) pts.push(c.position[0]!, c.position[1]!, c.position[2]!);
+  if (tracks) sample(tracks.positions, 2000);
+  // Clouds count, but a dense scan should not outweigh the solve.
+  const solved = pts.length / 3;
+  for (const c of clouds) sample(c.positions, solved ? Math.max(200, Math.min(1500, solved)) : 3000);
+  if (!pts.length) return null;
+  const n = pts.length / 3;
+  const median = [0, 1, 2].map((k) => {
+    const v = Array.from({ length: n }, (_, i) => pts[3 * i + k]!).sort((a, b) => a - b);
+    return v[Math.floor(n / 2)]!;
+  });
+  const cams = cameras.length ? [0, 1, 2].map((k) => cameras.reduce((a, c) => a + c.position[k]!, 0) / cameras.length) : median;
+  const centre = median.map((v, k) => 0.6 * v + 0.4 * cams[k]!);
+  const radii = Array.from({ length: n }, (_, i) => Math.hypot(pts[3 * i]! - centre[0]!, pts[3 * i + 1]! - centre[1]!, pts[3 * i + 2]! - centre[2]!)).sort((a, b) => a - b);
+  const radius = Math.max(1e-6, radii[Math.floor(0.8 * (n - 1))] ?? 1);
+  let yaw = 0.7;
+  if (cameras.length) {
+    const dir = [0, 0, 0];
+    for (const c of cameras) for (let k = 0; k < 3; k += 1) dir[k]! -= c.rotation[3 * k + 2]!;
+    if (Math.hypot(dir[0]!, dir[2]!) > 1e-6) yaw = Math.atan2(-dir[0]!, -dir[2]!);
+  }
+  return { target: centre, dist: Math.max(1e-3, Math.min(radius * 2.2, 1e7)), yaw, pitch: 0.45, centre, radius };
+}
+
+/** The content has left the view (moved by more than the view's reach) or changed size by more than 4×. */
+export function needsReframe(last: SceneFit | null, next: SceneFit, view: { target: number[]; dist: number }): boolean {
+  if (!last) return true;
+  const moved = Math.hypot(next.centre[0]! - view.target[0]!, next.centre[1]! - view.target[1]!, next.centre[2]! - view.target[2]!);
+  if (moved > Math.max(view.dist, next.radius * 2)) return true;
+  const ratio = next.radius / last.radius;
+  return ratio > 4 || ratio < 0.25;
+}
+
 export function PointCloudView(props: PointCloudViewProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const glRef = useRef<{ gl: WebGL2RenderingContext; prog: WebGLProgram; loc: { pos: number; col: number; mvp: WebGLUniformLocation; size: WebGLUniformLocation; round: WebGLUniformLocation } } | null>(null);
@@ -181,36 +236,38 @@ export function PointCloudView(props: PointCloudViewProps) {
     setTick((t) => t + 1);
   }, [props.clouds, props.tracks, upload]);
 
-  // Frame the scene when it changes: the cameras and the track points, else the clouds.
-  useEffect(() => {
-    const pts: number[] = [];
-    for (const c of props.cameras) pts.push(...c.position);
-    if (props.tracks) for (let i = 0; i < props.tracks.positions.length; i += 3 * Math.max(1, Math.floor(props.tracks.positions.length / 3 / 2000))) pts.push(props.tracks.positions[i]!, props.tracks.positions[i + 1]!, props.tracks.positions[i + 2]!);
-    if (!pts.length) for (const c of props.clouds) for (let i = 0; i < c.positions.length; i += 3 * 97) pts.push(c.positions[i]!, c.positions[i + 1]!, c.positions[i + 2]!);
-    if (!pts.length) return;
-    const n = pts.length / 3;
-    const median = [0, 1, 2].map((k) => {
-      const v = pts.filter((_, i) => i % 3 === k).sort((a, b) => a - b);
-      return v[Math.floor(v.length / 2)]!;
-    });
-    // Look between the camera path and the scene, so both are in the picture.
-    const cams = props.cameras.length ? [0, 1, 2].map((k) => props.cameras.reduce((a, c) => a + c.position[k]!, 0) / props.cameras.length) : median;
-    const centre = median.map((v, k) => 0.6 * v + 0.4 * cams[k]!);
-    // Far enough to see most of it (the 80th percentile, so stray points do not shrink the view)…
-    const radii = Array.from({ length: n }, (_, i) => Math.hypot(pts[3 * i]! - centre[0]!, pts[3 * i + 1]! - centre[1]!, pts[3 * i + 2]! - centre[2]!)).sort((a, b) => a - b);
-    const d = radii[Math.floor(0.8 * (n - 1))] ?? 1;
-    // …from behind the cameras, looking the way they look, a little above.
-    let yaw = 0.7;
-    if (props.cameras.length) {
-      const dir = [0, 0, 0];
-      for (const c of props.cameras) for (let k = 0; k < 3; k += 1) dir[k]! -= c.rotation[3 * k + 2]!;
-      if (Math.hypot(dir[0]!, dir[2]!) > 1e-6) yaw = Math.atan2(-dir[0]!, -dir[2]!);
-    }
-    view.current = { target: centre, dist: Math.max(1e-3, Math.min(d * 2.2, 1e6)), yaw, pitch: 0.45 };
-    void n;
+  // Frame the scene: on request (frameKey), and whenever the content moves out
+  // of view or changes size a lot — e.g. a LiDAR-constrained solve or an
+  // alignment puts the scene in the scan's coordinates, far from the origin.
+  const lastFit = useRef<SceneFit | null>(null);
+  const frameAll = useCallback(() => {
+    const fit = fitScene(props.clouds, props.tracks, props.cameras);
+    if (!fit) return;
+    lastFit.current = fit;
+    view.current = { target: fit.target, dist: fit.dist, yaw: fit.yaw, pitch: fit.pitch };
     setTick((t) => t + 1);
+  }, [props.clouds, props.tracks, props.cameras]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => frameAll(), [props.frameKey]);
+  useEffect(() => {
+    const fit = fitScene(props.clouds, props.tracks, props.cameras);
+    if (fit && needsReframe(lastFit.current, fit, view.current)) frameAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [props.frameKey]);
+  }, [props.clouds, props.tracks, props.cameras]);
+  // F frames everything (as in most 3D packages).
+  const frameRef = useRef(frameAll);
+  frameRef.current = frameAll;
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if ((e.key !== 'f' && e.key !== 'F') || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable)) return;
+      if (document.querySelector('.modal')) return;
+      frameRef.current();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   // Draw.
   useEffect(() => {
@@ -377,6 +434,9 @@ export function PointCloudView(props: PointCloudViewProps) {
     <div className="cloud-view">
       <canvas ref={canvasRef} className="cloud-canvas" aria-label="3D view" onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onWheel={onWheel} onContextMenu={(e) => e.preventDefault()} />
       {unsupported ? <p className="viewer-message">The 3D view needs WebGL 2, which this display does not offer.</p> : null}
+      <button type="button" className="cloud-frame-all small" onClick={frameAll} title="Frame everything: the cameras, the track points and the clouds (F)">
+        Frame all <kbd>F</kbd>
+      </button>
       <div className="cloud-legend small">
         <span>
           <i style={{ background: '#f2c033' }} /> camera path
@@ -389,7 +449,7 @@ export function PointCloudView(props: PointCloudViewProps) {
             <i style={{ background: '#ff5f56' }} /> {props.marks.length} correspondence{props.marks.length === 1 ? '' : 's'}
           </span>
         ) : null}
-        <span className="muted">drag to orbit · right-drag or Shift to pan · wheel to zoom · click to pick</span>
+        <span className="muted">drag to orbit · right-drag or Shift to pan · wheel to zoom · click to pick · F to frame all</span>
       </div>
     </div>
   );
