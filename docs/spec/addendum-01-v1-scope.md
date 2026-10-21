@@ -20,10 +20,12 @@ is done in another application.
 | §15, §16, §19 | Status model derived from task states; approval per task then per shot, always attributed; reopening approved work bumps the version and withdraws shot approval; every change logged. |
 | §17 | Shot package folders `00_SOURCE_REFERENCE` … `10_DELIVERY`, versioned `manifest_vNNN.json` and `prep_report_vNNN.html`, `manifest.json` = latest. |
 | §5, §5.1, §5.2 | Paint-to-roto ([addendum 04](addendum-04-paint-to-roto.md)): include/exclude paint on key frames, a classical Track engine (graph-cut segmentation, object-motion propagation, per-frame confidence) and an optional SAM 2.1 engine (ONNX, model downloaded on first use, pinned); parts combined into the subject matte; confidence timeline, next problem frame, contact sheet of mattes; corrections re-propagate locally; versioned 16-bit PNG (+ EXR) matte sequences and metadata in `02_MATTES_ROTO`; approval through the roto task. Project format 2. |
+| §10.1–10.3 | Camera tracking ([addendum 06](addendum-06-camera-tracking.md)): corner detection and pyramidal KLT tracking (forward–backward checked, roto parts and drawn rectangles excluded), an in-house incremental structure-from-motion solver with bundle adjustment (focal and distortion optional, nodal detected), error graph and worst tracks, a camera database with sources and verification flags, project lens profiles and checkerboard calibration, LiDAR / survey import (PLY, E57, LAS, OBJ, XYZ, CSV) with correspondences, similarity alignment, LiDAR-constrained solve and ICP, a coordinate system (units, up axis, origin, ground, scale), and versioned exports into `06_CAMERA_TRACK` for Nuke, Maya, Blender, After Effects, 3ds Max, FBX, Unreal 5, Unity, USD, Houdini, Fusion / Resolve and .chan, with lens STMaps (EXR), JSON, report and README. Project format 3. |
+| §9 | 2D tracking (addendum 06 §7): planar surface tracking from four corners (homography, RANSAC, direct refinement, roto occluders) and point tracking, drop-in preview, per-frame confidence, corrections as keys with local re-tracking; Nuke CornerPin2D, After Effects corner pin script, Mocha-style keyframe text and JSON into `05_TRACKS_2D`. |
 
 ## Tracked, not yet automated
 
-Key, despill, clean plate, 2D track, camera track, sky, background
+Key, despill, clean plate, sky, background
 removal, texture extraction, lighting analysis, compositor. Each is a task
 kind (`tasks.ts`, `available: false`) that moves through the same review and
 approval states, so its results can be recorded and packaged.

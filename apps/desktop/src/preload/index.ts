@@ -31,6 +31,12 @@ const api: VcvfxApi = {
   rotoMask: (input) => ipcRenderer.invoke('roto:mask', input),
   rotoExport: (input) => ipcRenderer.invoke('job:roto-export', input),
   rotoModel: (input) => ipcRenderer.invoke('job:roto-model', input),
+  trackSession: (input) => ipcRenderer.invoke('track:session', input),
+  trackFrame: (input) => ipcRenderer.invoke('track:frame', input),
+  trackView: (input) => ipcRenderer.invoke('track:view', input),
+  trackCommand: (input) => ipcRenderer.invoke('job:track-command', input),
+  chooseLidarFile: () => ipcRenderer.invoke('track:choose-lidar'),
+  saveCalibrationTarget: (input) => ipcRenderer.invoke('track:calibration-target', input),
   cancelJob: (jobId) => ipcRenderer.invoke('job:cancel', jobId),
   onProgress: (listener) => {
     const wrapped = (_event: IpcRendererEvent, progress: JobProgress) => listener(progress);

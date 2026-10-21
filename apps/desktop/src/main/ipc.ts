@@ -25,6 +25,10 @@ import { engineInfo, rotoExport, rotoFrame, rotoMask, rotoRun, rotoSession, type
 import { downloadModel, type FetchLike } from './roto/models';
 import { ortCandidates } from './roto/sam2-ort';
 import { verifyProject } from './verify';
+import { trackCommand, trackFrame, trackSession, trackView, type CameraEnv } from './camera/api';
+import { COMMAND_SPECS, type CameraCommand } from '../shared/camera/commands';
+import { checkerboardPdf, checkerboardPixels } from '../shared/camera/calibration';
+import { encodePng } from './roto/png';
 
 /**
  * IPC handlers. Every argument from the renderer is validated here with zod,
@@ -447,6 +451,100 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null, isDev
         }
       }
       return ok((await engineInfo(env)).find((e) => e.id === 'sam2')!);
+    } catch (error) {
+      return fail(error);
+    }
+  });
+
+  // Camera and 2D tracking (addendum 06). Looking is allowed read-only; commands that change the
+  // track or write files need a licence (a report is a question, and allowed).
+  const cameraEnv = async (): Promise<CameraEnv> => {
+    const t = await currentTools();
+    return {
+      ffmpeg: t.ffmpeg,
+      caps: t.caps,
+      cacheRoot: join(app.getPath('userData'), 'Track Cache'),
+      rotoCacheRoot: join(app.getPath('userData'), 'Roto Cache'),
+      frameCache,
+      workerFile: join(__dirname, 'camera-worker.js'),
+      generator: `VC VFX ${app.getVersion()}`,
+    };
+  };
+  const trackInput = { ...shotInput, workingWidth: z.number().int().min(256).max(8192).optional() };
+  handle('track:session', z.object(trackInput), async (_e, input) => {
+    try {
+      return ok(await trackSession(viewerProject(input.text), input, await outputRootFor(input.projectKey), await cameraEnv()));
+    } catch (error) {
+      return fail(error);
+    }
+  });
+  handle('track:frame', z.object({ ...trackInput, frame: z.number().int().nonnegative().max(100_000_000), maxWidth: z.number().int().min(64).max(4096), prefetch: z.boolean().optional() }), async (_e, input) => {
+    try {
+      return ok(await trackFrame(viewerProject(input.text), input, await outputRootFor(input.projectKey), await cameraEnv()));
+    } catch (error) {
+      return fail(error);
+    }
+  });
+  handle('track:view', z.object({ ...trackInput, clouds: z.boolean().optional() }), async (_e, input) => {
+    try {
+      return ok(await trackView(viewerProject(input.text), input, await cameraEnv()));
+    } catch (error) {
+      return fail(error);
+    }
+  });
+  const verbs = Object.keys(COMMAND_SPECS) as [string, ...string[]];
+  handle(
+    'job:track-command',
+    z.object({ ...trackInput, jobId, operator: z.string().min(1).max(200), command: z.object({ verb: z.enum(verbs) }).passthrough().refine((c) => JSON.stringify(c).length < 2_000_000, 'Command too large') }),
+    async (event, input) => {
+      const verb = input.command.verb as keyof typeof COMMAND_SPECS;
+      if (COMMAND_SPECS[verb].mutates && (await capability()) !== 'full') return fail(READ_ONLY_REASON);
+      const signal = startJob(input.jobId);
+      const progress = progressSender(event.sender, input.jobId, `Tracking ${input.shotId}`);
+      try {
+        const project = projectFrom(input.text);
+        const exporting = verb === 'export_camera' || verb === 'track2d_export';
+        const root = exporting ? await ensureOutputRoot(input.projectKey, project, false) : await outputRootFor(input.projectKey);
+        if (exporting && !root) return fail('No output root was chosen, so nothing was written.');
+        const outcome = await trackCommand(project, { shotId: input.shotId, projectKey: input.projectKey, operator: input.operator, command: input.command as unknown as CameraCommand, ...(input.workingWidth ? { workingWidth: input.workingWidth } : {}) }, root, await cameraEnv(), {
+          signal,
+          onProgress: (label, done, total) => progress(done, Math.max(1, total), label),
+        });
+        return ok(outcome);
+      } catch (error) {
+        return fail(error);
+      } finally {
+        endJob(input.jobId);
+      }
+    },
+  );
+  handle('track:choose-lidar', none, async () => {
+    try {
+      const window = parent();
+      const options: Electron.OpenDialogOptions = {
+        title: 'Import LiDAR, mesh or survey points',
+        properties: ['openFile'],
+        filters: [
+          { name: 'Point clouds, meshes, survey', extensions: ['e57', 'ply', 'las', 'obj', 'xyz', 'pts', 'csv', 'txt'] },
+          { name: 'All files', extensions: ['*'] },
+        ],
+      };
+      const choice = window ? await dialog.showOpenDialog(window, options) : await dialog.showOpenDialog(options);
+      return ok(choice.canceled ? null : (choice.filePaths[0] ?? null));
+    } catch (error) {
+      return fail(error);
+    }
+  });
+  handle('track:calibration-target', z.object({ cols: z.number().int().min(3).max(40), rows: z.number().int().min(3).max(40), squareMm: z.number().min(2).max(500), marginMm: z.number().min(0).max(200) }), async (_e, input) => {
+    try {
+      const window = parent();
+      const options: Electron.SaveDialogOptions = { title: 'Save calibration board', defaultPath: `checkerboard_${input.cols}x${input.rows}_${input.squareMm}mm.pdf`, filters: [{ name: 'PDF', extensions: ['pdf'] }] };
+      const choice = window ? await dialog.showSaveDialog(window, options) : await dialog.showSaveDialog(options);
+      if (choice.canceled || !choice.filePath) return ok(null);
+      await writeAtomic(choice.filePath, checkerboardPdf(input));
+      const px = checkerboardPixels(input, 300);
+      await writeAtomic(choice.filePath.replace(/\.pdf$/i, '') + '_300dpi.png', encodePng({ width: px.width, height: px.height, bitDepth: 8, data: px.data }, { text: { Comment: `Calibration board ${input.cols}x${input.rows} squares of ${input.squareMm} mm at 300 dpi` } }));
+      return ok({ path: choice.filePath });
     } catch (error) {
       return fail(error);
     }

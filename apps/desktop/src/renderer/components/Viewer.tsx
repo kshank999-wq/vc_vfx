@@ -3,6 +3,7 @@ import { contactSheetFrames, encodingLabel, handoffShot, serializeProject, shotS
 import type { ViewerFrame, ViewerLayer, ViewerSources, VcvfxApi } from '../../shared/bridge';
 import { clampFrame, viewerTimeline } from '../../shared/viewer';
 import { RotoWorkspace, type RotoWorkspaceProps } from './RotoWorkspace';
+import { TrackWorkspace, type TrackWorkspaceProps } from './TrackWorkspace';
 
 /**
  * The frame viewer and contact sheet (master spec §5.2, §15.4; addendum 03).
@@ -23,10 +24,11 @@ export interface ViewerProps {
   canEdit: boolean;
   onClose(): void;
   onToggleMark(frame: number, viewing: string, note: string): void;
-  /** View frames, or paint roto (addendum 04). */
-  mode: 'view' | 'roto';
-  onMode(mode: 'view' | 'roto'): void;
+  /** View frames, paint roto (addendum 04), or track (addendum 06). */
+  mode: ViewerMode;
+  onMode(mode: ViewerMode): void;
   roto: Pick<RotoWorkspaceProps, 'busy' | 'actor' | 'onRoto' | 'runJob' | 'notify' | 'onAddRotoTask'>;
+  track: Pick<TrackWorkspaceProps, 'busy' | 'actor' | 'onTrack' | 'runJob' | 'notify' | 'onAddTask'>;
 }
 
 type Compare = 'off' | 'wipe' | 'toggle';
@@ -36,7 +38,9 @@ const SIZES = [480, 960, 1280, 1920];
 const TILE_WIDTH = 320;
 const sizeFor = (px: number) => SIZES.find((s) => s >= px) ?? 1920;
 
-export function Viewer({ api, project, shotId, projectKey, canEdit, onClose, onToggleMark, mode, onMode, roto }: ViewerProps) {
+export type ViewerMode = 'view' | 'roto' | 'track';
+
+export function Viewer({ api, project, shotId, projectKey, canEdit, onClose, onToggleMark, mode, onMode, roto, track }: ViewerProps) {
   const isView = mode === 'view';
   const shot = handoffShot(project, shotId);
   const state = shotState(project, shotId);
@@ -233,8 +237,11 @@ export function Viewer({ api, project, shotId, projectKey, canEdit, onClose, onT
           <button type="button" role="tab" className={isView ? 'on' : undefined} aria-selected={isView} onClick={() => onMode('view')}>
             View
           </button>
-          <button type="button" role="tab" className={!isView ? 'on' : undefined} aria-selected={!isView} onClick={() => onMode('roto')} title={hasRoto ? 'Paint-to-roto' : 'Paint-to-roto (adds the task)'}>
+          <button type="button" role="tab" className={mode === 'roto' ? 'on' : undefined} aria-selected={mode === 'roto'} onClick={() => onMode('roto')} title={hasRoto ? 'Paint-to-roto' : 'Paint-to-roto (adds the task)'}>
             Roto
+          </button>
+          <button type="button" role="tab" className={mode === 'track' ? 'on' : undefined} aria-selected={mode === 'track'} onClick={() => onMode('track')} title="Camera solve and planar / point tracking">
+            Track
           </button>
         </div>
         <div className="spacer" />
@@ -292,7 +299,9 @@ export function Viewer({ api, project, shotId, projectKey, canEdit, onClose, onT
         ) : null}
       </header>
 
-      {!isView ? (
+      {mode === 'track' ? (
+        <TrackWorkspace api={api} project={project} shotId={shotId} projectKey={projectKey} canEdit={canEdit} frame={frame} onFrame={(f) => (timeline ? setFrame(clampFrame(timeline, f)) : setFrame(f))} {...track} />
+      ) : !isView ? (
         <RotoWorkspace api={api} project={project} shotId={shotId} projectKey={projectKey} canEdit={canEdit} frame={frame} onFrame={(f) => (timeline ? setFrame(clampFrame(timeline, f)) : setFrame(f))} {...roto} />
       ) : (
         <>

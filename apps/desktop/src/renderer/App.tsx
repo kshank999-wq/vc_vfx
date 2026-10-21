@@ -37,7 +37,7 @@ import type { AccountStatus, AppInfo, JobProgress, LicenceStanding, MenuCommand,
 import { projectKey } from '../shared/queue';
 import { BulkBar, QueueFilters, QueueTable, type SelectGesture } from './components/Queue';
 import { ShotDetail } from './components/ShotDetail';
-import { Viewer } from './components/Viewer';
+import { Viewer, type ViewerMode } from './components/Viewer';
 import { AccountDialog, IssuesDialog, PromptDialog, SettingsDialog } from './components/Dialogs';
 
 interface Doc {
@@ -94,7 +94,7 @@ export function App({ api, now = () => new Date() }: { api: VcvfxApi; now?: () =
   /** The frame viewer is open on the selected shot. */
   const [viewing, setViewing] = useState(false);
   /** What the viewer shows: frames, or the roto workspace. */
-  const [viewerMode, setViewerMode] = useState<'view' | 'roto'>('view');
+  const [viewerMode, setViewerMode] = useState<ViewerMode>('view');
   const [queueCollapsed, setQueueCollapsed] = useState(false);
 
   const capability = capabilityFrom(standing, now());
@@ -627,6 +627,14 @@ export function App({ api, now = () => new Date() }: { api: VcvfxApi; now?: () =
                   notify,
                   onAddRotoTask: () => apply((p) => addTask(p, selected, 'roto', actor, now())),
                 }}
+                track={{
+                  busy,
+                  actor,
+                  onTrack: (fn) => apply((p) => fn(p, actor, now())),
+                  runJob,
+                  notify,
+                  onAddTask: (kind) => apply((p) => addTask(p, selected, kind, actor, now())),
+                }}
               />
             ) : selected ? (
               <ShotDetail
@@ -667,6 +675,10 @@ export function App({ api, now = () => new Date() }: { api: VcvfxApi; now?: () =
                 }}
                 onRoto={() => {
                   setViewerMode('roto');
+                  setViewing(true);
+                }}
+                onTrack={() => {
+                  setViewerMode('track');
                   setViewing(true);
                 }}
               />

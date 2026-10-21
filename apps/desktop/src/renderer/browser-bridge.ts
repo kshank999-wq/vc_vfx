@@ -1,6 +1,7 @@
 import { PROJECT_EXTENSION, parseProject, plateColorFor, shotListHtml, shotState, viewTransform, type QueueFilter } from '@vcvfx/domain';
 import type { ApiResult, ExternalLink, JobProgress, LicenceStanding, MenuCommand, OpenedFile, Settings, VcvfxApi, ViewerFrame, ViewerFrameRequest, ViewerSources } from '../shared/bridge';
 import { viewerTimeline } from '../shared/viewer';
+import { createCameraPreview } from './camera-preview';
 import { createRotoPreview } from './roto-preview';
 
 /**
@@ -176,6 +177,7 @@ export function createBrowserBridge(): BrowserBridge {
   // Jobs that run in the page (roto propagation) report progress like the desktop's.
   const progressListeners = new Set<(p: JobProgress) => void>();
   const roto = createRotoPreview({ desktopOnly, progress: (p) => progressListeners.forEach((l) => l(p)) });
+  const camera = createCameraPreview({ desktopOnly, progress: (p) => progressListeners.forEach((l) => l(p)) });
 
   return {
     command,
@@ -270,7 +272,16 @@ export function createBrowserBridge(): BrowserBridge {
     rotoMask: (input) => roto.mask(input),
     rotoExport: async () => fail(desktopOnly('mattes are written into the shot package on disk.')),
     rotoModel: async ({ action }) => (action === 'download' ? fail(desktopOnly('the SAM 2 model is downloaded and runs on your computer.')) : ok(roto.engines()[1]!)),
-    cancelJob: async (jobId) => roto.cancel(jobId),
+    // Camera and 2D tracking: the shared dispatcher runs here on the sample's bundled tracking shot (camera-preview.ts).
+    trackSession: (input) => camera.session(input),
+    trackFrame: (input) => camera.frame(input),
+    trackView: (input) => camera.view(input),
+    trackCommand: (input) => camera.command(input),
+    chooseLidarFile: () => camera.chooseLidar(),
+    saveCalibrationTarget: (input) => camera.calibrationTarget(input),
+    cancelJob: async (jobId) => {
+      if (!camera.cancel(jobId)) roto.cancel(jobId);
+    },
     onProgress: (listener) => {
       progressListeners.add(listener);
       return () => progressListeners.delete(listener);

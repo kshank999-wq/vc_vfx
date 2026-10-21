@@ -23,7 +23,8 @@ export default defineConfig(({ mode }) => {
       define: buildEnv,
       build: {
         // The roto worker thread is its own entry (out/main/roto-worker.js; addendum 04).
-        rollupOptions: { input: { index: resolve(__dirname, 'src/main/index.ts'), 'roto-worker': resolve(__dirname, 'src/main/roto/worker.ts') } },
+        // The camera-tracking worker likewise (out/main/camera-worker.js; addendum 06).
+        rollupOptions: { input: { index: resolve(__dirname, 'src/main/index.ts'), 'roto-worker': resolve(__dirname, 'src/main/roto/worker.ts'), 'camera-worker': resolve(__dirname, 'src/main/camera/worker.ts') } },
       },
     },
     preload: {

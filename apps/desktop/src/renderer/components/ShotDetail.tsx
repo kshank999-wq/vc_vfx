@@ -51,6 +51,8 @@ export interface ShotDetailHandlers {
   onView(): void;
   /** Open the roto workspace on this shot (addendum 04). */
   onRoto?(): void;
+  /** Open the Track workspace on this shot (addendum 06). */
+  onTrack?(): void;
 }
 
 interface Props extends ShotDetailHandlers {
@@ -173,6 +175,11 @@ function TaskCard({ task, props }: { task: TaskRecord; props: Props }) {
         {task.kind === 'roto' && props.onRoto ? (
           <button type="button" className={task.state === 'pending' ? 'primary' : undefined} onClick={props.onRoto} title="Paint, propagate, review and export mattes">
             {task.state === 'pending' ? 'Paint roto…' : 'Open roto…'}
+          </button>
+        ) : null}
+        {(task.kind === 'camera_track' || task.kind === 'track_2d') && props.onTrack ? (
+          <button type="button" className={task.state === 'pending' ? 'primary' : undefined} onClick={props.onTrack} title={task.kind === 'camera_track' ? 'Track features, solve the camera, align to LiDAR, export' : 'Track a surface or a point, preview an insert, export'}>
+            {task.state === 'pending' ? 'Track…' : 'Open track…'}
           </button>
         ) : null}
         {NEXT_STATES[task.state].map((n) => (

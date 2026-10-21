@@ -86,10 +86,18 @@ const ROADMAP: ReadonlyArray<{ title: string; desc: string; v1?: boolean }> = [
     desc: 'Paint the subject on one frame; the matte follows it through the shot, with parts, confidence review and local corrections.',
     v1: true,
   },
+  {
+    title: 'Camera tracking',
+    desc: 'Track and solve the camera on your machine, with a camera database, lens calibration and LiDAR / survey alignment; export to Nuke, Maya, Blender, After Effects, Houdini, Fusion / Resolve, 3ds Max, FBX, Unreal Engine 5, Unity and USD.',
+    v1: true,
+  },
+  {
+    title: '2D / planar tracking',
+    desc: 'Pin a surface by its four corners or track a point, preview the replacement on it, correct any frame, export corner pins for Nuke and After Effects.',
+    v1: true,
+  },
   { title: 'Green / blue screen keying', desc: 'Hybrid key + roto, despill and background-reference matching.' },
   { title: 'Clean-plate generation', desc: 'Temporal reconstruction for object removal prep.' },
-  { title: '2D / planar tracking', desc: 'Corner-pin tracks with replacement preview and export.' },
-  { title: 'Camera tracking', desc: 'Camera database, LiDAR / survey constraints, export to major packages.' },
   { title: 'Background and sky isolation', desc: 'Mattes and plates exported separately for downstream control.' },
   { title: 'Texture extraction', desc: 'Seamless texture prep from set photography and scans.' },
   { title: 'Lightweight node compositor', desc: 'Connect prep stages, preview, and hand off toward Nuke.' },
@@ -106,8 +114,8 @@ const FAQ = [
     a: 'VC VFX builds its shot queue from the VCDIT handoff specification — the machine-readable file VCDIT writes alongside the VFX folder structure on the drive. VCDIT is the intended way in, and the two are designed to work as a pair.',
   },
   {
-    q: 'Does V1 do roto, keying, clean plates or tracking?',
-    a: 'Roto, yes: paint the subject on a key frame and VC VFX propagates the matte through the shot, flags the frames it is least sure of, and re-propagates your corrections locally. It runs on your own machine. Keying, clean plates and tracking are on the roadmap; they can already be requested in the handoff and are tracked in the queue and on the printed shot list, so everyone can see what each shot still needs.',
+    q: 'Does V1 do roto, tracking, keying or clean plates?',
+    a: 'Roto, yes: paint the subject on a key frame and VC VFX propagates the matte through the shot, flags the frames it is least sure of, and re-propagates your corrections locally. It runs on your own machine. Tracking, yes: camera tracking (solve, LiDAR alignment, exports for Nuke, Maya, Blender, After Effects, Houdini, Fusion / Resolve, Unreal Engine, Unity and USD) and 2D / planar tracking with corner-pin export. Keying and clean plates are on the roadmap; they can already be requested in the handoff and are tracked in the queue and on the printed shot list, so everyone can see what each shot still needs.',
   },
   {
     q: 'Which plate formats are supported?',

@@ -212,6 +212,60 @@ export interface RotoExportOutcome {
   files: number;
 }
 
+// ---------------------------------------------------------------------------
+// Camera tracking and 2D tracking (addendum 06)
+// ---------------------------------------------------------------------------
+
+export interface TrackSessionInfo {
+  available: boolean;
+  reason: string | null;
+  /** What the frames are: "plates v001", "source", "sample frames". */
+  frames: string;
+  /** Plate resolution: tracks and corners are in these pixels. */
+  plate: { width: number; height: number } | null;
+  /** The resolution tracking works at. */
+  working: { width: number; height: number } | null;
+  first: number;
+  last: number;
+  fps: number;
+  /** Exports can be written to a package from here (not in the browser preview). */
+  exportable: boolean;
+  /** LiDAR files can be chosen from disk (the preview offers its bundled scan). */
+  lidarFromDisk: boolean;
+  sample?: boolean;
+}
+
+/** The large data the Track workspace draws: feature tracks, the active solve, point clouds. */
+export interface TrackViewData {
+  tracks: { first: number; last: number; ids: Int32Array; start: Int32Array; length: Int32Array; offset: Int32Array; xy: Float32Array } | null;
+  solve: {
+    number: number;
+    frames: { frame: number; solved: boolean; rms: number; tracks: number; keyframe: boolean }[];
+    /** World → camera per frame (CV convention), 9 and 3 per frame. */
+    R: Float64Array;
+    t: Float64Array;
+    trackIds: Int32Array;
+    /** Solve-world positions (NaN when not triangulated). */
+    X: Float64Array;
+    trackRms: Float32Array;
+    intrinsics: { f: number; cx: number; cy: number; k1: number; k2: number; k3: number; p1: number; p2: number };
+  } | null;
+  /** Downsampled clouds in their files' coordinates, relative to `origin`. */
+  clouds: { id: string; origin: [number, number, number]; positions: Float32Array; colors: Uint8Array | null }[];
+}
+
+export interface TrackShotInput extends RotoShotInput {
+  /** Where the working size comes from (the camera track's tracker settings), so the viewer and the worker agree. */
+  workingWidth?: number;
+}
+
+export interface TrackCommandRequest extends TrackShotInput {
+  jobId: string;
+  operator: string;
+  /** A CameraCommand (shared/camera/commands.ts), validated by its verb in main. */
+  command: { verb: string } & Record<string, unknown>;
+}
+
 export type ExternalLink = 'site' | 'subscribe' | 'account' | 'ffmpeg';
 
 export const MENU_COMMANDS = [
@@ -272,6 +326,18 @@ export interface VcvfxApi {
   rotoExport(input: RotoExportRequest): Promise<ApiResult<RotoExportOutcome>>;
   /** The SAM 2 model: its status, or download it (a job with progress). */
   rotoModel(input: { jobId: string; action: 'status' | 'download' }): Promise<ApiResult<RotoEngineInfo>>;
+  /** Camera / 2D tracking: whether it can run on this shot, at what sizes and frames. */
+  trackSession(input: TrackShotInput): Promise<ApiResult<TrackSessionInfo>>;
+  /** A frame for the Track workspace (plates when there are some, else the source), for display. */
+  trackFrame(input: TrackShotInput & { frame: number; maxWidth: number; prefetch?: boolean }): Promise<ApiResult<ViewerFrame>>;
+  /** Feature tracks, the active solve and LiDAR clouds for drawing. */
+  trackView(input: TrackShotInput & { clouds?: boolean }): Promise<ApiResult<TrackViewData>>;
+  /** Run one camera-tracking command (a job with progress). The renderer applies the outcome's ops with `applyOps`. */
+  trackCommand(input: TrackCommandRequest): Promise<ApiResult<{ ok: true; summary: string; data: Record<string, unknown>; ops: unknown[] } | { ok: false; error: string }>>;
+  /** Choose a LiDAR / survey file (read only). Null when cancelled. */
+  chooseLidarFile(): Promise<ApiResult<string | null>>;
+  /** Save a printable calibration checkerboard (PDF and PNG). */
+  saveCalibrationTarget(input: { cols: number; rows: number; squareMm: number; marginMm: number }): Promise<ApiResult<{ path: string } | null>>;
   cancelJob(jobId: string): Promise<void>;
   onProgress(listener: (progress: JobProgress) => void): () => void;
   revealPath(path: string): Promise<void>;

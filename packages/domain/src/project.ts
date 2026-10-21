@@ -17,6 +17,8 @@ import {
   type ShotPlateColor,
 } from './color.js';
 import { RotoDocumentSchema } from './roto-schema.js';
+import { CamTrackDocumentSchema, Track2dDocumentSchema } from './camtrack-schema.js';
+import { CameraBodySchema, LensProfileSchema } from './camera-db.js';
 
 /**
  * A VCVFX project: the handoff it was built from plus VCVFX's own working
@@ -34,11 +36,14 @@ import { RotoDocumentSchema } from './roto-schema.js';
 
 export const PROJECT_FORMAT = 'vcvfx-project';
 /**
- * 2: shots carry a paint-to-roto document (`roto`). A version 1 project opens
- * unchanged (no roto yet) and is saved as 2; an older VC VFX refuses a 2
- * rather than silently dropping the roto it does not know about.
+ * 2: shots carry a paint-to-roto document (`roto`).
+ * 3: shots carry a camera-track (`camtrack`) and a 2D-track (`track2d`)
+ *    document; the project carries its lens profiles and custom cameras.
+ * An older project opens (the new fields empty) and is saved as the current
+ * version; an older VC VFX refuses a newer project rather than silently
+ * dropping what it does not know about.
  */
-export const PROJECT_VERSION = 2;
+export const PROJECT_VERSION = 3;
 export const PROJECT_EXTENSION = 'vcvfx';
 
 export const ApprovalSchema = z.object({ by: z.string().min(1), at: z.string() });
@@ -150,6 +155,10 @@ export const ShotStateSchema = z.object({
   reviewMarks: z.array(ReviewMarkSchema).default([]),
   /** Paint-to-roto (§5): parts, strokes, per-frame status and confidence. Null until roto starts. Masks are files, never here. */
   roto: RotoDocumentSchema.nullable().default(null),
+  /** Camera tracking / matchmove (§10). Null until started. Feature tracks and solved cameras are files, never here. */
+  camtrack: CamTrackDocumentSchema.nullable().default(null),
+  /** 2D / planar tracks (§9). Null until the first track. */
+  track2d: Track2dDocumentSchema.nullable().default(null),
 });
 export type ShotState = z.infer<typeof ShotStateSchema>;
 
@@ -173,6 +182,10 @@ export const ProjectSchema = z.object({
   /** What EXR plates are converted to unless a shot says otherwise. DPX/TIFF keep the camera encoding. */
   plateColorDefault: z.enum(PROJECT_EXR_COLOR).default('acescg'),
   shots: z.array(ShotStateSchema),
+  /** Lens distortion profiles by camera / lens / focal length (§10.1). */
+  lensProfiles: z.array(LensProfileSchema).default([]),
+  /** Cameras the production added to the built-in database. */
+  customCameras: z.array(CameraBodySchema).default([]),
   log: z.array(LogEntrySchema),
 });
 export type Project = z.infer<typeof ProjectSchema>;
@@ -206,9 +219,11 @@ export function createProject(handoff: Handoff, handoffPath: string, actor: stri
     plates: [],
     reviewMarks: [],
     roto: null,
+    camtrack: null,
+    track2d: null,
   }));
   return log(
-    { format: PROJECT_FORMAT, version: PROJECT_VERSION, createdAt: at, updatedAt: at, handoffPath, handoff, plateColorDefault: 'acescg', shots, log: [] },
+    { format: PROJECT_FORMAT, version: PROJECT_VERSION, createdAt: at, updatedAt: at, handoffPath, handoff, plateColorDefault: 'acescg', shots, lensProfiles: [], customCameras: [], log: [] },
     { at, actor, shotId: null, action: 'project.created', detail: `${shots.length} shots from ${handoffPath}` },
   );
 }
@@ -226,8 +241,8 @@ export function parseProject(text: string): { ok: true; project: Project } | { o
 
 /**
  * Bring an older project up to `PROJECT_VERSION`. The schema's defaults have
- * already filled what a version 1 project lacks (`roto: null`); this records
- * the version it is now saved as.
+ * already filled what an older project lacks (`roto`, `camtrack`, `track2d`
+ * null; no lens profiles); this records the version it is now saved as.
  */
 export function migrateProject(p: Project): Project {
   return p.version === PROJECT_VERSION ? p : { ...p, version: PROJECT_VERSION };
@@ -373,6 +388,12 @@ export function approveTask(p: Project, shotId: string, kind: PrepTaskKind, appr
     // Roto made here is approved as files: the mattes of this version must have been exported.
     if (kind === 'roto' && s.roto && s.roto.parts.some((part) => part.frames.length > 0) && !s.roto.exports.some((e) => e.version === task.version)) {
       return `Export the mattes of roto ${'v' + String(task.version).padStart(3, '0')} first; approval approves the files a vendor receives`;
+    }
+    if (kind === 'camera_track' && s.camtrack && s.camtrack.solves.length > 0 && !s.camtrack.exports.some((e) => e.version === task.version)) {
+      return `Export camera track ${'v' + String(task.version).padStart(3, '0')} first; approval approves the files a vendor receives`;
+    }
+    if (kind === 'track_2d' && s.track2d && s.track2d.tracks.some((t) => t.frames.length > 1) && !s.track2d.exports.some((e) => e.version === task.version)) {
+      return `Export the 2D tracks of ${'v' + String(task.version).padStart(3, '0')} first; approval approves the files a vendor receives`;
     }
     return { ...s, tasks: s.tasks.map((t) => (t.kind === kind ? { ...t, state: 'approved' as const, approval: { by: approver.trim(), at } } : t)) };
   });

@@ -1663,3 +1663,211 @@ table.queue.compact th {
 .roto-slider select {
   font-size: 12px;
 }
+
+/* ---------------------------------------------------------------- track (addendum 06) */
+.track-views {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.track-views > .viewer-stage {
+  flex: 1;
+  min-width: 0;
+}
+.track-views.split > .viewer-stage,
+.track-views.split > .cloud-view {
+  flex: 1 1 50%;
+}
+.track-overlay {
+  touch-action: none;
+}
+.track-overlay.tool-detect,
+.track-overlay.tool-include,
+.track-overlay.tool-exclude,
+.track-overlay.tool-planar,
+.track-overlay.tool-point {
+  cursor: crosshair;
+}
+.track-overlay.tool-origin,
+.track-overlay.tool-ground,
+.track-overlay.tool-scale,
+.track-overlay.tool-corr {
+  cursor: pointer;
+}
+.drop-in {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1024px;
+  height: 1024px;
+  object-fit: fill;
+  max-width: none;
+  transform-origin: 0 0;
+  pointer-events: none;
+  opacity: 0.92;
+}
+.track-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 8px;
+}
+.track-grid > label,
+.field-col {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.track-grid input,
+.track-grid select,
+.field-col select,
+.field-col input {
+  width: 100%;
+  min-width: 0;
+  font-size: 12px;
+}
+.check-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+.check-col {
+  display: grid;
+  gap: 4px;
+}
+.check-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 8px;
+}
+input.tiny {
+  width: 52px;
+  font-size: 12px;
+}
+.solve-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  align-items: baseline;
+  font-size: 12px;
+}
+.solve-stats .ok {
+  color: var(--ok);
+}
+.solve-stats .error {
+  color: var(--danger);
+}
+.warn {
+  color: var(--s-needs_review);
+  display: block;
+  line-height: 1.35;
+}
+.worst-tracks,
+.lidar-list,
+.corr-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+  max-height: 180px;
+  overflow: auto;
+}
+.worst-tracks li,
+.lidar-list li,
+.corr-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 4px;
+  border-radius: 3px;
+  font-size: 12px;
+}
+.worst-tracks li.selected {
+  background: var(--accent-soft);
+}
+.worst-tracks li > :first-child {
+  flex: none;
+}
+.worst-tracks .link,
+.lidar-list li > :first-child,
+.corr-list li > :first-child {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+.legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.legend i {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  margin-left: 6px;
+}
+.error-graph {
+  padding: 8px 12px 0;
+}
+.error-graph svg {
+  display: block;
+  width: 100%;
+  height: 64px;
+  background: #0b0d10;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  cursor: pointer;
+}
+.error-graph .grid {
+  stroke: var(--border-strong);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+  stroke-dasharray: 4 4;
+}
+.error-graph .cursor {
+  stroke: var(--text);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+.cloud-view {
+  position: relative;
+  min-width: 0;
+  margin: 10px 12px 0 0;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+  background: #07090c;
+}
+.cloud-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  cursor: grab;
+}
+.cloud-legend {
+  position: absolute;
+  left: 8px;
+  bottom: 6px;
+  right: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  pointer-events: none;
+  text-shadow: 0 1px 2px #000;
+}
+.track-transport {
+  padding-bottom: 10px;
+}
+.cloud-legend i {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 4px;
+}
