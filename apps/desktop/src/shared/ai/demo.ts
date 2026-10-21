@@ -82,7 +82,7 @@ function nextStep(script: DemoScript, seen: Seen[]): Step {
         targets_met: met,
         concerns: [...extraConcerns, ...(r.targets.coverageMet ? [] : ['Some frames have fewer than 20 tracks.'])],
         frames_to_check: r.perFrame.worst.slice(0, 2).map((f) => ({ frame: f.frame, reason: `Highest per-frame error (${f.rmsPx} px) — check the camera there.` })),
-        next_steps: ['Look at the solve in the 3D view and scrub the worst frames.', 'Approve the camera-track task in the shot panel if you agree.'],
+        next_steps: ['Look at the solve in the 3D view and scrub the worst frames.', 'Approve the camera-track task in Details (right) if you agree.'],
       },
     };
   };

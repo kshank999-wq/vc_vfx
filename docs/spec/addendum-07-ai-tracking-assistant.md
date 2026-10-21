@@ -10,8 +10,10 @@ it does, how, what it costs, what leaves the machine, and what is proved.
 
 ## 1. What the artist does
 
-In the Track tab of the viewer, the **AI assistant** panel docks on the right
-(hide it with ✕; the tab on the edge brings it back). The artist types an
+In the Camera Track and 2D Track tabs, the **AI assistant** is the right
+panel's second tab (**Details | AI assistant**, or the *AI assistant* button
+at the top of the steps; [addendum 08](addendum-08-layout.md)); ✕ goes back
+to the details, and a run carries on while it is hidden. The artist types an
 instruction — "Track the camera; ignore the actor; align to the LiDAR" — or
 picks a preset: **Solve camera**, **Clean up and re-solve**, **Align to
 LiDAR**, **Track this surface** (the last tracks a planar 2D track the artist

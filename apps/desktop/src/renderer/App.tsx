@@ -35,10 +35,16 @@ import {
 } from '@vcvfx/domain';
 import type { AccountStatus, AppInfo, JobProgress, LicenceStanding, MenuCommand, ProbeResult, Settings, VcvfxApi } from '../shared/bridge';
 import { projectKey } from '../shared/queue';
+import { clampFrame, viewerTimeline } from '../shared/viewer';
 import { BulkBar, QueueFilters, QueueTable, type SelectGesture } from './components/Queue';
-import { ShotDetail } from './components/ShotDetail';
-import { Viewer, type ViewerMode } from './components/Viewer';
+import { ShotDetail, type ShotDetailProps } from './components/ShotDetail';
 import { AccountDialog, IssuesDialog, PromptDialog, SettingsDialog } from './components/Dialogs';
+import { Icon } from './components/Icons';
+import { ModuleTabs, ShotBar, Tour, WhatsHere, modKey } from './components/Layout';
+import { DeliverModule, KeyModule, PlatesModule, TaskInfo } from './components/Modules';
+import { RotoWorkspace } from './components/RotoWorkspace';
+import { TrackWorkspace } from './components/TrackWorkspace';
+import { MODULES, MODULE_IDS, PREF, moduleForDigit, moduleToOpen, readPref, type ModuleId } from './modules';
 import { NOTICE_MS, pushNotice, type Notice } from './notices';
 
 interface Doc {
@@ -85,11 +91,14 @@ export function App({ api, now = () => new Date() }: { api: VcvfxApi; now?: () =
   const [standing, setStanding] = useState<LicenceStanding | null>(null);
   const [settings, setSettings] = useState<Settings>(EMPTY_SETTINGS);
   const [job, setJob] = useState<JobProgress | null>(null);
-  /** The frame viewer is open on the selected shot. */
-  const [viewing, setViewing] = useState(false);
-  /** What the viewer shows: frames, or the roto workspace. */
-  const [viewerMode, setViewerMode] = useState<ViewerMode>('view');
-  const [queueCollapsed, setQueueCollapsed] = useState(false);
+  /** The module tab on screen (addendum 08); Shots is the overview. */
+  const [module, setModuleState] = useState<ModuleId>('shots');
+  /** The last module other than Shots, opened again by a double-click. */
+  const [lastModule, setLastModule] = useState<ModuleId | null>(null);
+  /** The frame the module tabs share, for the shot it belongs to. */
+  const [frameOf, setFrameOf] = useState<{ shotId: string; frame: number } | null>(null);
+  const [tour, setTour] = useState(false);
+  const tourOffered = useRef(false);
 
   const capability = capabilityFrom(standing, now());
   const canEdit = capability === 'full';
@@ -153,7 +162,8 @@ export function App({ api, now = () => new Date() }: { api: VcvfxApi; now?: () =
       setDoc({ project, path, dirty });
       setFilter({});
       setMarked([]);
-      setViewing(false);
+      setModuleState('shots');
+      setFrameOf(null);
       setSelected(queueRows(project)[0]?.shot.shotId ?? null);
     },
     [setDoc],
@@ -391,14 +401,45 @@ export function App({ api, now = () => new Date() }: { api: VcvfxApi; now?: () =
     if (record) apply((p) => recordPlates(p, shotId, record, actor, now()));
     // Processing finishing never approves anything (§15.6): it goes to review.
     apply((p) => setTaskState(p, shotId, 'sequence_conversion', 'needs_review', actor, now()));
-    notify('ok', `${r.data.frames} frames written as ${r.data.pattern}. Review them, then approve the task.`, { label: 'View', run: () => setViewing(true) });
+    notify('ok', `${r.data.frames} frames written as ${r.data.pattern}. Review them, then approve the task.`, { label: 'View', run: () => openModule('plates', shotId) });
   };
 
-  // --- menu and keyboard ----------------------------------------------------
+  // --- modules, shots and frames --------------------------------------------
   const rows = useMemo(() => (doc ? queueRows(doc.project, filter) : []), [doc, filter]);
+
+  const setModule = useCallback((id: ModuleId) => {
+    setModuleState(id);
+    if (id !== 'shots') setLastModule(id);
+  }, []);
+  /** Open a module tab, on a given shot if one is named. */
+  const openModule = (id: ModuleId, shotId?: string) => {
+    if (shotId) {
+      setSelected(shotId);
+      setMarked([]);
+    }
+    setModule(id);
+  };
+
+  const project = doc?.project ?? null;
+  const timeline = useMemo(() => (project && selected ? viewerTimeline(project, selected) : null), [project, selected]);
+  const frame = frameOf && frameOf.shotId === selected ? frameOf.frame : (timeline?.editorialIn ?? timeline?.first ?? 0);
+  const setFrame = useCallback(
+    (f: number) => {
+      if (!selected) return;
+      setFrameOf({ shotId: selected, frame: timeline ? clampFrame(timeline, f) : f });
+    },
+    [selected, timeline],
+  );
+
+  // --- menu and keyboard ----------------------------------------------------
   const commands = useRef<(c: MenuCommand) => void>(() => undefined);
   commands.current = (command: MenuCommand) => {
     if (command.startsWith('open-recent:')) return void openPath(command.slice('open-recent:'.length));
+    if (command.startsWith('show-') && command !== 'show-tour') {
+      const id = command.slice('show-'.length) as ModuleId;
+      if (MODULE_IDS.includes(id) && (docRef.current || id === 'shots')) setModule(id);
+      return;
+    }
     switch (command) {
       case 'open-handoff':
         return void openHandoff();
@@ -420,6 +461,12 @@ export function App({ api, now = () => new Date() }: { api: VcvfxApi; now?: () =
         return setDialog('settings');
       case 'account':
         return setDialog('account');
+      case 'show-tour':
+        if (docRef.current) {
+          setModule('shots');
+          setTour(true);
+        }
+        return;
       case 'next-shot':
       case 'previous-shot':
         return moveSelection(command === 'next-shot' ? 1 : -1);
@@ -432,19 +479,42 @@ export function App({ api, now = () => new Date() }: { api: VcvfxApi; now?: () =
     const index = rows.findIndex((r) => r.shot.shotId === selected);
     const next = index < 0 ? 0 : Math.min(rows.length - 1, Math.max(0, index + delta));
     setSelected(rows[next]!.shot.shotId);
+    setMarked([]);
   };
-  const moveRef = useRef(moveSelection);
-  moveRef.current = moveSelection;
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement | null;
-      if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
-      if (document.querySelector('.modal')) return;
-      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+  // The keys the App owns: ⌘/Ctrl+1…7 the tabs, ⌘/Ctrl+↑/↓ the shot (anywhere); ↑/↓ the shot on
+  // the Shots tab; ←/→ the frame and Esc back to Shots in the tabs whose viewer does not do it itself.
+  const keys = useRef<(e: KeyboardEvent) => void>(() => undefined);
+  keys.current = (e: KeyboardEvent) => {
+    if (document.querySelector('.modal')) return;
+    const target = e.target as HTMLElement | null;
+    const typing = Boolean(target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName));
+    if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey) {
+      const id = moduleForDigit(e.key);
+      if (id) {
+        if (!docRef.current && id !== 'shots') return;
         e.preventDefault();
-        moveRef.current(e.key === 'ArrowDown' ? 1 : -1);
+        return setModule(id);
       }
-    };
+      if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && !typing) {
+        e.preventDefault();
+        return moveSelection(e.key === 'ArrowDown' ? 1 : -1);
+      }
+      return;
+    }
+    if (typing || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (module === 'shots' && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+      e.preventDefault();
+      moveSelection(e.key === 'ArrowDown' ? 1 : -1);
+    } else if ((module === 'roto' || module === 'camera' || module === 'track2d') && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) {
+      e.preventDefault();
+      setFrame(frame + (e.key === 'ArrowRight' ? 1 : -1) * (e.shiftKey ? 10 : 1));
+    } else if (e.key === 'Escape' && (module === 'roto' || module === 'camera' || module === 'track2d' || module === 'deliver')) {
+      e.preventDefault();
+      setModule('shots');
+    }
+  };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => keys.current(e);
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
@@ -453,6 +523,16 @@ export function App({ api, now = () => new Date() }: { api: VcvfxApi; now?: () =
   useEffect(() => {
     if (rows.length && !rows.some((r) => r.shot.shotId === selected)) setSelected(rows[0]!.shot.shotId);
   }, [rows, selected]);
+
+  // The first time a project is open, offer the tour (once; Help › Show the tour brings it back).
+  useEffect(() => {
+    if (!project || tourOffered.current) return;
+    tourOffered.current = true;
+    if (readPref(PREF.tourDone) !== '1') {
+      setModuleState('shots');
+      setTour(true);
+    }
+  }, [project]);
 
   // Click selects one shot; Ctrl/Cmd-click adds or removes a shot; Shift-click takes the range from the selected one.
   const selectShot = (shotId: string, gesture: SelectGesture) => {
@@ -489,60 +569,128 @@ export function App({ api, now = () => new Date() }: { api: VcvfxApi; now?: () =
     notify(r.added.length ? 'ok' : 'error', `${label} added to ${r.added.length} shot${r.added.length === 1 ? '' : 's'}.${skipped}`);
   };
 
+  // --- the shot's handlers, shared by the Shots tab and the modules ----------
+  const shotProps = (shotId: string, p: Project): ShotDetailProps => ({
+    project: p,
+    shotId,
+    now: now(),
+    canEdit,
+    busy,
+    outputRoot,
+    onTaskState: (kind: PrepTaskKind, state: Exclude<TaskState, 'approved'>) => apply((x) => setTaskState(x, shotId, kind, state, actor, now())),
+    onApproveTask: (kind) =>
+      askApprover('Approve task', `Approval is recorded with your name and the time, per task (${PREP_TASKS[kind].label}).`, (name) => {
+        setPrompt(null);
+        apply((x) => approveTask(x, shotId, kind, name, now()));
+      }),
+    onApproveShot: () =>
+      askApprover('Approve shot', `Sign off ${shotId} as prep approved. This is a production decision, recorded with your name.`, (name) => {
+        setPrompt(null);
+        apply((x) => approveShot(x, shotId, name, now()));
+      }),
+    onPackage: () => void packageSelected(shotId),
+    onDeliver: () => apply((x) => markDelivered(x, shotId, actor, now())),
+    onReopen: () => apply((x) => reopenShot(x, shotId, actor, now())),
+    onTaskNotes: (kind, notes) => apply((x) => setTaskNotes(x, shotId, kind, notes, actor, now())),
+    onShotNotes: (notes) => apply((x) => setShotNotes(x, shotId, notes, actor, now())),
+    onAddTask: (kind) => apply((x) => addTask(x, shotId, kind, actor, now())),
+    onSetVfxShotId: (value) => apply((x) => setVfxShotId(x, shotId, value, actor, now())),
+    ...(api.probeSources && p.handoffPath !== 'sample' ? { onProbe: () => void probeSources([shotId]) } : {}),
+    onGeneratePlates: () => void generatePlates(shotId),
+    onChangeOutputRoot: () => void chooseOutputRoot(),
+    onRevealOutput: () => outputRoot && void api.revealPath(outputRoot),
+    onPlateColor: (change) => apply((x) => setShotPlateColor(x, shotId, change, actor, now())),
+    onOpenModule: (id) => openModule(id, shotId),
+  });
+
+  const moduleScreen = () => {
+    if (!project || !doc) return null;
+    if (!selected || !key) return <main className="module module-missing">Select a shot on the Shots tab.</main>;
+    const props = shotProps(selected, project);
+    const screen = {
+      ...props,
+      api,
+      projectKey: key,
+      frame,
+      onFrame: setFrame,
+      onClose: () => setModule('shots'),
+      onToggleMark: (f: number, seen: string, note: string) => apply((p) => toggleReviewMark(p, selected, { frame: f, viewing: seen, note }, actor, now())),
+    };
+    const work = { api, project, shotId: selected, projectKey: key, canEdit, busy, actor, frame, onFrame: setFrame, runJob, notify };
+    switch (module) {
+      case 'plates':
+        return <PlatesModule {...screen} />;
+      case 'key':
+        return <KeyModule {...screen} work={{ actor, runJob, notify, onKey: (fn) => apply((p) => fn(p, actor, now())) }} />;
+      case 'roto':
+        return <RotoWorkspace {...work} onRoto={(fn) => apply((p) => fn(p, actor, now()))} onAddRotoTask={() => apply((p) => addTask(p, selected, 'roto', actor, now()))} taskInfo={<TaskInfo props={props} kind="roto" />} />;
+      case 'camera':
+      case 'track2d':
+        return (
+          <TrackWorkspace
+            key={module}
+            {...work}
+            mode={module === 'camera' ? 'camera' : '2d'}
+            onTrack={(fn) => apply((p) => fn(p, actor, now()))}
+            onAddTask={(kind) => apply((p) => addTask(p, selected, kind, actor, now()))}
+            taskInfo={<TaskInfo props={props} kind={module === 'camera' ? 'camera_track' : 'track_2d'} />}
+          />
+        );
+      case 'deliver':
+        return <DeliverModule {...screen} onVerify={() => void verify()} onPrint={(mode) => void print(mode)} shownShots={rows.length} />;
+      default:
+        return null;
+    }
+  };
+
   // --- render ---------------------------------------------------------------
-  const project = doc?.project ?? null;
+  const mod = modKey();
   return (
     <div className="app">
       <header className="topbar">
-        <div className="brand">
+        <div className="brand" title={doc?.path ?? undefined}>
           <span className="logo">VFX</span>
-          <span className="brand-name">VC VFX</span>
-        </div>
-        {project ? (
-          <div className="doc-title">
-            <strong>{project.handoff.project}</strong>
-            {project.handoff.productionCompany ? <span className="muted"> · {project.handoff.productionCompany}</span> : null}
-            {project.handoff.origin?.day ? (
-              <span className="muted doc-day" title={project.handoff.origin.tool ? `Handed off by ${project.handoff.origin.tool}` : undefined}>
-                {' · '}
-                {[
-                  project.handoff.origin.day.number !== undefined ? `Day ${project.handoff.origin.day.number}` : null,
-                  project.handoff.origin.day.date,
-                ]
-                  .filter(Boolean)
-                  .join(' · ')}
-              </span>
-            ) : null}
-            <span className="doc-path" title={doc?.path ?? undefined}>
-              {doc?.path ? doc.path.split(/[\\/]/).pop() : project.handoffPath === 'sample' ? 'Sample — not saved' : 'Not saved'}
-              {doc?.dirty ? <span className="dirty" title="Unsaved changes"> •</span> : null}
+          <span className="brand-text">
+            <span className="brand-name">VC VFX</span>
+            <span className="brand-project">
+              {project ? project.handoff.project : 'No project open'}
+              {doc?.dirty ? (
+                <span className="dirty" title="Unsaved changes">
+                  {' '}
+                  •
+                </span>
+              ) : null}
             </span>
-          </div>
-        ) : (
-          <div className="doc-title muted">No project open</div>
-        )}
+          </span>
+        </div>
+        <div className="tabs-wrap" data-tour="tabs">
+          <ModuleTabs project={project} shotId={selected} active={module} onSelect={setModule} />
+        </div>
         <div className="spacer" />
-        <div className="toolbar">
-          <button type="button" onClick={() => void openHandoff()} title="Open VCDIT Handoff (Ctrl/Cmd+O)">
-            Open Handoff
+        <div className="top-actions">
+          <button
+            type="button"
+            className="top-icon"
+            disabled={!project}
+            onClick={() => {
+              setModule('shots');
+              setTour(true);
+            }}
+            title="Help: show the quick tour of the tabs"
+            aria-label="Help"
+          >
+            <Icon name="help" size={20} />
+            <span>Help</span>
           </button>
-          <button type="button" onClick={() => void verify()} disabled={!project || busy}>
-            Verify Sources
+          <button type="button" className={`licence-pill ${capability}`} onClick={() => setDialog('account')} title={`Account & licence${account.signedIn ? ` — ${account.displayName ?? account.email}` : ''}`}>
+            <Icon name="user" size={18} />
+            {capability === 'full' ? 'Licensed' : 'Read-only'}
           </button>
-          <button type="button" onClick={() => void print('print')} disabled={!project} title="Print Shot List (Ctrl/Cmd+P)">
-            Print
-          </button>
-          <button type="button" onClick={() => void print('pdf')} disabled={!project}>
-            Export PDF
+          <button type="button" className="top-icon" aria-label="Settings" title={`Settings (${mod},)`} onClick={() => setDialog('settings')}>
+            <Icon name="settings" size={20} />
+            <span>Settings</span>
           </button>
         </div>
-        <button type="button" className={`licence-pill ${capability}`} onClick={() => setDialog('account')} title="Account & licence">
-          {capability === 'full' ? 'Licensed' : 'Read-only'}
-          {account.signedIn ? <span className="muted"> · {account.displayName ?? account.email}</span> : null}
-        </button>
-        <button type="button" className="icon" aria-label="Settings" title="Settings" onClick={() => setDialog('settings')}>
-          ⚙
-        </button>
       </header>
 
       {capability === 'read_only' ? (
@@ -574,113 +722,33 @@ export function App({ api, now = () => new Date() }: { api: VcvfxApi; now?: () =
       ) : null}
 
       {project && doc ? (
-        <>
-          {viewing && selected ? null : <QueueFilters project={project} filter={filter} onChange={setFilter} />}
-          <main className={`workspace${viewing && selected ? ` viewing${queueCollapsed ? ' queue-collapsed' : ''}` : ''}`}>
-            <section className="queue-pane" aria-label="Queue">
-              {viewing && selected ? (
-                <button type="button" className="queue-toggle" onClick={() => setQueueCollapsed((c) => !c)} aria-expanded={!queueCollapsed} title={queueCollapsed ? 'Show the queue' : 'Hide the queue'}>
-                  {queueCollapsed ? '»' : '« Queue'}
-                </button>
-              ) : null}
-              {visibleMarked.length > 1 && !viewing ? (
-                <BulkBar project={project} shotIds={visibleMarked} canEdit={canEdit} busy={busy} onAddTask={addTaskToMarked} onClear={() => setMarked([])} />
-              ) : null}
-              {viewing && selected && queueCollapsed ? null : (
-                <QueueTable
-                  project={project}
-                  rows={rows}
-                  selected={selected}
-                  marked={visibleMarked}
-                  onSelect={selectShot}
-                  onOpen={(id) => {
-                    setSelected(id);
-                    setMarked([]);
-                    setViewing(true);
-                  }}
-                  compact={viewing}
-                />
-              )}
-            </section>
-            {viewing && selected && key ? (
-              <Viewer
-                api={api}
-                project={project}
-                shotId={selected}
-                projectKey={key}
-                canEdit={canEdit}
-                onClose={() => setViewing(false)}
-                onToggleMark={(frame, seen, note) => apply((p) => toggleReviewMark(p, selected, { frame, viewing: seen, note }, actor, now()))}
-                mode={viewerMode}
-                onMode={setViewerMode}
-                roto={{
-                  busy,
-                  actor,
-                  onRoto: (fn) => apply((p) => fn(p, actor, now())),
-                  runJob,
-                  notify,
-                  onAddRotoTask: () => apply((p) => addTask(p, selected, 'roto', actor, now())),
-                }}
-                track={{
-                  busy,
-                  actor,
-                  onTrack: (fn) => apply((p) => fn(p, actor, now())),
-                  runJob,
-                  notify,
-                  onAddTask: (kind) => apply((p) => addTask(p, selected, kind, actor, now())),
-                }}
-              />
-            ) : selected ? (
-              <ShotDetail
-                project={project}
-                shotId={selected}
-                now={now()}
-                canEdit={canEdit}
-                busy={busy}
-                outputRoot={outputRoot}
-                onTaskState={(kind: PrepTaskKind, state: Exclude<TaskState, 'approved'>) => apply((p) => setTaskState(p, selected, kind, state, actor, now()))}
-                onApproveTask={(kind) =>
-                  askApprover('Approve task', `Approval is recorded with your name and the time, per task (${kind.replace(/_/g, ' ')}).`, (name) => {
-                    setPrompt(null);
-                    apply((p) => approveTask(p, selected, kind, name, now()));
-                  })
-                }
-                onApproveShot={() =>
-                  askApprover('Approve shot', `Sign off ${selected} as prep approved. This is a production decision, recorded with your name.`, (name) => {
-                    setPrompt(null);
-                    apply((p) => approveShot(p, selected, name, now()));
-                  })
-                }
-                onPackage={() => void packageSelected(selected)}
-                onDeliver={() => apply((p) => markDelivered(p, selected, actor, now()))}
-                onReopen={() => apply((p) => reopenShot(p, selected, actor, now()))}
-                onTaskNotes={(kind, notes) => apply((p) => setTaskNotes(p, selected, kind, notes, actor, now()))}
-                onShotNotes={(notes) => apply((p) => setShotNotes(p, selected, notes, actor, now()))}
-                onAddTask={(kind) => apply((p) => addTask(p, selected, kind, actor, now()))}
-                onSetVfxShotId={(value) => apply((p) => setVfxShotId(p, selected, value, actor, now()))}
-                {...(api.probeSources && project.handoffPath !== 'sample' ? { onProbe: () => void probeSources([selected]) } : {})}
-                onGeneratePlates={() => void generatePlates(selected)}
-                onChangeOutputRoot={() => void chooseOutputRoot()}
-                onRevealOutput={() => outputRoot && void api.revealPath(outputRoot)}
-                onPlateColor={(change) => apply((p) => setShotPlateColor(p, selected, change, actor, now()))}
-                onView={() => {
-                  setViewerMode('view');
-                  setViewing(true);
-                }}
-                onRoto={() => {
-                  setViewerMode('roto');
-                  setViewing(true);
-                }}
-                onTrack={() => {
-                  setViewerMode('track');
-                  setViewing(true);
-                }}
-              />
-            ) : (
-              <aside className="detail empty">Select a shot.</aside>
-            )}
-          </main>
-        </>
+        module === 'shots' ? (
+          <div className="shots-screen">
+            <ProjectHeader
+              project={project}
+              path={doc.path}
+              dirty={doc.dirty}
+              shown={rows.length}
+              onOpenHandoff={() => void openHandoff()}
+              onOpenProject={() => void openProject()}
+              onSample={openSample}
+            />
+            <WhatsHere onOpen={(id) => openModule(id)} />
+            <QueueFilters project={project} filter={filter} onChange={setFilter} />
+            <main className="workspace" aria-label="Shots">
+              <section className="queue-pane" aria-label="Queue">
+                {visibleMarked.length > 1 ? <BulkBar project={project} shotIds={visibleMarked} canEdit={canEdit} busy={busy} onAddTask={addTaskToMarked} onClear={() => setMarked([])} /> : null}
+                <QueueTable project={project} rows={rows} selected={selected} marked={visibleMarked} onSelect={selectShot} onOpen={(id) => openModule(moduleToOpen(project, id, lastModule), id)} />
+              </section>
+              {selected ? <ShotDetail {...shotProps(selected, project)} /> : <aside className="detail empty">Select a shot.</aside>}
+            </main>
+          </div>
+        ) : (
+          <>
+            {selected ? <ShotBar project={project} rows={rows} shotId={selected} module={module} onSelect={(id) => openModule(module, id)} onMove={moveSelection} /> : null}
+            {moduleScreen()}
+          </>
+        )
       ) : (
         <Welcome recent={settings.recent} onOpenHandoff={() => void openHandoff()} onOpenProject={() => void openProject()} onSample={openSample} onRecent={(p) => void openPath(p)} />
       )}
@@ -692,6 +760,7 @@ export function App({ api, now = () => new Date() }: { api: VcvfxApi; now?: () =
               `${rows.length} of ${project.shots.length} shots`,
               project.handoff.vfxSupervisor ? `VFX Sup ${project.handoff.vfxSupervisor}` : null,
               project.handoff.ditOperator ? `DIT ${project.handoff.ditOperator}` : null,
+              module !== 'shots' ? `${MODULES[module].label}` : null,
             ]
               .filter(Boolean)
               .join(' · ')}
@@ -711,7 +780,11 @@ export function App({ api, now = () => new Date() }: { api: VcvfxApi; now?: () =
               Cancel
             </button>
           </div>
-        ) : null}
+        ) : (
+          <span className="muted keys-hint">
+            {mod}1–7 tabs · {mod}↑/↓ shots
+          </span>
+        )}
       </footer>
 
       <div className="notices" aria-live="polite">
@@ -733,6 +806,7 @@ export function App({ api, now = () => new Date() }: { api: VcvfxApi; now?: () =
         ))}
       </div>
 
+      {tour && project ? <Tour onClose={() => setTour(false)} /> : null}
       {issues ? <IssuesDialog {...issues} onClose={() => setIssues(null)} /> : null}
       {prompt ? <PromptDialog {...prompt} onClose={() => setPrompt(null)} /> : null}
       {dialog === 'settings' ? (
@@ -755,6 +829,55 @@ export function App({ api, now = () => new Date() }: { api: VcvfxApi; now?: () =
         <AccountDialog api={api} info={info} account={account} standing={standing} onAccount={setAccount} onStanding={setStanding} onClose={() => setDialog(null)} />
       ) : null}
     </div>
+  );
+}
+
+/** The Shots tab's head: the project, where it came from, and opening another. */
+function ProjectHeader({
+  project,
+  path,
+  dirty,
+  shown,
+  onOpenHandoff,
+  onOpenProject,
+  onSample,
+}: {
+  project: Project;
+  path: string | null;
+  dirty: boolean;
+  shown: number;
+  onOpenHandoff: () => void;
+  onOpenProject: () => void;
+  onSample: () => void;
+}) {
+  const h = project.handoff;
+  const day = h.origin?.day ? [h.origin.day.number !== undefined ? `Day ${h.origin.day.number}` : null, h.origin.day.date].filter(Boolean).join(' · ') : null;
+  const facts = [h.productionCompany, day, h.vfxSupervisor ? `VFX Sup ${h.vfxSupervisor}` : null, h.ditOperator ? `DIT ${h.ditOperator}` : null].filter(Boolean);
+  return (
+    <section className="project-head" aria-label="Project">
+      <div className="project-title">
+        <h1>{h.project}</h1>
+        <p className="project-facts">
+          {facts.join(' · ')}
+          {h.origin?.tool ? <span className="muted"> · handed off by {h.origin.tool}</span> : null}
+        </p>
+        <p className="project-file muted" title={path ?? undefined}>
+          {path ? path.split(/[\\/]/).pop() : project.handoffPath === 'sample' ? 'Sample project — not saved' : 'Not saved'}
+          {dirty ? <span className="dirty"> · unsaved changes</span> : path ? ' · saved' : ''} · {shown} of {project.shots.length} shots shown
+        </p>
+      </div>
+      <div className="project-actions">
+        <button type="button" onClick={onOpenHandoff} title="Open the VCDIT handoff from the drive (Ctrl/Cmd+O)">
+          Open handoff…
+        </button>
+        <button type="button" onClick={onOpenProject} title="Open a saved VC VFX project (Ctrl/Cmd+Shift+O)">
+          Open project…
+        </button>
+        <button type="button" onClick={onSample}>
+          Sample project
+        </button>
+      </div>
+    </section>
   );
 }
 

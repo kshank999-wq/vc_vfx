@@ -206,7 +206,7 @@ export async function runTrackAgent(run: AgentRun): Promise<AgentOutcome> {
       const others = results.filter((r) => r.tool_use_id !== finishId);
       if (others.length) messages.push({ role: 'user', content: [...others, { type: 'tool_result', tool_use_id: finishId, content: 'Report delivered.' }] });
       unanswered = others.length ? [] : [finishId];
-      return finish('finished', report.targetsMet ? 'Finished: targets met. Review it, then approve the task in the shot panel if you agree.' : 'Finished: targets not all met — see the concerns.', report, text);
+      return finish('finished', report.targetsMet ? 'Finished: targets met. Review it, then approve the task in Details (right) if you agree.' : 'Finished: targets not all met — see the concerns.', report, text);
     }
     messages.push({ role: 'user', content: results });
     unanswered = [];

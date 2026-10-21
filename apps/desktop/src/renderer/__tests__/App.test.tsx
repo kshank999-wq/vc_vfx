@@ -89,7 +89,9 @@ describe('approval', () => {
     const approve = screen.getByRole('button', { name: 'Approve shot…' }) as HTMLButtonElement;
     expect(approve.disabled).toBe(true);
     expect(approve.title).toMatch(/Read-only mode/);
-    expect((screen.getByRole('button', { name: 'Print' }) as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(screen.getByRole('tab', { name: 'Deliver' }));
+    fireEvent.click(screen.getByRole('button', { name: /Print shot list/ }));
+    expect((screen.getByRole('button', { name: 'Print…' }) as HTMLButtonElement).disabled).toBe(false);
     fireEvent.click(screen.getByRole('button', { name: 'Subscribe at vc-vfx.com' }));
     expect(openExternal).toHaveBeenCalledWith('subscribe');
   });
@@ -240,10 +242,11 @@ describe('the frame viewer', () => {
       ...over,
     });
 
-  it('opens on double-click at the editorial in-point, steps with the keyboard and closes with Esc', async () => {
+  it('opens in the Plates tab on double-click at the editorial in-point, steps with the keyboard and goes back to Shots with Esc', async () => {
     const table = await openSample(frames());
     fireEvent.doubleClick(shotRows(table)[0]!);
     await act(async () => undefined);
+    expect(screen.getByRole('tab', { name: 'Plates' }).getAttribute('aria-selected')).toBe('true');
     const viewer = screen.getByRole('region', { name: 'Viewer — 010_020' });
     expect(within(viewer).getByLabelText('Frame').textContent).toBe('1009');
     expect((within(viewer).getByAltText('Source frame 1009') as HTMLImageElement).src).toBe('vcvfx-frame://cache/source-rec709-1009-1280.jpg');
@@ -255,12 +258,14 @@ describe('the frame viewer', () => {
     expect(within(viewer).getByLabelText('Frame').textContent).toBe('1019');
     fireEvent.keyDown(window, { key: 'Escape' });
     expect(screen.queryByRole('region', { name: 'Viewer — 010_020' })).toBeNull();
+    expect(screen.getByRole('tab', { name: 'Shots' }).getAttribute('aria-selected')).toBe('true');
   });
 
   it('shows a contact sheet of first, last and twelve between; a tile jumps there', async () => {
     const table = await openSample(frames());
     fireEvent.doubleClick(shotRows(table)[0]!);
     await act(async () => undefined);
+    fireEvent.click(screen.getByRole('button', { name: 'Contact sheet' }));
     const sheet = screen.getByRole('region', { name: 'Contact sheet' });
     const tiles = within(sheet).getAllByRole('button', { name: /^Frame / });
     expect(tiles).toHaveLength(14);
@@ -292,6 +297,7 @@ describe('the frame viewer', () => {
     fireEvent.doubleClick(shotRows(table)[0]!);
     await act(async () => undefined);
     expect(screen.getByText('The sample project has no media on disk.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Contact sheet' }));
     expect(screen.getByText('Nothing to show for this shot yet.')).toBeTruthy();
     expect((screen.getByRole('button', { name: 'Wipe' }) as HTMLButtonElement).disabled).toBe(true);
   });

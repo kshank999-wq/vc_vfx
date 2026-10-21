@@ -1,5 +1,6 @@
 import type { AgentEvent, StopReason } from './ai/agent';
 import type { FinishReport, QuadProposal } from './ai/tools';
+import type { KeyBridge } from './key/bridge-types';
 import type { AiAllowance, ColorEncodingId, LicenseStatus, PlateRecordInput, ProbedMediaInput, QueueFilter, RotoDirection, RotoEngineId, RotoExportInput, RotoPropagationResult, ViewTransformId } from '@vcvfx/domain';
 
 /**
@@ -340,10 +341,20 @@ export const MENU_COMMANDS = [
   'account',
   'next-shot',
   'previous-shot',
+  // View › the module tabs (addendum 08), and Help › Show the tour.
+  'show-shots',
+  'show-plates',
+  'show-roto',
+  'show-key',
+  'show-camera',
+  'show-track2d',
+  'show-deliver',
+  'show-tour',
 ] as const;
 export type MenuCommand = (typeof MENU_COMMANDS)[number] | `open-recent:${string}`;
 
-export interface VcvfxApi {
+/** The key's methods (addendum 09) are optional, like the AI assistant's: a host may not offer them. */
+export interface VcvfxApi extends Partial<KeyBridge> {
   appInfo(): Promise<AppInfo>;
 
   openHandoffDialog(): Promise<ApiResult<OpenedFile | null>>;

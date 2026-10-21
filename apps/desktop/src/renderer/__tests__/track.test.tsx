@@ -79,10 +79,10 @@ describe('the Track workspace', () => {
     const table = screen.getByRole('table', { name: 'Shot queue' });
     const row = within(table).getAllByRole('row').find((r) => r.textContent?.includes('020_010'))!;
     fireEvent.click(row);
-    fireEvent.click(screen.getByRole('button', { name: 'Track…' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open Camera Track' }));
     await act(async () => undefined);
-    expect(screen.getByRole('tab', { name: 'Track' }).getAttribute('aria-selected')).toBe('true');
-    expect(screen.getByRole('tab', { name: 'Camera solve' }).getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByRole('tab', { name: 'Camera Track' }).getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByRole('region', { name: 'Current shot' }).textContent).toContain('020_010');
     // The viewer's frame is brought into the tracked range (the shot's first N frames here).
     const h = parseHandoff(JSON.stringify(SAMPLE_HANDOFF));
     if (!h.ok) throw new Error('sample');
@@ -90,11 +90,16 @@ describe('the Track workspace', () => {
     await waitFor(() => expect(Number(screen.getByLabelText('Frame').textContent)).toBeLessThanOrEqual(first + N - 1));
 
     fireEvent.click(await screen.findByRole('button', { name: 'Auto-track' }));
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Track again' })).toBeTruthy(), { timeout: 20_000 });
+    // Tracking done: step 2 is ticked and folded, Solve is next.
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Solve camera' })).toBeTruthy(), { timeout: 20_000 });
+    expect(document.querySelector('[data-step="features"]')?.classList.contains('step-done')).toBe(true);
     fireEvent.click(screen.getByRole('button', { name: 'Solve camera' }));
-    await waitFor(() => expect(document.querySelector('.solve-stats')).toBeTruthy(), { timeout: 20_000 });
-    const rms = Number(/RMS ([\d.]+) px/.exec(document.querySelector('.solve-stats')!.textContent!)![1]);
+    // The numbers that matter are in Details, large.
+    const rmsStat = () => [...document.querySelectorAll('.stat')].find((s) => s.textContent?.includes('RMS error'))!;
+    await waitFor(() => expect(rmsStat().textContent).toMatch(/px/), { timeout: 20_000 });
+    const rms = Number(rmsStat().querySelector('.stat-value')!.textContent!.replace(/[^\d.]/g, ''));
     expect(rms).toBeLessThan(0.5);
+    expect(document.querySelector('[data-step="solve"]')?.classList.contains('step-done')).toBe(true);
     expect(document.querySelectorAll('.error-graph rect').length).toBeGreaterThanOrEqual(N);
     expect(log).toEqual(['auto_track', 'solve']);
 
@@ -108,15 +113,17 @@ describe('the Track workspace', () => {
     expect(exportButton.title).toMatch(/desktop app/);
   }, 60_000);
 
-  it('opens a 2D-only shot on the 2D tab', async () => {
+  it('opens a 2D-only shot in the 2D Track tab', async () => {
     render(<App api={trackBridge([])} />);
     await act(async () => undefined);
     fireEvent.click(screen.getByRole('button', { name: 'Open sample project' }));
     const table = screen.getByRole('table', { name: 'Shot queue' });
     fireEvent.click(within(table).getAllByRole('row').find((r) => r.textContent?.includes('010_030'))!);
-    fireEvent.click(screen.getByRole('button', { name: 'Track…' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open 2D Track' }));
     await act(async () => undefined);
-    expect(screen.getByRole('tab', { name: '2D / planar' }).getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByRole('tab', { name: '2D Track' }).getAttribute('aria-selected')).toBe('true');
+    // The shot has no camera track: that tab is greyed, with the reason, but still opens.
+    expect(screen.getByRole('tab', { name: 'Camera Track' }).className).toContain('missing');
     expect(screen.getByRole('button', { name: 'New planar' })).toBeTruthy();
   });
 });
