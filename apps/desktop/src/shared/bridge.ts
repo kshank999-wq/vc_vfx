@@ -1,4 +1,6 @@
-import type { ColorEncodingId, LicenseStatus, PlateRecordInput, ProbedMediaInput, QueueFilter, RotoDirection, RotoEngineId, RotoExportInput, RotoPropagationResult, ViewTransformId } from '@vcvfx/domain';
+import type { AgentEvent, StopReason } from './ai/agent';
+import type { FinishReport, QuadProposal } from './ai/tools';
+import type { AiAllowance, ColorEncodingId, LicenseStatus, PlateRecordInput, ProbedMediaInput, QueueFilter, RotoDirection, RotoEngineId, RotoExportInput, RotoPropagationResult, ViewTransformId } from '@vcvfx/domain';
 
 /**
  * The contract between the renderer and the main process.
@@ -33,6 +35,8 @@ export interface Settings {
   recent: string[];
   /** Where the SAM 2 model is downloaded from; empty means the default (addendum 04). */
   modelBaseUrl?: string;
+  /** Projects (by key) whose frames the AI assistant may see (addendum 07 §7). */
+  aiFrames?: Record<string, boolean>;
 }
 
 export interface AccountStatus {
@@ -266,6 +270,61 @@ export interface TrackCommandRequest extends TrackShotInput {
   command: { verb: string } & Record<string, unknown>;
 }
 
+// ---------------------------------------------------------------------------
+// The AI tracking assistant (addendum 07)
+// ---------------------------------------------------------------------------
+
+export interface AiRunRequest extends TrackShotInput {
+  runId: string;
+  operator: string;
+  instruction: string;
+  /** Facts for the briefing: what the artist has drawn or selected. */
+  notes?: string[];
+  framesAllowed: boolean;
+  exportAllowed: boolean;
+  /** Credits this run may spend. */
+  creditCap: number;
+  maxTurns: number;
+  focalRange?: { min: number; max: number } | null;
+  /** Continue a conversation main still holds (a follow-up instruction). */
+  conversationId?: string | null;
+}
+
+export interface AiRunResult {
+  reason: StopReason;
+  message: string;
+  report: FinishReport | null;
+  text: string | null;
+  credits: number;
+  turns: number;
+  created2d: string[];
+  /** For a follow-up instruction in the same conversation. */
+  conversationId: string;
+}
+
+/** What main tells the panel while a run goes: the loop's events, plus requests to apply ops and to confirm a proposal. */
+export type AiRunEvent = { runId: string } & (
+  | Exclude<AgentEvent, { type: 'done' }>
+  | { type: 'apply'; seq: number; ops: unknown[] }
+  | { type: 'confirm'; seq: number; proposal: QuadProposal }
+  | { type: 'progress'; label: string; done: number; total: number }
+);
+
+/** The panel's answer to `apply` (the project afterwards, or the refusal) or `confirm`. */
+export interface AiAck {
+  runId: string;
+  seq: number;
+  ok: boolean;
+  /** The project after the ops, serialized. */
+  text?: string;
+  error?: string;
+  accepted?: boolean;
+  corners?: [number, number][];
+  note?: string;
+}
+
+export type AiAllowanceInfo = AiAllowance & { licensed?: boolean };
+
 export type ExternalLink = 'site' | 'subscribe' | 'account' | 'ffmpeg';
 
 export const MENU_COMMANDS = [
@@ -338,6 +397,15 @@ export interface VcvfxApi {
   chooseLidarFile(): Promise<ApiResult<string | null>>;
   /** Save a printable calibration checkerboard (PDF and PNG). */
   saveCalibrationTarget(input: { cols: number; rows: number; squareMm: number; marginMm: number }): Promise<ApiResult<{ path: string } | null>>;
+  /** Run the AI tracking assistant on a shot (desktop only; the preview runs a scripted demo instead). Resolves when the run ends. */
+  aiTrackRun?(input: AiRunRequest): Promise<ApiResult<AiRunResult>>;
+  aiTrackAck?(ack: AiAck): Promise<void>;
+  aiTrackCancel?(runId: string): Promise<void>;
+  onAiEvent?(listener: (event: AiRunEvent) => void): () => void;
+  /** This month's AI credits from vc-vfx.com. */
+  aiAllowance?(): Promise<ApiResult<AiAllowanceInfo>>;
+  /** Whether the assistant may see frames of this project (a per-project, per-computer choice); `allowed` sets it. */
+  aiFrames?(input: { projectKey: string; allowed?: boolean }): Promise<boolean>;
   cancelJob(jobId: string): Promise<void>;
   onProgress(listener: (progress: JobProgress) => void): () => void;
   revealPath(path: string): Promise<void>;
