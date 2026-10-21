@@ -413,6 +413,7 @@ export interface VcvfxApi {
   accountStatus(): Promise<AccountStatus>;
   requestSignInCode(email: string): Promise<ApiResult<null>>;
   verifySignInCode(email: string, code: string): Promise<ApiResult<AccountStatus>>;
+  signInWithPassword(email: string, password: string): Promise<ApiResult<AccountStatus>>;
   signOut(): Promise<void>;
   licenceStanding(recheck: boolean): Promise<LicenceStanding | null>;
   activateLicence(): Promise<ApiResult<{ message: string }>>;

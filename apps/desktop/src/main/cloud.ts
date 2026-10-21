@@ -92,6 +92,15 @@ export const verifySignInCode = async (email: string, token: string): Promise<Ac
   return statusOf(data.session.user);
 };
 
+/** Password sign-in, for accounts that have set one (on vc-vfx.com, or created in Supabase). */
+export const signInWithPassword = async (email: string, password: string): Promise<AccountStatus> => {
+  const { data, error } = await supabase().auth.signInWithPassword({ email, password });
+  if (error) throw new CloudError(error.message);
+  if (!data.session) throw new CloudError('Signed in but no session came back. Try again.');
+  await storeSession(data.session);
+  return statusOf(data.session.user);
+};
+
 export const signOut = async (): Promise<void> => {
   if (isCloudConfigured()) await supabase().auth.signOut().catch(() => undefined);
   await storeSession(null);

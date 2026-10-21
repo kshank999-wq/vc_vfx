@@ -238,6 +238,7 @@ export function AccountDialog({
 }) {
   const [email, setEmail] = useState(account.email ?? '');
   const [code, setCode] = useState('');
+  const [password, setPassword] = useState('');
   const [sent, setSent] = useState(false);
   const [message, setMessage] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
   const [working, setWorking] = useState(false);
@@ -283,6 +284,12 @@ export function AccountDialog({
             <span>Email</span>
             <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} disabled={sent} placeholder="you@production.com" />
           </label>
+          {!sent ? (
+            <label className="field">
+              <span>Password (if you have one)</span>
+              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" />
+            </label>
+          ) : null}
           {sent ? (
             <label className="field">
               <span>Code from the email</span>
@@ -290,10 +297,29 @@ export function AccountDialog({
             </label>
           ) : null}
           <div className="row">
-            {!sent ? (
+            {!sent && password ? (
               <button
                 type="button"
                 className="primary"
+                disabled={working || !email.includes('@')}
+                onClick={() =>
+                  void run(async () => {
+                    const r = await api.signInWithPassword(email.trim(), password);
+                    if (r.ok) {
+                      setPassword('');
+                      onAccount(r.data);
+                      onStanding(await api.licenceStanding(true));
+                    } else setMessage({ kind: 'error', text: r.error });
+                  })
+                }
+              >
+                Sign in
+              </button>
+            ) : null}
+            {!sent ? (
+              <button
+                type="button"
+                className={password ? undefined : 'primary'}
                 disabled={working || !email.includes('@')}
                 onClick={() =>
                   void run(async () => {

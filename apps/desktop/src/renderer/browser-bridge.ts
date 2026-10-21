@@ -291,6 +291,7 @@ export function createBrowserBridge(): BrowserBridge {
     accountStatus: async () => ({ configured: false, signedIn: false, email: null, displayName: null }),
     requestSignInCode: async () => fail(desktopOnly('signing in activates a licence on a computer.')),
     verifySignInCode: async () => fail(desktopOnly('signing in activates a licence on a computer.')),
+    signInWithPassword: async () => fail(desktopOnly('signing in activates a licence on a computer.')),
     signOut: async () => undefined,
     licenceStanding: async () => standing(),
     activateLicence: async () => fail(desktopOnly('a licence is activated on a computer.')),

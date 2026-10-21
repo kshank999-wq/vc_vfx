@@ -660,6 +660,15 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null, isDev
       return fail(error);
     }
   });
+  handle('account:sign-in-password', z.object({ email: z.string().email().max(320), password: z.string().min(1).max(1024) }), async (_e, input) => {
+    try {
+      const status = await cloud.signInWithPassword(input.email, input.password);
+      void licenceStanding(true);
+      return ok(status);
+    } catch (error) {
+      return fail(error);
+    }
+  });
   handle('account:sign-out', none, async () => cloud.signOut());
   handle('licence:standing', z.boolean(), async (_e, recheck) => licenceStanding(recheck));
   handle('licence:activate', none, async () => {

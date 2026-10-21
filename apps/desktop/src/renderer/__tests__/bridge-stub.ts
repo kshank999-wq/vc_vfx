@@ -39,6 +39,7 @@ export function stubBridge(overrides: Partial<VcvfxApi> = {}, standing: LicenceS
     accountStatus: async () => ({ configured: false, signedIn: false, email: null, displayName: null }),
     requestSignInCode: async () => ({ ok: true, data: null }),
     verifySignInCode: async () => ({ ok: false, error: 'offline' }),
+    signInWithPassword: async () => ({ ok: false, error: 'offline' }),
     signOut: async () => undefined,
     licenceStanding: async () => standing,
     activateLicence: async () => ({ ok: false, error: 'offline' }),

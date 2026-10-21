@@ -57,6 +57,7 @@ const api: VcvfxApi = {
   accountStatus: () => ipcRenderer.invoke('account:status'),
   requestSignInCode: (email) => ipcRenderer.invoke('account:request-code', email),
   verifySignInCode: (email, code) => ipcRenderer.invoke('account:verify-code', { email, code }),
+  signInWithPassword: (email, password) => ipcRenderer.invoke('account:sign-in-password', { email, password }),
   signOut: () => ipcRenderer.invoke('account:sign-out'),
   licenceStanding: (recheck) => ipcRenderer.invoke('licence:standing', recheck),
   activateLicence: () => ipcRenderer.invoke('licence:activate'),
