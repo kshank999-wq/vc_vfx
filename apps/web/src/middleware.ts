@@ -135,7 +135,9 @@ const previewResponse = async (request: NextRequest, route: NonNullable<ReturnTy
     const { data } = await supabase.auth.getUser();
     if (!data.user) return signIn();
     const { data: profile } = await supabase.from('profiles').select('is_admin').eq('id', data.user.id).maybeSingle();
-    if (!profile?.is_admin) return signIn();
+    // Signed in but not an admin: say so, rather than showing the sign-in
+    // form again as if nothing had happened.
+    if (!profile?.is_admin) return NextResponse.redirect(new URL(`${previewSignIn}&error=not_admin`, request.url));
   } catch {
     // A Supabase hiccup costs a refresh, never opens the gate.
     return signIn();

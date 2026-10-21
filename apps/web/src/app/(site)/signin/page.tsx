@@ -26,6 +26,7 @@ function SignInForm() {
   const params = useSearchParams();
   const next = safeNextPath(params.get('next'));
   const failed = params.get('error') === 'link_expired';
+  const notAdmin = params.get('error') === 'not_admin';
 
   const [way, setWay] = useState<Way>('password');
   const [email, setEmail] = useState('');
@@ -219,6 +220,13 @@ function SignInForm() {
           {error ? (
             <p className="error small" role="alert" style={{ marginTop: 16 }}>
               {error}
+            </p>
+          ) : null}
+
+          {notAdmin ? (
+            <p className="notice" role="status" style={{ marginTop: 18 }}>
+              You are signed in, but that page is for VC VFX administrators only. If this account should have access,
+              ask an administrator to grant it.
             </p>
           ) : null}
 
