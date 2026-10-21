@@ -49,7 +49,7 @@ async function openRoto() {
   fireEvent.click(screen.getByRole('button', { name: 'Open sample project' }));
   const table = screen.getByRole('table', { name: 'Shot queue' });
   fireEvent.click(within(table).getAllByRole('row')[1]!);
-  fireEvent.click(screen.getByRole('button', { name: 'Paint roto…' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Open Roto' }));
   await act(async () => undefined);
   await waitFor(() => expect(screen.getByLabelText('Paint on the frame')).toBeTruthy());
   const canvas = screen.getByLabelText('Paint on the frame') as HTMLCanvasElement;
@@ -65,8 +65,10 @@ function paint(canvas: HTMLCanvasElement, points: [number, number][]) {
 }
 
 describe('the roto workspace', () => {
-  it('opens from the roto task with both engines, SAM 2 the desktop app’s', async () => {
+  it('opens from the roto task in the Roto tab with both engines, SAM 2 the desktop app’s', async () => {
     await openRoto();
+    expect(screen.getByRole('tab', { name: 'Roto' }).getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByRole('button', { name: /Paint the subject/ }).getAttribute('aria-expanded')).toBe('true');
     expect((screen.getByRole('radio', { name: /Track \(classical\)/ }) as HTMLInputElement).checked).toBe(true);
     expect((screen.getByRole('radio', { name: /SAM 2\.1/ }) as HTMLInputElement).disabled).toBe(true);
     expect((screen.getByRole('button', { name: /Download model/ }) as HTMLButtonElement).disabled).toBe(true);
@@ -98,8 +100,11 @@ describe('the roto workspace', () => {
     const cells = screen.getAllByRole('button', { name: /^Frame \d+$/ });
     expect(cells).toHaveLength(120);
     expect(cells.every((c) => (c as HTMLElement).style.background !== '')).toBe(true);
+    // The steps move on: painted and propagated are ticked.
+    expect(document.querySelector('[data-step="paint"]')?.classList.contains('step-done')).toBe(true);
+    expect(document.querySelector('[data-step="propagate"]')?.classList.contains('step-done')).toBe(true);
     // Processing finishing puts roto up for review; nothing approves it.
-    fireEvent.click(screen.getByRole('button', { name: '← Queue' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Shots' }));
     const task = screen.getAllByText('Paint-to-roto').find((el) => el.classList.contains('task-name'))!.closest('li')!;
     expect(within(task).getByText('Needs Review')).toBeTruthy();
     // Approval needs the exported mattes (the desktop app writes them).
@@ -122,8 +127,11 @@ describe('the roto workspace', () => {
       [162, 120],
       [162, 180],
     ]);
-    expect(screen.getByText(/Refine · Right arm/)).toBeTruthy();
-    expect((screen.getByRole('button', { name: 'Flag' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(document.querySelector('.info-line .part-chip')?.textContent).toBe('Right arm');
+    // Reviewing waits for a propagated matte: there is nothing to flag yet.
+    fireEvent.click(screen.getByRole('button', { name: /Review problem frames/ }));
+    expect(screen.getByText('Propagate first (step 2).')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Flag' })).toBeNull();
     // [ and ] change the brush.
     const before = (screen.getByLabelText('Brush size') as HTMLInputElement).value;
     fireEvent.keyDown(window, { key: ']' });
@@ -140,9 +148,10 @@ describe('the roto workspace', () => {
     fireEvent.doubleClick(within(table).getAllByRole('row')[2]!);
     await act(async () => undefined);
     fireEvent.click(screen.getByRole('tab', { name: 'Roto' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Add Paint-to-roto' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add Roto to this shot' }));
     await act(async () => undefined);
-    expect(screen.queryByRole('button', { name: 'Add Paint-to-roto' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Add Roto to this shot' })).toBeNull();
+    expect(screen.getByLabelText('Paint on the frame')).toBeTruthy();
     expect(serializeProject(createProject(parsed.handoff, 'sample', 't', new Date()))).toBeTruthy();
   });
 });

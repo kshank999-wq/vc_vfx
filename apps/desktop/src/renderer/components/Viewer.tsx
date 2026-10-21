@@ -1,20 +1,18 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { contactSheetFrames, encodingLabel, handoffShot, serializeProject, shotState, versionTag, type Project, type ViewTransformId } from '@vcvfx/domain';
 import type { ViewerFrame, ViewerLayer, ViewerSources, VcvfxApi } from '../../shared/bridge';
 import { clampFrame, viewerTimeline } from '../../shared/viewer';
-import { RotoWorkspace, type RotoWorkspaceProps } from './RotoWorkspace';
-import { TrackWorkspace, type TrackWorkspaceProps } from './TrackWorkspace';
-import { AiAssistant } from './AiAssistant';
 
 /**
- * The frame viewer and contact sheet (master spec §5.2, §15.4; addendum 03).
+ * The frame viewer and contact sheet (master spec §5.2, §15.4; addendum 03),
+ * the picture in the middle of the Plates, Key and Deliver tabs (addendum 08).
  *
  * Shows a shot's source or its plates, frame by frame in delivered numbering
  * with the clip's timecode, an A/B wipe or toggle between source and plate,
  * and a contact sheet of representative frames. The View menu is a display
  * transform for looking only; it never touches a plate. Frames come from
  * main (`viewerFrame`), which extracts and caches them; this component only
- * asks, shows and prefetches.
+ * asks, shows and prefetches. The frame is the App's, shared by the tabs.
  */
 
 export interface ViewerProps {
@@ -23,13 +21,15 @@ export interface ViewerProps {
   shotId: string;
   projectKey: string;
   canEdit: boolean;
-  onClose(): void;
+  frame: number;
+  onFrame(frame: number): void;
+  /** Esc: back to the Shots tab. */
+  onClose?(): void;
   onToggleMark(frame: number, viewing: string, note: string): void;
-  /** View frames, paint roto (addendum 04), or track (addendum 06). */
-  mode: ViewerMode;
-  onMode(mode: ViewerMode): void;
-  roto: Pick<RotoWorkspaceProps, 'busy' | 'actor' | 'onRoto' | 'runJob' | 'notify' | 'onAddRotoTask'>;
-  track: Pick<TrackWorkspaceProps, 'busy' | 'actor' | 'onTrack' | 'runJob' | 'notify' | 'onAddTask'>;
+  /** Hide "Mark for correction" (it belongs to reviewing plates). */
+  noMarks?: boolean;
+  /** Extra controls at the end of the viewer's toolbar. */
+  toolbarExtra?: ReactNode;
 }
 
 type Compare = 'off' | 'wipe' | 'toggle';
@@ -39,10 +39,7 @@ const SIZES = [480, 960, 1280, 1920];
 const TILE_WIDTH = 320;
 const sizeFor = (px: number) => SIZES.find((s) => s >= px) ?? 1920;
 
-export type ViewerMode = 'view' | 'roto' | 'track';
-
-export function Viewer({ api, project, shotId, projectKey, canEdit, onClose, onToggleMark, mode, onMode, roto, track }: ViewerProps) {
-  const isView = mode === 'view';
+export function Viewer({ api, project, shotId, projectKey, canEdit, frame, onFrame, onClose, onToggleMark, noMarks, toolbarExtra }: ViewerProps) {
   const shot = handoffShot(project, shotId);
   const state = shotState(project, shotId);
   const timeline = useMemo(() => viewerTimeline(project, shotId), [project, shotId]);
@@ -59,21 +56,20 @@ export function Viewer({ api, project, shotId, projectKey, canEdit, onClose, onT
   const [showB, setShowB] = useState(false);
   const [wipe, setWipe] = useState(0.5);
   const [view, setView] = useState<ViewTransformId>('rec709');
-  const [frame, setFrame] = useState<number>(timeline?.editorialIn ?? timeline?.first ?? 0);
   const [playing, setPlaying] = useState(false);
-  const [sheetOpen, setSheetOpen] = useState(true);
+  const [sheetOpen, setSheetOpen] = useState(false);
   const [note, setNote] = useState('');
   const [stageWidth, setStageWidth] = useState(1280);
   const [, setTick] = useState(0);
   const loaded = useRef(new Map<string, Loaded>());
   const pending = useRef(new Set<string>());
   const stageRef = useRef<HTMLDivElement | null>(null);
+  const setFrame = onFrame;
 
   // A new shot starts afresh.
   useEffect(() => {
     loaded.current = new Map();
     pending.current = new Set();
-    setFrame(timeline?.editorialIn ?? timeline?.first ?? 0);
     setPlaying(false);
     setCompare('off');
     setLayer('source');
@@ -138,10 +134,10 @@ export function Viewer({ api, project, shotId, projectKey, canEdit, onClose, onT
   const primary: ViewerLayer = comparing ? (compare === 'toggle' && showB ? 'plates' : 'source') : layer;
 
   // The frame on screen, and its neighbours fetched ahead.
-  const current = isView && available(primary) ? want(primary, version, frame, mainWidth, false) : undefined;
-  const second = isView && comparing && compare === 'wipe' ? want('plates', version, frame, mainWidth, false) : undefined;
+  const current = available(primary) ? want(primary, version, frame, mainWidth, false) : undefined;
+  const second = comparing && compare === 'wipe' ? want('plates', version, frame, mainWidth, false) : undefined;
   useEffect(() => {
-    if (!timeline || playing || !isView) return;
+    if (!timeline || playing) return;
     const layers: ViewerLayer[] = comparing ? ['source', 'plates'] : [primary];
     for (const d of [1, -1, 2, 10, -10]) {
       const f = clampFrame(timeline, frame + d);
@@ -172,22 +168,23 @@ export function Viewer({ api, project, shotId, projectKey, canEdit, onClose, onT
     return () => clearInterval(timer);
   });
 
-  const go = useCallback((f: number) => timeline && setFrame(clampFrame(timeline, f)), [timeline]);
+  const go = useCallback((f: number) => timeline && setFrame(clampFrame(timeline, f)), [timeline, setFrame]);
 
   // Keyboard: ←/→ one frame, Shift ten, Space play, Esc back to the queue.
   const keys = useRef<(e: KeyboardEvent) => void>(() => undefined);
   keys.current = (e: KeyboardEvent) => {
     const target = e.target as HTMLElement | null;
     if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName) && e.key !== 'Escape') return;
-    if (document.querySelector('.modal')) return;
+    if (document.querySelector('.modal') || e.metaKey || e.ctrlKey || e.altKey) return;
     if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
       e.preventDefault();
       setPlaying(false);
       go(frame + (e.key === 'ArrowRight' ? 1 : -1) * (e.shiftKey ? 10 : 1));
-    } else if (e.key === ' ' && isView) {
+    } else if (e.key === ' ') {
       e.preventDefault();
       setPlaying((p) => !p);
     } else if (e.key === 'Escape') {
+      if (!onClose) return;
       e.preventDefault();
       onClose();
     } else if ((e.key === 'b' || e.key === 'B') && compare === 'toggle') {
@@ -211,7 +208,6 @@ export function Viewer({ api, project, shotId, projectKey, canEdit, onClose, onT
   const name = state.vfxShotId ?? shot.shotId;
   const marks = state.reviewMarks;
   const markHere = marks.find((m) => m.frame === frame);
-  const hasRoto = state.tasks.some((t) => t.kind === 'roto');
   const plateLabel = version !== null ? `Plates ${versionTag(version)}` : 'Plates';
   const viewing = primary === 'plates' ? plateLabel.toLowerCase() : 'source';
   const encodingOf = (l: ViewerLayer) => (l === 'source' ? sources?.source.encoding : plateVersions.find((p) => p.version === version)?.encoding) ?? null;
@@ -223,33 +219,9 @@ export function Viewer({ api, project, shotId, projectKey, canEdit, onClose, onT
 
   return (
     <section className="viewer" aria-label={`Viewer — ${name}`}>
-      <header className="viewer-bar">
-        <button type="button" className="viewer-back" onClick={onClose} title="Back to the queue (Esc)">
-          ← Queue
-        </button>
-        <h2 className="viewer-title">{name}</h2>
-        <span className="muted viewer-sub">
-          Scene {shot.scene}
-          {shot.take ? ` · Take ${shot.take}` : ''}
-          {shot.clip ? ` · ${shot.clip}` : ''}
-        </span>
-        {sources?.sample && isView ? <span className="tag" title="The browser preview has no media; these frames stand in for the shot’s">sample frames</span> : null}
-        <div className="seg viewer-mode" role="tablist" aria-label="Viewer mode">
-          <button type="button" role="tab" className={isView ? 'on' : undefined} aria-selected={isView} onClick={() => onMode('view')}>
-            View
-          </button>
-          <button type="button" role="tab" className={mode === 'roto' ? 'on' : undefined} aria-selected={mode === 'roto'} onClick={() => onMode('roto')} title={hasRoto ? 'Paint-to-roto' : 'Paint-to-roto (adds the task)'}>
-            Roto
-          </button>
-          <button type="button" role="tab" className={mode === 'track' ? 'on' : undefined} aria-selected={mode === 'track'} onClick={() => onMode('track')} title="Camera solve and planar / point tracking">
-            Track
-          </button>
-        </div>
-        <div className="spacer" />
-        {isView ? (
-          <>
+      <header className="viewer-toolbar">
         <label className="field-inline">
-          <span className="muted">Show</span>
+          <span>Show</span>
           <select
             aria-label="Show"
             value={comparing ? 'compare' : layer === 'plates' && version !== null ? `plates:${version}` : 'source'}
@@ -264,7 +236,7 @@ export function Viewer({ api, project, shotId, projectKey, canEdit, onClose, onT
             }}
           >
             <option value="source" disabled={!sources?.source.available}>
-              Source
+              Source (camera)
             </option>
             {plateVersions.map((p) => (
               <option key={p.version} value={`plates:${p.version}`}>
@@ -290,25 +262,14 @@ export function Viewer({ api, project, shotId, projectKey, canEdit, onClose, onT
           ))}
         </div>
         <label className="field-inline">
-          <span className="muted">View</span>
-          <select aria-label="View" value={view} onChange={(e) => setView(e.target.value as ViewTransformId)}>
+          <span>View</span>
+          <select aria-label="View" value={view} onChange={(e) => setView(e.target.value as ViewTransformId)} title="For looking only: never applied to plates">
             <option value="rec709">Rec.709 (approx.)</option>
             <option value="raw">Raw values</option>
           </select>
         </label>
-          </>
-        ) : null}
+        {toolbarExtra}
       </header>
-
-      {mode === 'track' ? (
-        <>
-          <TrackWorkspace api={api} project={project} shotId={shotId} projectKey={projectKey} canEdit={canEdit} frame={frame} onFrame={(f) => (timeline ? setFrame(clampFrame(timeline, f)) : setFrame(f))} {...track} />
-          <AiAssistant api={api} project={project} shotId={shotId} projectKey={projectKey} canEdit={canEdit} actor={track.actor} onTrack={track.onTrack} notify={track.notify} onFrame={(f) => (timeline ? setFrame(clampFrame(timeline, f)) : setFrame(f))} />
-        </>
-      ) : !isView ? (
-        <RotoWorkspace api={api} project={project} shotId={shotId} projectKey={projectKey} canEdit={canEdit} frame={frame} onFrame={(f) => (timeline ? setFrame(clampFrame(timeline, f)) : setFrame(f))} {...roto} />
-      ) : (
-        <>
 
       <div className="viewer-main">
         <div
@@ -319,7 +280,7 @@ export function Viewer({ api, project, shotId, projectKey, canEdit, onClose, onT
           data-frame={frame}
         >
           {sourcesError ? <p className="viewer-message">{sourcesError}</p> : null}
-          {!timeline ? <p className="viewer-message">The frame range is unknown. Read it from the clip first (Sequence plan › Read from clip).</p> : null}
+          {!timeline ? <p className="viewer-message">The frame range is unknown. Read it from the clip first (step 1, Read from clip).</p> : null}
           {timeline && unavailable ? <p className="viewer-message">{unavailable}</p> : null}
           {current && 'error' in current ? <p className="viewer-message error">{current.error}</p> : null}
           {img(current, `${primary === 'source' ? 'Source' : plateLabel} frame ${frame}`)}
@@ -334,56 +295,97 @@ export function Viewer({ api, project, shotId, projectKey, canEdit, onClose, onT
             </>
           ) : null}
           {comparing && compare === 'toggle' ? <span className="wipe-tag a">{showB ? `B · ${plateLabel}` : 'A · Source'} — press B</span> : null}
+          {!comparing && current && 'url' in current ? <span className="wipe-tag a">{primary === 'source' ? 'Source' : plateLabel}</span> : null}
           {!current && timeline && !unavailable && !sourcesError ? <p className="viewer-message muted">Reading frame {frame}…</p> : null}
+          {sources?.sample ? (
+            <span className="stage-tag" title="The browser preview has no media; these frames stand in for the shot’s">
+              sample frames
+            </span>
+          ) : null}
         </div>
+
+        {sheetOpen ? (
+          <section className="contact-sheet" aria-label="Contact sheet">
+            <header>
+              <strong>Contact sheet</strong>
+              <span className="muted small">
+                {sheet.length} frames, first to last · {primary === 'source' ? 'source' : plateLabel}
+                {marks.length ? ` · ${marks.length} marked for correction` : ''}
+              </span>
+            </header>
+            {!available(primary) ? <p className="muted small sheet-empty">Nothing to show for this shot yet.</p> : null}
+            {available(primary) ? (
+              <ol className="tiles">
+                {sheet.map((f) => {
+                  const tile = available(primary) ? want(primary, version, f, TILE_WIDTH, false) : undefined;
+                  const marked = marks.some((m) => m.frame === f);
+                  return (
+                    <li key={f} className={[f === frame ? 'current' : '', marked ? 'marked' : ''].filter(Boolean).join(' ') || undefined}>
+                      <button type="button" onClick={() => go(f)} aria-label={`Frame ${f}`} title={timeline?.timecode(f) ?? undefined}>
+                        <span className="tile-img">{tile && 'url' in tile ? <img src={tile.url} alt="" draggable={false} /> : <span className="tile-wait">{tile && 'error' in tile ? '—' : '…'}</span>}</span>
+                        <span className="tile-label mono">
+                          {f}
+                          {marked ? <span className="tile-mark"> ●</span> : null}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ol>
+            ) : null}
+          </section>
+        ) : null}
 
         <div className="viewer-info">
           <span className="mono frame-no" aria-label="Frame">
             {frame}
           </span>
-          {timeline?.timecode(frame) ? <span className="mono muted">TC {timeline.timecode(frame)}</span> : null}
+          {timeline?.timecode(frame) ? <span className="mono muted tc">TC {timeline.timecode(frame)}</span> : null}
           {timeline && (frame < timeline.editorialIn || frame > timeline.editorialOut) ? <span className="tag">handle</span> : null}
-          <span className="muted small view-label" title="Viewing only: never applied to plates">
+          <span className="muted view-label" title="Viewing only: never applied to plates">
             {viewLabel ?? (view === 'raw' ? 'Raw values' : `${encodingLabel(encodingOf(primary))} → Rec.709 (approx.)`)} · viewing only
           </span>
-          <div className="spacer" />
-          <input className="mark-note" aria-label="Correction note" placeholder="Note (optional)" value={note} disabled={!canEdit || Boolean(markHere)} onChange={(e) => setNote(e.target.value)} />
-          <button
-            type="button"
-            className={markHere ? 'marked' : undefined}
-            aria-pressed={Boolean(markHere)}
-            disabled={!canEdit || state.stage !== 'prep'}
-            title={markHere ? `Marked by ${markHere.by}${markHere.note ? `: ${markHere.note}` : ''} — click to clear` : 'Add a correction note for this frame to the shot (logged)'}
-            onClick={() => {
-              onToggleMark(frame, viewing, markHere ? '' : note);
-              setNote('');
-            }}
-          >
-            {markHere ? '● Marked for correction' : 'Mark for correction'}
-          </button>
+          {noMarks ? null : (
+            <>
+              <input className="mark-note" aria-label="Correction note" placeholder="Note (optional)" value={note} disabled={!canEdit || Boolean(markHere)} onChange={(e) => setNote(e.target.value)} />
+              <button
+                type="button"
+                className={markHere ? 'marked' : undefined}
+                aria-pressed={Boolean(markHere)}
+                disabled={!canEdit || state.stage !== 'prep'}
+                title={markHere ? `Marked by ${markHere.by}${markHere.note ? `: ${markHere.note}` : ''} — click to clear` : 'Add a correction note for this frame to the shot (logged)'}
+                onClick={() => {
+                  onToggleMark(frame, viewing, markHere ? '' : note);
+                  setNote('');
+                }}
+              >
+                {markHere ? '● Marked for correction' : 'Mark for correction'}
+              </button>
+            </>
+          )}
         </div>
 
         {timeline ? (
           <div className="transport">
-            <button type="button" aria-label="First frame" onClick={() => go(timeline.first)}>
+            <button type="button" aria-label="First frame" title="First frame" onClick={() => go(timeline.first)}>
               ⏮
             </button>
-            <button type="button" aria-label="Back 10 frames" onClick={() => go(frame - 10)}>
+            <button type="button" aria-label="Back 10 frames" title="Back 10 frames (Shift+←)" onClick={() => go(frame - 10)}>
               −10
             </button>
-            <button type="button" aria-label="Back 1 frame" onClick={() => go(frame - 1)}>
+            <button type="button" aria-label="Back 1 frame" title="Back 1 frame (←)" onClick={() => go(frame - 1)}>
               −1
             </button>
-            <button type="button" className="play" aria-label={playing ? 'Pause' : 'Play'} onClick={() => setPlaying((p) => !p)}>
+            <button type="button" className="play" aria-label={playing ? 'Pause' : 'Play'} title="Play / pause (Space)" onClick={() => setPlaying((p) => !p)}>
               {playing ? '❚❚' : '▶'}
             </button>
-            <button type="button" aria-label="Forward 1 frame" onClick={() => go(frame + 1)}>
+            <button type="button" aria-label="Forward 1 frame" title="Forward 1 frame (→)" onClick={() => go(frame + 1)}>
               +1
             </button>
-            <button type="button" aria-label="Forward 10 frames" onClick={() => go(frame + 10)}>
+            <button type="button" aria-label="Forward 10 frames" title="Forward 10 frames (Shift+→)" onClick={() => go(frame + 10)}>
               +10
             </button>
-            <button type="button" aria-label="Last frame" onClick={() => go(timeline.last)}>
+            <button type="button" aria-label="Last frame" title="Last frame" onClick={() => go(timeline.last)}>
               ⏭
             </button>
             <div className="scrub">
@@ -409,46 +411,15 @@ export function Viewer({ api, project, shotId, projectKey, canEdit, onClose, onT
                 }}
               />
             </div>
-            <span className="mono muted small">
+            <span className="mono muted range">
               {timeline.first}–{timeline.last} · {timeline.frameRate} fps
             </span>
+            <button type="button" className={sheetOpen ? 'on' : undefined} aria-pressed={sheetOpen} onClick={() => setSheetOpen((o) => !o)} title="First and last frames and twelve between">
+              Contact sheet
+            </button>
           </div>
         ) : null}
       </div>
-
-      <section className={`contact-sheet${sheetOpen ? '' : ' closed'}`} aria-label="Contact sheet">
-        <header>
-          <button type="button" className="link" onClick={() => setSheetOpen((o) => !o)} aria-expanded={sheetOpen}>
-            {sheetOpen ? '▾' : '▸'} Contact sheet
-          </button>
-          <span className="muted small">
-            {sheet.length} frames, first to last · {primary === 'source' ? 'source' : plateLabel}
-            {marks.length ? ` · ${marks.length} marked for correction` : ''}
-          </span>
-        </header>
-        {sheetOpen && !available(primary) ? <p className="muted small sheet-empty">Nothing to show for this shot yet.</p> : null}
-        {sheetOpen && available(primary) ? (
-          <ol className="tiles">
-            {sheet.map((f) => {
-              const tile = available(primary) ? want(primary, version, f, TILE_WIDTH, false) : undefined;
-              const marked = marks.some((m) => m.frame === f);
-              return (
-                <li key={f} className={[f === frame ? 'current' : '', marked ? 'marked' : ''].filter(Boolean).join(' ') || undefined}>
-                  <button type="button" onClick={() => go(f)} aria-label={`Frame ${f}`} title={timeline?.timecode(f) ?? undefined}>
-                    <span className="tile-img">{tile && 'url' in tile ? <img src={tile.url} alt="" draggable={false} /> : <span className="tile-wait">{tile && 'error' in tile ? '—' : '…'}</span>}</span>
-                    <span className="tile-label mono">
-                      {f}
-                      {marked ? <span className="tile-mark"> ●</span> : null}
-                    </span>
-                  </button>
-                </li>
-              );
-            })}
-          </ol>
-        ) : null}
-      </section>
-        </>
-      )}
     </section>
   );
 }
