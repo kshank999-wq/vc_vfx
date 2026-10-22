@@ -10,6 +10,11 @@ import { distort, undistort, type Intrinsics } from './geometry';
  *  - redistort map: output = the distorted image; it samples the undistorted
  *    render. Apply to CG to put the lens back.
  *
+ * In the plate's own (squeezed) pixel space: same stored resolution, u
+ * across the stored width. For a non-square plate the distortion is computed
+ * on de-squeezed (physical) coordinates and mapped back, so the map applies
+ * to the squeezed plate as delivered (addendum 17).
+ *
  * Same resolution as the plate (no overscan): undistorting a barrel-distorted
  * plate pushes its corners out of frame. Written as uncompressed 32-bit float
  * scanline OpenEXR by our own writer (R, G, B channels; B = 0).
@@ -23,12 +28,13 @@ export interface STMap {
 }
 
 export function undistortMap(k: Intrinsics, width: number, height: number): STMap {
+  const a = k.a ?? 1;
   const uv = new Float32Array(width * height * 2);
   for (let y = 0; y < height; y += 1)
     for (let x = 0; x < width; x += 1) {
       // This output pixel is undistorted; find where it lies on the distorted plate.
-      const [xd, yd] = distort(k, (x - k.cx) / k.f, (y - k.cy) / k.f);
-      const px = k.f * xd + k.cx;
+      const [xd, yd] = distort(k, ((x - k.cx) * a) / k.f, (y - k.cy) / k.f);
+      const px = (k.f * xd) / a + k.cx;
       const py = k.f * yd + k.cy;
       const i = 2 * (y * width + x);
       uv[i] = (px + 0.5) / width;
@@ -38,11 +44,12 @@ export function undistortMap(k: Intrinsics, width: number, height: number): STMa
 }
 
 export function redistortMap(k: Intrinsics, width: number, height: number): STMap {
+  const a = k.a ?? 1;
   const uv = new Float32Array(width * height * 2);
   for (let y = 0; y < height; y += 1)
     for (let x = 0; x < width; x += 1) {
-      const [xu, yu] = undistort(k, (x - k.cx) / k.f, (y - k.cy) / k.f);
-      const px = k.f * xu + k.cx;
+      const [xu, yu] = undistort(k, ((x - k.cx) * a) / k.f, (y - k.cy) / k.f);
+      const px = (k.f * xu) / a + k.cx;
       const py = k.f * yu + k.cy;
       const i = 2 * (y * width + x);
       uv[i] = (px + 0.5) / width;

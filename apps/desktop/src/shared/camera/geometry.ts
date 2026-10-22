@@ -9,14 +9,18 @@ import { cross, det3, mul3, mulv3, nearestRotation, norm3, t3 } from './linalg';
  *    ((W − 1)/2, (H − 1)/2).
  *  - Camera ("computer vision"): x right, y down, z forward (OpenCV). A world
  *    point X is seen at Xc = R·X + t; the camera centre is C = −Rᵀt.
- *  - Lens: pinhole with one focal length f in pixels (square pixels; an
- *    anamorphic squeeze is recorded for later, not modelled), and
- *    Brown–Conrady distortion on normalised coordinates (x, y) = (Xc/Zc, Yc/Zc):
+ *  - Lens: pinhole with a focal length f in pixels, a pixel aspect a (the
+ *    stored pixel's width over its height: 1 square, 2 for a 2× anamorphic
+ *    plate kept squeezed; addendum 17), and Brown–Conrady distortion on
+ *    normalised coordinates (x, y) = (Xc/Zc, Yc/Zc):
  *      r² = x² + y²,  radial = 1 + k1 r² + k2 r⁴ + k3 r⁶
  *      xd = x·radial + 2 p1 x y + p2 (r² + 2x²)
  *      yd = y·radial + p1 (r² + 2y²) + 2 p2 x y
- *      u = f·xd + cx,  v = f·yd + cy
- *    — OpenCV's model. Exports carry it as numbers and as STMaps.
+ *      u = (f / a)·xd + cx,  v = f·yd + cy
+ *    — OpenCV's model with fx = f / a, fy = f. f is the vertical focal in
+ *    plate pixels, which is the focal in de-squeezed (physical, square)
+ *    pixels; the distortion acts on physical coordinates, the 3DEqualizer /
+ *    Nuke anamorphic convention. Exports carry it as numbers and as STMaps.
  */
 
 export interface Intrinsics {
@@ -29,7 +33,12 @@ export interface Intrinsics {
   k3: number;
   p1: number;
   p2: number;
+  /** Pixel aspect (stored pixel width / height); absent = 1. fx = f / a. */
+  a?: number;
 }
+
+/** The intrinsics' pixel aspect (1 when not set). */
+export const aspectOf = (k: Pick<Intrinsics, 'a'>): number => k.a ?? 1;
 
 export const pinhole = (f: number, width: number, height: number): Intrinsics => ({ f, cx: (width - 1) / 2, cy: (height - 1) / 2, k1: 0, k2: 0, k3: 0, p1: 0, p2: 0 });
 
@@ -71,13 +80,13 @@ export function undistort(k: Intrinsics, xd: number, yd: number): [number, numbe
 
 /** Pixel → undistorted normalised coordinates. */
 export function pixelToRay(k: Intrinsics, u: number, v: number): [number, number] {
-  return undistort(k, (u - k.cx) / k.f, (v - k.cy) / k.f);
+  return undistort(k, ((u - k.cx) * aspectOf(k)) / k.f, (v - k.cy) / k.f);
 }
 
 /** Undistorted normalised coordinates → pixel. */
 export function rayToPixel(k: Intrinsics, x: number, y: number): [number, number] {
   const [xd, yd] = distort(k, x, y);
-  return [k.f * xd + k.cx, k.f * yd + k.cy];
+  return [(k.f * xd) / aspectOf(k) + k.cx, k.f * yd + k.cy];
 }
 
 /** Project a world point; null behind the camera. */

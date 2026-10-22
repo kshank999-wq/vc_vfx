@@ -24,7 +24,8 @@ import { IsolateDocumentsSchema } from './isolate-schema.js';
 import { TextureDocumentSchema } from './texture-schema.js';
 import { CompDocumentSchema } from './comp-schema.js';
 import { LightingDocumentSchema } from './lighting-schema.js';
-import { CameraBodySchema, LensProfileSchema } from './camera-db.js';
+import { CameraBodySchema, LensProfileSchema, findCamera, matchCamera } from './camera-db.js';
+import { PixelAspectOverrideSchema, formatPixelAspect, handoffPixelAspect, modePixelAspect, pixelAspectLabel, resolvePixelAspect, type PixelAspectDecision } from './pixel-aspect.js';
 
 /**
  * A VCVFX project: the handoff it was built from plus VCVFX's own working
@@ -52,11 +53,15 @@ export const PROJECT_FORMAT = 'vcvfx-project';
  * 7: shots carry a texture-extraction document (`texture`; addendum 12).
  * 8: shots carry a prep-compositor document (`comp`; addendum 13).
  * 9: shots carry a lighting-and-lens analysis document (`lighting`; addendum 14).
+ * 10: pixel aspect (addendum 17): a shot may carry the artist's pixel-aspect
+ *    override (`pixelAspect`), the probe records the clip's sample aspect
+ *    (`probe.sampleAspect`), and a solve records the pixel aspect it was
+ *    solved at (`intrinsics.pixelAspect`, 1 for older solves).
  * An older project opens (the new fields empty) and is saved as the current
  * version; an older VC VFX refuses a newer project rather than silently
  * dropping what it does not know about.
  */
-export const PROJECT_VERSION = 9;
+export const PROJECT_VERSION = 10;
 export const PROJECT_EXTENSION = 'vcvfx';
 
 export const ApprovalSchema = z.object({ by: z.string().min(1), at: z.string() });
@@ -91,6 +96,8 @@ export const ProbedMediaSchema = z.object({
   colorRange: z.string().optional(),
   colorTransfer: z.string().optional(),
   colorPrimaries: z.string().optional(),
+  /** The file's own sample (pixel) aspect, when it states one other than unknown: QuickTime pasp, MXF, PNG pHYs, DPX/EXR header. */
+  sampleAspect: z.number().min(0.25).max(4).optional(),
   probedAt: z.string(),
 });
 export type ProbedMedia = z.infer<typeof ProbedMediaSchema>;
@@ -125,12 +132,14 @@ export const PlateRecordSchema = z.object({
   firstFrame: z.number().int().nonnegative(),
   lastFrame: z.number().int().nonnegative(),
   color: PlateColorRecordSchema,
+  /** The pixel aspect written into the plates' headers (never resampled; addendum 17). 1 for plates written before format 10. */
+  pixelAspect: z.number().positive().default(1),
   notes: z.array(z.string()).default([]),
   writtenAt: z.string(),
   by: z.string(),
 });
 export type PlateRecord = z.infer<typeof PlateRecordSchema>;
-export type PlateRecordInput = Omit<PlateRecord, 'writtenAt' | 'by'>;
+export type PlateRecordInput = Omit<z.input<typeof PlateRecordSchema>, 'writtenAt' | 'by'>;
 
 /** A frame marked in review as needing correction (groundwork for roto review, §5.2). */
 export const ReviewMarkSchema = z.object({
@@ -184,6 +193,8 @@ export const ShotStateSchema = z.object({
   comp: CompDocumentSchema.nullable().default(null),
   /** Lighting and lens analysis (§13). Null until started. The estimate, the artist's edits and the exports' records; pictures are files, never here. */
   lighting: LightingDocumentSchema.nullable().default(null),
+  /** The artist's pixel aspect for the shot, over every other source (addendum 17). Null: decided from the handoff, camera and clip. */
+  pixelAspect: PixelAspectOverrideSchema.nullable().default(null),
 });
 export type ShotState = z.infer<typeof ShotStateSchema>;
 
@@ -252,6 +263,7 @@ export function createProject(handoff: Handoff, handoffPath: string, actor: stri
     texture: null,
     comp: null,
     lighting: null,
+    pixelAspect: null,
   }));
   return log(
     { format: PROJECT_FORMAT, version: PROJECT_VERSION, createdAt: at, updatedAt: at, handoffPath, handoff, plateColorDefault: 'acescg', shots, lensProfiles: [], customCameras: [], log: [] },
@@ -547,11 +559,72 @@ export function setProbedMedia(p: Project, shotId: string, media: ProbedMediaInp
     m.resolution ? `${m.resolution.width}×${m.resolution.height}` : null,
     m.codec ?? null,
     m.pixelFormat ?? null,
+    m.sampleAspect && m.sampleAspect !== 1 ? `pixel aspect ${formatPixelAspect(m.sampleAspect)}` : null,
     m.colorSpace || m.colorTransfer || m.colorPrimaries ? `tags ${[m.colorSpace, m.colorRange, m.colorTransfer, m.colorPrimaries].filter(Boolean).join('/')}` : null,
   ]
     .filter(Boolean)
     .join(', ');
   return chain(r, (proj) => log(proj, { at, actor, shotId, action: 'source.probed', detail: `${m.file}: ${detail}` }));
+}
+
+// ---------------------------------------------------------------------------
+// Pixel aspect (addendum 17)
+// ---------------------------------------------------------------------------
+
+/**
+ * The shot's pixel aspect and where it came from: the artist's override, the
+ * handoff, the camera database (the camera chosen in Camera Track, else the
+ * handoff's camera text matched with confidence), the clip's metadata, or
+ * square. See `resolvePixelAspect`.
+ */
+export function shotPixelAspect(p: Project, shotId: string): PixelAspectDecision {
+  const shot = handoffShot(p, shotId);
+  const state = shotState(p, shotId);
+  if (!shot || !state) throw new Error(`No shot ${shotId}`);
+  const resolution = shot.resolution ?? state.probe?.resolution ?? null;
+  let camera: { value: number; detail: string } | null = null;
+  const sel = state.camtrack?.camera;
+  const body = sel?.cameraId ? findCamera(sel.cameraId, p.customCameras) : undefined;
+  const mode = body && sel?.modeId ? body.modes.find((m) => m.id === sel.modeId) : undefined;
+  if (mode) camera = { value: modePixelAspect(mode), detail: `${body!.make} ${body!.model} · ${mode.name}${mode.anamorphicSqueeze !== 1 ? ` (${mode.anamorphicSqueeze}× lens, ${mode.px.width} × ${mode.px.height})` : ''}, chosen in Camera Track` };
+  else if (!sel) {
+    const c = shot.camera;
+    const match = matchCamera({ body: c.body, sensorMode: c.sensorMode, filmBackMm: c.filmBackMm, resolution: resolution ?? undefined }, p.customCameras);
+    if (match?.confident && match.mode.anamorphicSqueeze !== 1) camera = { value: modePixelAspect(match.mode), detail: `${match.camera.make} ${match.camera.model} · ${match.mode.name} (${match.mode.anamorphicSqueeze}× lens, ${match.mode.px.width} × ${match.mode.px.height})` };
+  }
+  // A camera-track lens squeeze set by hand or from a lens profile counts with the camera.
+  const lensSqueeze = state.camtrack?.lens.squeeze ?? 1;
+  if (!camera && lensSqueeze !== 1) camera = { value: lensSqueeze, detail: `${formatPixelAspect(lensSqueeze)}× lens squeeze in Camera Track` };
+  const clip = state.probe?.sampleAspect ? { value: state.probe.sampleAspect, detail: `${state.probe.file} says ${formatPixelAspect(state.probe.sampleAspect)}` } : null;
+  return resolvePixelAspect({ override: state.pixelAspect, handoff: handoffPixelAspect({ ...shot, resolution: resolution ?? undefined }), camera, clip, resolution });
+}
+
+/** The shot's pixel aspect as a number (1 for square pixels). */
+export function pixelAspectOf(p: Project, shotId: string): number {
+  return shotPixelAspect(p, shotId).value;
+}
+
+/**
+ * Set the artist's pixel aspect for a shot, or clear it (null) to follow the
+ * handoff, camera and clip again. Logged. Refused once the shot has left
+ * prep. Plates are never resampled: work already exported keeps the aspect it
+ * was made at (each record says which), and the next solve, rectification or
+ * export uses the new one.
+ */
+export function setShotPixelAspect(p: Project, shotId: string, change: { value: number | null; note?: string }, actor: string, now: Date): Result {
+  const at = now.toISOString();
+  if (change.value !== null && !(Number.isFinite(change.value) && change.value >= 0.25 && change.value <= 4)) return { ok: false, reason: 'A pixel aspect is a number from 0.25 to 4 (2 for a 2× anamorphic, 1.5 for DVCPRO HD 1080)' };
+  const before = shotState(p, shotId) ? shotPixelAspect(p, shotId) : null;
+  const r = updateShot(p, shotId, (s) => {
+    if (s.stage !== 'prep') return `${shotId} is ${s.stage}; reopen it before changing its pixel aspect`;
+    if (change.value === null) return s.pixelAspect === null ? s : { ...s, pixelAspect: null };
+    if (s.pixelAspect && s.pixelAspect.value === change.value && s.pixelAspect.note === (change.note ?? '')) return s;
+    return { ...s, pixelAspect: { value: change.value, note: change.note?.trim() ?? '', by: actor, at } };
+  });
+  if (!r.ok) return r;
+  if (r.project === p || shotState(r.project, shotId) === shotState(p, shotId)) return { ok: true, project: p };
+  const after = shotPixelAspect(r.project, shotId);
+  return { ok: true, project: log(r.project, { at, actor, shotId, action: 'shot.pixel_aspect', detail: `${before ? pixelAspectLabel(before.value) : '?'} → ${after.summary}` }) };
 }
 
 // ---------------------------------------------------------------------------

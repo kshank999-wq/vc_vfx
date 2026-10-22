@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { PREP_TASK_KINDS } from './tasks.js';
 import { SHOT_STATUSES } from './status.js';
 import { fromVcditHandoff, isVcditDocument } from './vcdit.js';
+import { parsePixelAspect } from './pixel-aspect.js';
 
 /**
  * The VCDIT → VCVFX handoff specification (master spec §2, §18).
@@ -51,6 +52,9 @@ export const ChecksumRecordSchema = z
   .passthrough();
 export type ChecksumRecord = z.infer<typeof ChecksumRecordSchema>;
 
+/** A pixel aspect or squeeze as a handoff may write it: 1.5, "1.5", "3:2", "4/3". Read by `parsePixelAspect`. */
+const PixelAspectInputSchema = z.union([z.number().positive(), z.string().min(1)]);
+
 export const CameraSchema = z
   .object({
     body: z.string().optional(),
@@ -61,6 +65,15 @@ export const CameraSchema = z
     focalLengthMm: z.number().positive().optional(),
     focusDistance: z.string().optional(),
     iris: z.string().optional(),
+    /**
+     * The plate's pixel aspect (stored pixel width / height): 2 for a 2×
+     * anamorphic delivered squeezed, 1.5 for DVCPRO HD 1080. A number or
+     * "3:2". Addendum 17.
+     */
+    pixelAspect: PixelAspectInputSchema.optional(),
+    /** The lens's anamorphic squeeze (the plate's pixel aspect unless the raster was desqueezed in camera). */
+    anamorphicSqueeze: PixelAspectInputSchema.optional(),
+    lensSqueeze: PixelAspectInputSchema.optional(),
   })
   .passthrough();
 export type Camera = z.infer<typeof CameraSchema>;
@@ -138,6 +151,8 @@ export const HandoffShotSchema = z
     timecodeOut: TimecodeSchema.optional(),
     frameRate: z.number().positive(),
     resolution: z.object({ width: z.number().int().positive(), height: z.number().int().positive() }).optional(),
+    /** The plate's pixel aspect, when the handoff gives it for the shot rather than in `camera` (addendum 17). */
+    pixelAspect: PixelAspectInputSchema.optional(),
     camera: CameraSchema.default({}),
     color: ColorSchema.default({}),
     output: OutputSpecSchema.optional(),
@@ -241,6 +256,10 @@ export function parseHandoff(text: string): ParseHandoffResult {
     if (s.tasks.length === 0) warnings.push({ path: `shots[${i}].tasks`, message: `${s.shotId} has no prep tasks requested` });
     if (s.checksums.length === 0) warnings.push({ path: `shots[${i}].checksums`, message: `${s.shotId} carries no source checksums to verify against` });
     if (s.frameIn === undefined) warnings.push({ path: `shots[${i}].frameIn`, message: `${s.shotId} has no frame range; it is read from the clip with ffprobe` });
+    const cam = s.camera as Record<string, unknown>;
+    for (const [where, v] of [['camera.pixelAspect', cam['pixelAspect']], ['camera.anamorphicSqueeze', cam['anamorphicSqueeze']], ['camera.lensSqueeze', cam['lensSqueeze']], ['pixelAspect', s.pixelAspect]] as const) {
+      if (v !== undefined && parsePixelAspect(v) === null) warnings.push({ path: `shots[${i}].${where}`, message: `${s.shotId}: “${String(v)}” is not a pixel aspect (a number from 0.25 to 4, or a ratio like 3:2); it is ignored` });
+    }
   });
   return { ok: true, handoff, warnings };
 }

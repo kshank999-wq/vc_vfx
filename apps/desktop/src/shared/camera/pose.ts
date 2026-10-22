@@ -30,7 +30,7 @@ function proj(k: Intrinsics, R: ArrayLike<number>, t: ArrayLike<number>, X: Arra
   const radial = 1 + r2 * (k.k1 + r2 * (k.k2 + r2 * k.k3));
   const xd = xn * radial + 2 * k.p1 * xn * yn + k.p2 * (r2 + 2 * xn * xn);
   const yd = yn * radial + k.p1 * (r2 + 2 * yn * yn) + 2 * k.p2 * xn * yn;
-  return [k.f * xd + k.cx, k.f * yd + k.cy, Xc, Yc, Zc];
+  return [(k.f * xd) / (k.a ?? 1) + k.cx, k.f * yd + k.cy, Xc, Yc, Zc];
 }
 
 /** d(u, v)/d(Xc) (2×3, row-major) at camera point (X, Y, Z). */
@@ -45,7 +45,8 @@ function dProj(k: Intrinsics, X: number, Y: number, Z: number): number[] {
   const d12 = 2 * xn * yn * dr + 2 * k.p1 * xn + 2 * k.p2 * yn;
   const d22 = radial + 2 * yn * yn * dr + 6 * k.p1 * yn + 2 * k.p2 * xn;
   const f = k.f;
-  return [f * d11 * iz, f * d12 * iz, -f * (d11 * xn + d12 * yn) * iz, f * d12 * iz, f * d22 * iz, -f * (d12 * xn + d22 * yn) * iz];
+  const fx = f / (k.a ?? 1);
+  return [fx * d11 * iz, fx * d12 * iz, -fx * (d11 * xn + d12 * yn) * iz, f * d12 * iz, f * d22 * iz, -f * (d12 * xn + d22 * yn) * iz];
 }
 
 export interface RefinePoseResult extends Pose {

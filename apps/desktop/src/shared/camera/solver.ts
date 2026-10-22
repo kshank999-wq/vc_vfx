@@ -66,6 +66,13 @@ export interface SolveSettings {
   initial?: SolveResult;
   /** Force (true) or forbid (false) a nodal solve; undefined decides. */
   nodal?: boolean;
+  /**
+   * The plate's pixel aspect (stored pixel width / height; addendum 17). The
+   * solve models fx = f / a, fy = f with distortion on physical coordinates;
+   * `focal.px` and the result's `intrinsics.f` are the vertical focal in plate
+   * pixels (= the focal in de-squeezed pixels). Residuals stay in plate pixels.
+   */
+  pixelAspect?: number;
 }
 
 export interface SolvedFrame {
@@ -557,7 +564,13 @@ export async function solveTracks(td: TrackData, settings: SolveSettings, ctx: S
   const cy = settings.principal?.cy ?? (height - 1) / 2;
   const dist = settings.distortion ?? {};
   const focalGiven = settings.focal.px && settings.focal.px > 0 ? settings.focal.px : null;
-  const intr: Intrinsics = { f: focalGiven ?? 1.2 * width, cx, cy, k1: dist.k1 ?? 0, k2: dist.k2 ?? 0, k3: dist.k3 ?? 0, p1: dist.p1 ?? 0, p2: dist.p2 ?? 0 };
+  // Pixel aspect: the picture is `width × aspect` de-squeezed pixels wide; focal lengths are in those (square) pixels.
+  const aspect = settings.pixelAspect && settings.pixelAspect > 0 ? settings.pixelAspect : 1;
+  const shownWidth = width * aspect;
+  const intr: Intrinsics = { f: focalGiven ?? 1.2 * shownWidth, cx, cy, k1: dist.k1 ?? 0, k2: dist.k2 ?? 0, k3: dist.k3 ?? 0, p1: dist.p1 ?? 0, p2: dist.p2 ?? 0, ...(aspect !== 1 ? { a: aspect } : {}) };
+  // Image → de-squeezed coordinates (x × aspect), for the self-calibration that assumes square pixels.
+  const S = [aspect, 0, 0, 0, 1, 0, 0, 0, 1];
+  const Si = [1 / aspect, 0, 0, 0, 1, 0, 0, 0, 1];
   const warnings: string[] = [];
   const outlierPx = settings.outlierPx ?? 3;
   const loss = settings.loss ?? 'huber';
@@ -611,6 +624,8 @@ export async function solveTracks(td: TrackData, settings: SolveSettings, ctx: S
   if (settings.initial && settings.initial.ok) {
     const init = settings.initial;
     Object.assign(intr, init.intrinsics);
+    if (aspect !== 1) intr.a = aspect;
+    else delete intr.a;
     for (const fr of init.frames) {
       const fi = fr.frame - td.first;
       if (fi < 0 || fi >= F || !fr.solved) continue;
@@ -678,8 +693,8 @@ export async function solveTracks(td: TrackData, settings: SolveSettings, ctx: S
 
   // ----- focal length -----------------------------------------------------
   const searchFocal = (cost: (f: number) => number): number => {
-    const lo = Math.log(0.25 * width);
-    const hi = Math.log(8 * width);
+    const lo = Math.log(0.25 * shownWidth);
+    const hi = Math.log(8 * shownWidth);
     let best = lo;
     let bestC = Infinity;
     const N = 160;
@@ -704,14 +719,15 @@ export async function solveTracks(td: TrackData, settings: SolveSettings, ctx: S
   };
   if (!focalGiven) {
     if (!nodal) {
-      const Fs = parallaxPairs.map((p) => centreFundamental(p.F!, cx, cy));
+      // F in centred, de-squeezed coordinates: x' = S·x̃, so F' = S⁻ᵀ F̃ S⁻¹.
+      const Fs = parallaxPairs.map((p) => mul3(mul3(Si, centreFundamental(p.F!, cx, cy)), Si));
       intr.f = searchFocal((f) => median(Fs.map((Fm) => essentialCost(Fm, f))));
     } else {
       const Hs = pairs.map((p) => {
         // H in principal-point-centred coordinates: T⁻¹ H T with T = translate(c).
         const T = [1, 0, cx, 0, 1, cy, 0, 0, 1];
         const Ti = [1, 0, -cx, 0, 1, -cy, 0, 0, 1];
-        return mul3(mul3(Ti, p.H!), T);
+        return mul3(mul3(S, mul3(mul3(Ti, p.H!), T)), Si);
       });
       intr.f = searchFocal((f) => median(Hs.map((H) => rotationHomographyCost(H, f))));
     }
@@ -729,7 +745,7 @@ export async function solveTracks(td: TrackData, settings: SolveSettings, ctx: S
     // ----- initial pair -----------------------------------------------------
     let best: { pair: PairInfo; R: number[]; t: number[]; inl: Uint8Array; score: number } | null = null;
     // Score every parallax pair with E = KᵀFK from its F (cheap), then refine the winner's E by RANSAC on rays.
-    const K = [intr.f, 0, 0, 0, intr.f, 0, 0, 0, 1];
+    const K = [intr.f / aspect, 0, 0, 0, intr.f, 0, 0, 0, 1];
     const scorePair = (p: PairInfo, E: number[], r1: Float64Array, r2: Float64Array, inl: Uint8Array) => {
       const pose = poseFromEssential(E, r1, r2, inl);
       if (pose.front < 0.8 * pose.tested) return null;
@@ -866,8 +882,9 @@ export async function solveTracks(td: TrackData, settings: SolveSettings, ctx: S
     warnings.push('Rotation-only (nodal) camera: no parallax between frames, so the camera position cannot be solved. Solved as a nodal pan from a fixed point; track points are directions at a nominal distance.');
     w.nodal = true;
     const I = [1, 0, 0, 0, 1, 0, 0, 0, 1];
-    const K = [intr.f, 0, cx, 0, intr.f, cy, 0, 0, 1];
-    const Ki = [1 / intr.f, 0, -cx / intr.f, 0, 1 / intr.f, -cy / intr.f, 0, 0, 1];
+    const fx = intr.f / aspect;
+    const K = [fx, 0, cx, 0, intr.f, cy, 0, 0, 1];
+    const Ki = [1 / fx, 0, -cx / fx, 0, 1 / intr.f, -cy / intr.f, 0, 0, 1];
     setPose(w, kfs[0]!, I, [0, 0, 0]);
     w.keyframe[kfs[0]!] = 1;
     kfDone.push(kfs[0]!);

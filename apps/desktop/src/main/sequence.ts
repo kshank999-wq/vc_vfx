@@ -13,6 +13,7 @@ import {
   planFor,
   plateColorFor,
   setProbedMedia,
+  shotPixelAspect,
   shotState,
   shotTiming,
   versionTag,
@@ -144,6 +145,8 @@ export async function generateSequence(input: SequenceInput): Promise<SequenceRe
   }
   const timing = shotTiming(project, shot)!;
   const plan = planFor(project, shot)!;
+  // The pixel aspect, with the clip's own sample aspect even when that read was not recorded.
+  const pixelAspect = shotPixelAspect(state.probe || !media ? project : { ...project, shots: project.shots.map((s) => (s.shotId === shotId ? { ...s, probe: { ...media!, probedAt: '' } } : s)) }, shotId);
   const output = outputFor(project.handoff, shot);
   const name = state.vfxShotId ?? shot.shotId;
   const folder = shotFolder(project, shotId, input.outputRoot);
@@ -182,6 +185,8 @@ export async function generateSequence(input: SequenceInput): Promise<SequenceRe
       color: transform ? { transform, decodeLut } : null,
       hints: hintsFrom(media),
       caps,
+      // The header states the shot's pixel aspect when it is not square or the clip said something else (addendum 17).
+      ...(pixelAspect.value !== 1 || (media?.sampleAspect !== undefined && media.sampleAspect !== pixelAspect.value) ? { pixelAspect: pixelAspect.value } : {}),
     });
   } catch (error) {
     return { ok: false, reason: (error as Error).message };
@@ -222,6 +227,7 @@ export async function generateSequence(input: SequenceInput): Promise<SequenceRe
       workingDirectory: '09_PROJECT_DATA',
     },
     lookApplied: false,
+    pixelAspect: { value: pixelAspect.value, source: pixelAspect.source, summary: pixelAspect.summary, inHeader: command.filter.includes('setsar='), resampled: false },
     notes: command.notes,
   };
   await writeFile(join(data, colourFile), `${JSON.stringify(colour, null, 2)}\n`);
@@ -273,7 +279,8 @@ export async function generateSequence(input: SequenceInput): Promise<SequenceRe
       files,
       lookApplied: false,
     },
-    notes: [...decision.warnings, ...command.notes],
+    pixelAspect: pixelAspect.value,
+    notes: [...decision.warnings, ...command.notes, ...pixelAspect.warnings],
   };
-  return { ok: true, folder: plates, pattern, frames: written, notes: record.notes, record, ...(probed ? { probed } : {}) };
+  return { ok: true, folder: plates, pattern, frames: written, notes: record.notes ?? [], record, ...(probed ? { probed } : {}) };
 }

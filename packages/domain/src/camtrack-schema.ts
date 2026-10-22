@@ -132,6 +132,13 @@ export const SolveRecordSchema = z.object({
     k3: z.number(),
     p1: z.number(),
     p2: z.number(),
+    /**
+     * The pixel aspect the solve was made at (addendum 17). `focalPx` is the
+     * vertical focal in plate pixels (= the focal in de-squeezed pixels); the
+     * horizontal focal in plate pixels is focalPx / pixelAspect. 1 for solves
+     * made before pixel aspect was modelled.
+     */
+    pixelAspect: z.number().positive().default(1),
   }),
   stats: SolveStatsSchema,
   /** How the solve was tied to survey/LiDAR data, if at all. */
