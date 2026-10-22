@@ -69,6 +69,8 @@ describe('the Lighting workspace', () => {
     });
     await waitFor(() => expect(doc().references.map((r) => r.kind)).toEqual(['chrome_ball', 'grey_ball', 'hdri']));
     expect(doc().references[0]).toMatchObject({ from: 'sample', circle: { r: 84 } });
+    // The reference added last is the one selected (addendum 16: marking a second ball's circle moved the first's).
+    await waitFor(() => expect(within(steps).getByRole('button', { name: /HDRI \(equirect\)/ }).getAttribute('aria-pressed')).toBe('true'));
     expect(task().state).toBe('processing');
     // The HDRI's heading, typed (logged, a new settings revision).
     const rev = doc().revision;

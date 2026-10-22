@@ -145,6 +145,13 @@ export function useLightingController(props: LightingWorkspaceProps) {
   const light = rig.find((l) => l.id === lightId) ?? null;
   const refs = doc?.references ?? [];
   const refId = refPick && refs.some((r) => r.id === refPick) ? refPick : (refs[0]?.id ?? null);
+  // A reference just added is the one selected: marking a second ball's circle must not move the first's.
+  const refCount = useRef({ shotId, n: refs.length });
+  useEffect(() => {
+    if (refCount.current.shotId === shotId && refs.length > refCount.current.n) setRefPick(refs[refs.length - 1]!.id);
+    refCount.current = { shotId, n: refs.length };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shotId, refs.length]);
   const ref = refs.find((r) => r.id === refId) ?? null;
   const canChange = canEdit && !locked && Boolean(session?.available);
   const specs = useMemo(() => live.map((l) => (draft && draft.id === l.id ? ({ ...l.spec, ...draft.fields } as LightSpec) : l.spec)), [live, draft]);
@@ -213,10 +220,9 @@ export function useLightingController(props: LightingWorkspaceProps) {
   // The selected reference's picture.
   useEffect(() => {
     if (view !== 'reference') return;
-    if (!api.lightingImage || !session?.available || !ref) {
-      setRefView(null);
-      return;
-    }
+    // Never another shot's or another reference's picture while this one loads (a 10K HDRI takes seconds).
+    setRefView(null);
+    if (!api.lightingImage || !session?.available || !ref) return;
     let alive = true;
     void api.lightingImage({ text: textRef.current, shotId, projectKey, id: ref.id, maxWidth: ref.kind === 'hdri' ? 1600 : 960 }).then((r) => {
       if (!alive) return;
