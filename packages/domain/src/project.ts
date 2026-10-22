@@ -23,6 +23,7 @@ import { CleanPlateDocumentSchema } from './cleanplate-schema.js';
 import { IsolateDocumentsSchema } from './isolate-schema.js';
 import { TextureDocumentSchema } from './texture-schema.js';
 import { CompDocumentSchema } from './comp-schema.js';
+import { LightingDocumentSchema } from './lighting-schema.js';
 import { CameraBodySchema, LensProfileSchema } from './camera-db.js';
 
 /**
@@ -50,11 +51,12 @@ export const PROJECT_FORMAT = 'vcvfx-project';
  *    addendum 11).
  * 7: shots carry a texture-extraction document (`texture`; addendum 12).
  * 8: shots carry a prep-compositor document (`comp`; addendum 13).
+ * 9: shots carry a lighting-and-lens analysis document (`lighting`; addendum 14).
  * An older project opens (the new fields empty) and is saved as the current
  * version; an older VC VFX refuses a newer project rather than silently
  * dropping what it does not know about.
  */
-export const PROJECT_VERSION = 8;
+export const PROJECT_VERSION = 9;
 export const PROJECT_EXTENSION = 'vcvfx';
 
 export const ApprovalSchema = z.object({ by: z.string().min(1), at: z.string() });
@@ -180,6 +182,8 @@ export const ShotStateSchema = z.object({
   texture: TextureDocumentSchema.nullable().default(null),
   /** The prep compositor (§14). Null until started. The graph and its render settings; renders and exports are files, never here. */
   comp: CompDocumentSchema.nullable().default(null),
+  /** Lighting and lens analysis (§13). Null until started. The estimate, the artist's edits and the exports' records; pictures are files, never here. */
+  lighting: LightingDocumentSchema.nullable().default(null),
 });
 export type ShotState = z.infer<typeof ShotStateSchema>;
 
@@ -247,6 +251,7 @@ export function createProject(handoff: Handoff, handoffPath: string, actor: stri
     isolate: { sky: null, background: null },
     texture: null,
     comp: null,
+    lighting: null,
   }));
   return log(
     { format: PROJECT_FORMAT, version: PROJECT_VERSION, createdAt: at, updatedAt: at, handoffPath, handoff, plateColorDefault: 'acescg', shots, lensProfiles: [], customCameras: [], log: [] },
@@ -268,7 +273,7 @@ export function parseProject(text: string): { ok: true; project: Project } | { o
 /**
  * Bring an older project up to `PROJECT_VERSION`. The schema's defaults have
  * already filled what an older project lacks (`roto`, `camtrack`, `track2d`,
- * `key`, `cleanPlate`, `texture`, `comp` null, no `isolate` documents; no lens profiles); this records the version it is now saved as.
+ * `key`, `cleanPlate`, `texture`, `comp`, `lighting` null, no `isolate` documents; no lens profiles); this records the version it is now saved as.
  */
 export function migrateProject(p: Project): Project {
   return p.version === PROJECT_VERSION ? p : { ...p, version: PROJECT_VERSION };
@@ -442,6 +447,9 @@ export function approveTask(p: Project, shotId: string, kind: PrepTaskKind, appr
     }
     if (kind === 'composite' && s.comp && s.comp.nodes.length > 0 && !s.comp.exports.some((e) => e.version === task.version)) {
       return `Render and export comp ${'v' + String(task.version).padStart(3, '0')} first; approval approves the files a vendor receives`;
+    }
+    if (kind === 'lighting_analysis' && s.lighting && (s.lighting.analysis || s.lighting.added.length > 0) && !s.lighting.exports.some((e) => e.version === task.version)) {
+      return `Export the light rig ${'v' + String(task.version).padStart(3, '0')} first; approval approves the files a vendor receives`;
     }
     return { ...s, tasks: s.tasks.map((t) => (t.kind === kind ? { ...t, state: 'approved' as const, approval: { by: approver.trim(), at } } : t)) };
   });
