@@ -188,6 +188,13 @@ describe('roto mutations', () => {
     ]);
     expect(rivalFrames(roto(p).parts[0]!, 1020)).toMatchObject({ 1011: 0.9, 1019: 0.9 });
     expect(rivalFrames(roto(p).parts[0]!, 1010)).toEqual({});
+    // A new key frame inside that run: frames past it on the far side from 1010 still belong to 1010's
+    // run (rivals); none behind it were reached without crossing it. A key that is gone backs nothing.
+    const part2 = roto(p).parts[0]!;
+    const withKey = { ...part2, keyFrames: [...part2.keyFrames, { ...part2.keyFrames[0]!, frame: 1015 }] };
+    expect(Object.keys(rivalFrames(withKey, 1015)).map(Number)).toEqual([1010, 1011, 1012, 1013, 1014]);
+    expect(Object.keys(rivalFrames(withKey, 1012)).map(Number)).toEqual([1010, 1011]);
+    expect(rivalFrames({ ...part2, keyFrames: [] }, 1020)).toEqual({});
     expect(p.log.filter((l) => l.action === 'roto.propagated').at(-1)!.detail).toMatch(/forward from 1010: 10 frames 1011–1020 with track@1.0.0, confidence mean 0.84 min 0.30, 1 below 0.6/);
 
     // A correction painted on a propagated frame is a correction; the task goes back to needs correction.

@@ -518,10 +518,21 @@ export function recordPropagation(p: Project, shotId: string, result: RotoPropag
  * whose matte came from another key frame. A correction replaces them only
  * where it does better (engine.ts `runRoto`), so re-propagating locally never
  * spoils good frames that belong to a neighbouring key.
+ *
+ * Only a matte that reached its frame without passing `from` competes. One
+ * carried from a key on the far side of `from` was propagated through the
+ * matte this key frame now replaces, and one from a key that is no longer a
+ * key has no key behind it: both are stale and are replaced whatever their
+ * confidence (on real footage a stale matte can be confidently wrong — a
+ * runner's matte left on the wall behind him as he leaves frame).
  */
-export function rivalFrames(part: Pick<RotoPart, 'frames'>, from: number): Record<number, number> {
+export function rivalFrames(part: Pick<RotoPart, 'frames' | 'keyFrames'>, from: number): Record<number, number> {
+  const keys = new Set(part.keyFrames.map((k) => k.frame));
   const out: Record<number, number> = {};
-  for (const f of part.frames) if (f.from !== null && f.from !== from && f.frame !== from) out[f.frame] = f.confidence;
+  for (const f of part.frames) {
+    if (f.from === null || f.from === from || f.frame === from || !keys.has(f.from)) continue;
+    if ((f.from - from) * (f.frame - from) > 0) out[f.frame] = f.confidence;
+  }
   return out;
 }
 
