@@ -66,6 +66,8 @@ export interface AnalysisInput {
   seed?: number;
   progress?: (done: number, total: number) => void;
   signal?: AbortSignal;
+  /** Let the page breathe between the stages (the browser preview). */
+  yieldNow?: () => Promise<void>;
 }
 
 export interface AnalysisOutput {
@@ -137,7 +139,7 @@ function colourOf(rgb: [number, number, number], wb: number | null, gamut: Gamut
   return { temperature: kelvinRange(Math.max(1000, Math.min(40000, t.kelvin)), spreadMired + Math.min(60, Math.abs(t.duv) * 4000)), rgb: t.rgb };
 }
 
-export function analyseLighting(input: AnalysisInput): AnalysisOutput {
+export async function analyseLighting(input: AnalysisInput): Promise<AnalysisOutput> {
   const started = Date.now();
   const seed = input.seed ?? 1;
   const { frame, luma, gamut } = input;
@@ -158,6 +160,7 @@ export function analyseLighting(input: AnalysisInput): AnalysisOutput {
   const vpFocal = focalFromLines(straight, W, H, { seed });
   check(input.signal);
   tick();
+  await input.yieldNow?.();
   const fb = input.camera.filmBackMm ?? { width: 36, height: (36 * H) / W };
   const fbSource = input.camera.filmBackMm ? input.camera.filmBackSource : 'nominal';
   if (!input.camera.filmBackMm) warnings.push('The film back is not known: focal lengths are 36 mm (full-frame) equivalents. Choose the camera in Camera Track for real millimetres.');
@@ -222,6 +225,7 @@ export function analyseLighting(input: AnalysisInput): AnalysisOutput {
   } else warnings.push('No subject matte: roto or isolate the subject (Roto, Sky & BG tabs) for the shading-based estimates; the shadows need it too.');
   check(input.signal);
   tick();
+  await input.yieldNow?.();
   // Further frames: the key's direction again on each (they steady it).
   const extraKeys: DirEstimate[] = [];
   for (const ex of input.extra ?? []) {
@@ -249,6 +253,7 @@ export function analyseLighting(input: AnalysisInput): AnalysisOutput {
   }
   check(input.signal);
   tick();
+  await input.yieldNow?.();
 
   // 4. Probes.
   const chrome: (ProbeResult & { id: string })[] = input.references.chrome.map((c) => ({ id: c.id, ...chromeBall(c.image, c.circle, luma, cam) }));
@@ -273,6 +278,7 @@ export function analyseLighting(input: AnalysisInput): AnalysisOutput {
   }
   check(input.signal);
   tick();
+  await input.yieldNow?.();
 
   // 5. Practicals in frame (off the subject, the balls and the sky).
   const exclude = new Uint8Array(W * H);
@@ -286,6 +292,7 @@ export function analyseLighting(input: AnalysisInput): AnalysisOutput {
         for (let x = Math.max(0, Math.floor(c.circle.cx - c.circle.r * 1.2)); x < Math.min(W, c.circle.cx + c.circle.r * 1.2); x += 1) exclude[y * W + x] = 1;
   const practicals = findPracticals(frame, luma, cam, { exclude });
   tick();
+  await input.yieldNow?.();
 
   // 6. The rig.
   const lights: LightEstimate[] = [];
@@ -569,6 +576,7 @@ export function analyseLighting(input: AnalysisInput): AnalysisOutput {
   }
   check(input.signal);
   tick();
+  await input.yieldNow?.();
 
   // 7. The lens figures, the relight model and the match score.
   const iris = parseIris(input.camera.iris);
@@ -604,6 +612,7 @@ export function analyseLighting(input: AnalysisInput): AnalysisOutput {
   if (match !== null && match < 0.6) warnings.push(`The rig explains the subject’s shading only partly (match ${(match * 100).toFixed(0)} %): a textured or non-diffuse subject, or light the model does not see.`);
   if (!lights.length) warnings.push('No light could be estimated: add a subject matte, a ball or an HDRI — or place the lights by hand (step 3).');
   tick();
+  await input.yieldNow?.();
   const subjectCover = field ? field.count / (W * H) : 0;
   const skyCover = input.sky ? input.sky.matte.reduce((a, v) => a + (v > 0.5 ? 1 : 0), 0) / (W * H) : 0;
   return {

@@ -97,11 +97,12 @@ export async function buildMenu(getWindow: () => BrowserWindow | null, isDevelop
             ['Sky & BG', 'show-isolate', '6'],
             ['Textures', 'show-texture', null],
             ['Comp', 'show-comp', '7'],
+            ['Lighting', 'show-lighting', null],
             ['Camera Track', 'show-camera', '8'],
             ['2D Track', 'show-track2d', '9'],
             ['Deliver', 'show-deliver', '0'],
           ] as const
-          // Eleven tabs, ten digits: Textures (the least used) has none (renderer/modules.ts MODULE_DIGITS).
+          // Twelve tabs, ten digits: Textures and Lighting (the least used) have none (renderer/modules.ts MODULE_DIGITS).
         ).map(([label, command, digit]) => ({ label, ...(digit ? { accelerator: `CmdOrCtrl+${digit}`, registerAccelerator: false } : {}), click: send(command) })),
         { type: 'separator' },
         { label: 'Previous Shot', accelerator: 'CmdOrCtrl+Up', registerAccelerator: false, click: send('previous-shot') },

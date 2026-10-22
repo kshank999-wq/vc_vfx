@@ -28,9 +28,10 @@ import { CleanPlateInfo, CleanPlateViewer, cleanPlateStepDefs, useCleanPlateCont
 import { IsolateInfo, IsolateViewer, isolateStepDefs, useIsolateController, type IsolateWorkspaceProps } from './isolate/IsolateWorkspace';
 import { TextureInfo, TextureViewer, textureStepDefs, useTextureController, type TextureWorkspaceProps } from './texture/TextureWorkspace';
 import { CompInfo, CompViewer, compStepDefs, useCompController, type CompWorkspaceProps } from './comp/CompWorkspace';
+import { LightingInfo, LightingViewer, lightingStepDefs, useLightingController, type LightingWorkspaceProps } from './lighting/LightingWorkspace';
 
 /**
- * The Plates, Key, Clean Plate, Sky & BG, Textures, Comp and Deliver tabs (addendum 08). The Key tab
+ * The Plates, Key, Clean Plate, Sky & BG, Textures, Comp, Lighting and Deliver tabs (addendum 08). The Key tab
  * places the key workspace's steps, viewer and numbers (key/KeyWorkspace.tsx,
  * addendum 09) in the shell's zones; the Clean Plate tab does the same with
  * cleanplate/CleanPlateWorkspace.tsx (addendum 10), and Sky & BG with
@@ -466,6 +467,53 @@ export function CompModule(props: ModuleScreenProps & { work: CompWork }) {
     <ModuleLayout label="Comp" steps={task ? <StepList steps={compStepDefs(ctl)} resetKey={shotId} /> : <MissingCard props={props} module="comp" />} info={info}>
       {task && ctl.supported ? (
         <CompViewer ctl={ctl} />
+      ) : (
+        <Viewer api={props.api} project={project} shotId={shotId} projectKey={props.projectKey} canEdit={props.canEdit} frame={props.frame} onFrame={props.onFrame} onClose={props.onClose} onToggleMark={props.onToggleMark} />
+      )}
+    </ModuleLayout>
+  );
+}
+
+// ------------------------------------------------------------------ Lighting
+
+/** What the Lighting tab needs from the app beyond a module screen's props. */
+export type LightingWork = Pick<LightingWorkspaceProps, 'actor' | 'runJob' | 'notify' | 'onLighting'>;
+
+/** The Lighting tab (addendum 14): the steps, the plate with the lights and the rig diagram, the selected light's figures with their ranges. */
+export function LightingModule(props: ModuleScreenProps & { work: LightingWork }) {
+  const { project, shotId } = props;
+  const state = shotState(project, shotId);
+  const shot = handoffShot(project, shotId);
+  const ctl = useLightingController({
+    api: props.api,
+    project,
+    shotId,
+    projectKey: props.projectKey,
+    canEdit: props.canEdit,
+    busy: props.busy,
+    actor: props.work.actor,
+    frame: props.frame,
+    onLighting: props.work.onLighting,
+    runJob: props.work.runJob,
+    notify: props.work.notify,
+  });
+  if (!state || !shot) return null;
+  const task = state.tasks.find((t) => t.kind === 'lighting_analysis');
+  const info = (
+    <>
+      {task ? <LightingInfo ctl={ctl} /> : null}
+      {shot.supervisorNotes ? (
+        <InfoSection title="Supervisor notes">
+          <p className="info-line">{shot.supervisorNotes}</p>
+        </InfoSection>
+      ) : null}
+      {task ? <TaskInfo props={props} kind="lighting_analysis" /> : null}
+    </>
+  );
+  return (
+    <ModuleLayout label="Lighting" steps={task ? <StepList steps={lightingStepDefs(ctl)} resetKey={shotId} /> : <MissingCard props={props} module="lighting" />} info={info}>
+      {task && ctl.supported ? (
+        <LightingViewer ctl={ctl} />
       ) : (
         <Viewer api={props.api} project={project} shotId={shotId} projectKey={props.projectKey} canEdit={props.canEdit} frame={props.frame} onFrame={props.onFrame} onClose={props.onClose} onToggleMark={props.onToggleMark} />
       )}

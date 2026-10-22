@@ -42,7 +42,7 @@ import { ShotDetail, type ShotDetailProps } from './components/ShotDetail';
 import { AccountDialog, IssuesDialog, PromptDialog, SettingsDialog } from './components/Dialogs';
 import { Icon } from './components/Icons';
 import { ModuleTabs, NoticeDock, ShotBar, Tour, WhatsHere, modKey } from './components/Layout';
-import { CleanPlateModule, CompModule, DeliverModule, IsolateModule, KeyModule, PlatesModule, TaskInfo, TextureModule } from './components/Modules';
+import { CleanPlateModule, CompModule, DeliverModule, IsolateModule, KeyModule, LightingModule, PlatesModule, TaskInfo, TextureModule } from './components/Modules';
 import { RotoWorkspace } from './components/RotoWorkspace';
 import { TrackWorkspace } from './components/TrackWorkspace';
 import { MODULES, MODULE_IDS, PREF, moduleForDigit, moduleToOpen, readPref, type ModuleId } from './modules';
@@ -647,6 +647,8 @@ export function App({ api, now = () => new Date() }: { api: VcvfxApi; now?: () =
         return <TextureModule {...screen} work={{ actor, runJob, notify, onTexture: (fn) => apply((p) => fn(p, actor, now())) }} />;
       case 'comp':
         return <CompModule {...screen} work={{ actor, runJob, notify, onComp: (fn) => apply((p) => fn(p, actor, now())) }} />;
+      case 'lighting':
+        return <LightingModule {...screen} work={{ actor, runJob, notify, onLighting: (fn) => apply((p) => fn(p, actor, now())) }} />;
       case 'roto':
         return <RotoWorkspace {...work} onRoto={(fn) => apply((p) => fn(p, actor, now()))} onAddRotoTask={() => apply((p) => addTask(p, selected, 'roto', actor, now()))} taskInfo={<TaskInfo props={props} kind="roto" />} />;
       case 'camera':
@@ -808,7 +810,7 @@ export function App({ api, now = () => new Date() }: { api: VcvfxApi; now?: () =
           </div>
         ) : (
           <span className="muted keys-hint">
-            {mod}1–9, {mod}0 tabs (Textures: click) · {mod}↑/↓ shots
+            {mod}1–9, {mod}0 tabs (Textures, Lighting: click) · {mod}↑/↓ shots
           </span>
         )}
       </footer>

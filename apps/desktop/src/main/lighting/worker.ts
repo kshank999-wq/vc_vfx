@@ -108,7 +108,7 @@ export async function runAnalyse(job: LightingAnalyseJob, signal: AbortSignal, p
   const hdri = job.references.hdri ? { id: job.references.hdri.id, image: await readReferencePicture(job.io.comp.ffmpeg, job.io.comp.caps, job.references.hdri.spec, enc, 1024, signal), headingDeg: job.references.hdri.headingDeg } : null;
   progress(3, 10);
   const space = job.io.comp.space;
-  const out = analyseLighting({
+  const out = await analyseLighting({
     frame: img,
     frameNumber: frame,
     frames: job.frames,
