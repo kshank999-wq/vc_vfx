@@ -223,7 +223,7 @@ export function useCompController(props: CompWorkspaceProps) {
     add: (type: CompNodeType, at: { x: number; y: number } | null) => {
       const after = !at && selected.length ? selected[selected.length - 1]! : null;
       const before = new Set(doc?.nodes.map((n) => n.id) ?? []);
-      const okay = edit(`added ${COMP_NODES[type].label}`, (p, a, t) => addCompNode(p, shotId, type, { ...(at ? { x: Math.round(at.x - COMP_NODE_W / 2), y: Math.round(at.y - COMP_NODE_H / 2) } : {}), ...(after ? { after } : !at ? { x: 0, y: (doc?.nodes.length ? Math.max(...doc.nodes.map((n) => n.y)) : 0) + 92 } : {}) }, a, t));
+      const okay = edit(`added ${COMP_NODES[type].label}`, (p, a, t) => addCompNode(p, shotId, type, { ...(at ? { x: Math.round(at.x - COMP_NODE_W / 2), y: Math.round(at.y - COMP_NODE_H / 2) } : {}), ...(after ? { after } : !at ? { x: 0, y: (doc?.nodes.length ? Math.max(...doc.nodes.map((n) => n.y)) : 0) + 76 } : {}) }, a, t));
       return { okay, before };
     },
     remove: (ids: string[]) => {
@@ -519,7 +519,7 @@ export function CompViewer({ ctl }: { ctl: CompController }) {
   const { view, mode, setMode, wipe, setWipe, channel, setChannel, first, last, frame, onFrame, doc, viewer } = ctl;
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const stageRef = useRef<HTMLDivElement | null>(null);
-  const [split, setSplit] = useState(0.55);
+  const [split, setSplit] = useState(0.5);
   const centreRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {

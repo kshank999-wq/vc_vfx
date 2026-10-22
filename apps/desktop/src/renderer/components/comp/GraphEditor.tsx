@@ -320,10 +320,10 @@ export function GraphEditor(p: GraphEditorProps) {
             <g key={n.id} className={cls} transform={`translate(${q.x},${q.y})`} data-node-id={n.id} data-name={n.name}>
               <title>{`${n.name} (${info.label})${problem ? ` — ${problem.message}` : ''}${n.disabled ? ' — bypassed (D)' : ''}`}</title>
               <rect className="comp-node-body" width={COMP_NODE_W} height={COMP_NODE_H} rx={5} fill={CATEGORY_COLOUR[info.category]} />
-              <text className="comp-node-name" x={COMP_NODE_W / 2} y={15} textAnchor="middle">
+              <text className="comp-node-name" x={COMP_NODE_W / 2} y={14} textAnchor="middle">
                 {n.name.length > 17 ? `${n.name.slice(0, 16)}…` : n.name}
               </text>
-              <text className="comp-node-type" x={COMP_NODE_W / 2} y={28} textAnchor="middle">
+              <text className="comp-node-type" x={COMP_NODE_W / 2} y={25.5} textAnchor="middle">
                 {info.label}
                 {n.type === 'merge' ? ` · ${String(n.params['operation'] ?? 'over')}` : ''}
               </text>

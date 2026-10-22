@@ -123,7 +123,7 @@ async function drive() {
 }
 
 function readExr(file: string, alpha: boolean): Float32Array {
-  const raw = spawnSync('ffmpeg', ['-v', 'error', '-i', file, '-f', 'rawvideo', '-pix_fmt', alpha ? 'gbrapf32le' : 'gbrpf32le', '-']).stdout;
+  const raw = spawnSync('ffmpeg', ['-v', 'error', '-i', file, '-f', 'rawvideo', '-pix_fmt', alpha ? 'gbrapf32le' : 'gbrpf32le', '-'], { maxBuffer: 1 << 30 }).stdout;
   return new Float32Array(raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength));
 }
 

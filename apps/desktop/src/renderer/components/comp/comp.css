@@ -375,3 +375,6 @@
 .comp-sources li.missing {
   color: #ff8a8a;
 }
+.comp-params > .key-note:first-of-type {
+  margin-bottom: 8px;
+}

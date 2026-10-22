@@ -55,7 +55,7 @@ export const COMP_TASK: PrepTaskKind = 'composite';
 export const COMP_NODE_W = 128;
 export const COMP_NODE_H = 34;
 const GAP_X = 168;
-const GAP_Y = 92;
+const GAP_Y = 76;
 
 function logged(p: Project, entry: Omit<LogEntry, 'detail'> & { detail?: string }): Project {
   return { ...p, updatedAt: entry.at, log: [...p.log, { detail: '', ...entry }] };
