@@ -221,7 +221,9 @@ export function useCompController(props: CompWorkspaceProps) {
     connect: (e: { from: string; to: string; input: string }) => edit(`${name(e.from)} → ${name(e.to)}.${e.input}`, (p, a, t) => connectComp(p, shotId, e, a, t)),
     disconnect: (to: string, input: string) => edit(`disconnected ${name(to)}.${input}`, (p, a, t) => disconnectComp(p, shotId, to, input, a, t)),
     add: (type: CompNodeType, at: { x: number; y: number } | null) => {
-      const after = !at && selected.length ? selected[selected.length - 1]! : null;
+      // As Nuke: with a node selected the new one is inserted after it (wherever the pointer is); otherwise it goes where the menu was opened.
+      const after = selected.length ? selected[selected.length - 1]! : null;
+      if (after) at = null;
       const before = new Set(doc?.nodes.map((n) => n.id) ?? []);
       const okay = edit(`added ${COMP_NODES[type].label}`, (p, a, t) => addCompNode(p, shotId, type, { ...(at ? { x: Math.round(at.x - COMP_NODE_W / 2), y: Math.round(at.y - COMP_NODE_H / 2) } : {}), ...(after ? { after } : !at ? { x: 0, y: (doc?.nodes.length ? Math.max(...doc.nodes.map((n) => n.y)) : 0) + 76 } : {}) }, a, t));
       return { okay, before };

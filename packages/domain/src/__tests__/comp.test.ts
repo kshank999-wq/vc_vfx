@@ -166,7 +166,11 @@ describe('editing the graph', () => {
   it('adds nodes with free names, inserting after the selected node as Nuke does', () => {
     let p = start();
     const merge = byName(p, 'Merge1');
+    const writeY = byName(p, 'Write1').y;
     p = ok(addCompNode(p, SHOT, 'grade', { after: merge.id }, 'ana', NOW));
+    // Under the Merge, and what was below it moved down a row to make room.
+    expect(byName(p, 'Grade1')).toMatchObject({ x: merge.x, y: merge.y + 76 });
+    expect(byName(p, 'Write1').y).toBe(writeY + 76);
     const grade = byName(p, 'Grade1');
     expect(grade).toBeTruthy();
     expect(doc(p).edges).toContainEqual({ from: merge.id, to: grade.id, input: 'src' });

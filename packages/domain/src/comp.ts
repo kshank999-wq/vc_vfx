@@ -711,7 +711,13 @@ export function addCompNode(p: Project, shotId: string, type: CompNodeType, o: C
       edges = [...edges.map((e) => (e.from === after.id ? { ...e, from: id } : e)), { from: after.id, to: id, input: first.name }];
       detail += ` after ${after.name}`;
     }
-    return { doc: { ...doc, nodes: [...doc.nodes, node], edges, seq }, detail, task: 'edited', pixels: true };
+    // Inserted where nothing was asked for: what is below it moves down a row to make room, as Nuke does.
+    let nodes = doc.nodes;
+    if (after && o.y === undefined) {
+      const below = compDownstream(doc, after.id);
+      nodes = nodes.map((n) => (below.has(n.id) && n.y > after.y ? { ...n, y: n.y + GAP_Y } : n));
+    }
+    return { doc: { ...doc, nodes: [...nodes, node], edges, seq }, detail, task: 'edited', pixels: true };
   });
 }
 
