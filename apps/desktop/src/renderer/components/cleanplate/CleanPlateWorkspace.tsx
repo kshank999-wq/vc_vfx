@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
+import { AspectTag, FrameBox, overlayAspect, useShotAspect, useStageSize } from '../FrameBox';
+import { clientToImage } from '../../frame-fit';
 import {
   CLEANPLATE_LOW_CONFIDENCE,
   DEFAULT_CLEANPLATE_PARAMS,
@@ -683,6 +685,8 @@ export function CleanPlateViewer({ ctl }: { ctl: CleanPlateController }) {
   const { view, mode, setMode, wipe, setWipe, tool, setTool, plate, first, last, frame, onFrame, doc, review } = ctl;
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const stageRef = useRef<HTMLDivElement | null>(null);
+  const stageSize = useStageSize(stageRef);
+  const aspect = useShotAspect(ctl.props.project, ctl.props.shotId);
   const [drag, setDrag] = useState<Drag>(null);
 
   useEffect(() => {
@@ -695,16 +699,11 @@ export function CleanPlateViewer({ ctl }: { ctl: CleanPlateController }) {
     g.putImageData(new ImageData(composeCleanPlate(view, mode, wipe), view.width, view.height), 0, 0);
   }, [view, mode, wipe]);
 
+  /** Pointer → view pixels (the frame is shown de-squeezed, "contain", in its stage). */
   const toView = (e: ReactPointerEvent): { x: number; y: number } | null => {
     const el = stageRef.current;
     if (!el || !view) return null;
-    const rect = el.getBoundingClientRect();
-    const s = Math.min(rect.width / view.width, rect.height / view.height) || 1;
-    const ox = (rect.width - view.width * s) / 2;
-    const oy = (rect.height - view.height * s) / 2;
-    const x = (e.clientX - rect.left - ox) / s;
-    const y = (e.clientY - rect.top - oy) / s;
-    return x >= 0 && y >= 0 && x <= view.width && y <= view.height ? { x, y } : null;
+    return clientToImage(el, view, aspect.display, e.clientX, e.clientY);
   };
   const toPlate = (v: { x: number; y: number }) => {
     const k = plate && view ? plate.width / view.width : 1;
@@ -778,9 +777,10 @@ export function CleanPlateViewer({ ctl }: { ctl: CleanPlateController }) {
         </button>
       </div>
       <div ref={stageRef} className={`key-stage ${cursorClass}`} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp}>
+        <FrameBox stage={stageSize} size={view} pixelAspect={aspect.display}>
         {view ? <canvas ref={canvasRef} className="key-canvas" aria-label={`${CLEANPLATE_VIEW_LABELS[mode]} of frame ${view.frame}`} /> : null}
         {view ? (
-          <svg className="key-overlay" viewBox={`0 0 ${view.width} ${view.height}`} preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+          <svg className="key-overlay" viewBox={`0 0 ${view.width} ${view.height}`} preserveAspectRatio={overlayAspect(stageSize)} aria-hidden="true">
             {boxes.map((r) => {
               const b = (r.source as { rect: CleanPlateRect }).rect;
               return <rect key={r.id} className="key-box cp-box-remove" x={b.x0 * k} y={b.y0 * k} width={(b.x1 - b.x0) * k} height={(b.y1 - b.y0) * k} />;
@@ -792,6 +792,8 @@ export function CleanPlateViewer({ ctl }: { ctl: CleanPlateController }) {
             {wipe.on ? <line className="key-wipe" x1={wipe.x * view.width} x2={wipe.x * view.width} y1={0} y2={view.height} /> : null}
           </svg>
         ) : null}
+        </FrameBox>
+        {view ? <AspectTag aspect={aspect} /> : null}
         {message ? <div className="key-message">{message}</div> : null}
         {ctl.loading && view ? <div className="key-busy" aria-live="polite">Loading…</div> : null}
         {view?.plate && view.stillFrame !== null && (mode === 'plate' || mode === 'unresolved' || mode === 'confidence') ? <div className="key-hint">A still: one plate in frame {view.stillFrame}’s coordinates for the whole shot.</div> : null}

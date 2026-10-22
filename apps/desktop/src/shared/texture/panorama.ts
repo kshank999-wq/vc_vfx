@@ -164,8 +164,9 @@ export function panoramaViewRgb(pano: LinearImage, view: { yaw: number; pitch: n
 }
 
 /** The photo as a small grey picture, undistorted when its lens is known (the matcher's input). */
-export function photoGrey(photo: LinearImage, luma: readonly [number, number, number], width: number, intr: Intrinsics | null, fullWidth: number): { data: Float32Array; width: number; height: number } {
-  const height = Math.max(8, Math.round((photo.height / photo.width) * width));
+export function photoGrey(photo: LinearImage, luma: readonly [number, number, number], width: number, intr: Intrinsics | null, fullWidth: number, pixelAspect = intr?.a ?? 1): { data: Float32Array; width: number; height: number } {
+  // De-squeezed (addendum 17): the grey picture has the shape the camera saw.
+  const height = Math.max(8, Math.round((photo.height / (photo.width * pixelAspect)) * width));
   const out = new Float32Array(width * height);
   const tmp = new Float32Array(3);
   const kRead = photo.width / fullWidth;

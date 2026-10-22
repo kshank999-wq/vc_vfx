@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
+import { AspectTag, FrameBox, overlayAspect, useShotAspect, useStageSize } from '../FrameBox';
+import { clientToImage } from '../../frame-fit';
 import {
   COMP_NODES,
   COMP_NODE_H,
@@ -521,6 +523,8 @@ export function CompViewer({ ctl }: { ctl: CompController }) {
   const { view, mode, setMode, wipe, setWipe, channel, setChannel, first, last, frame, onFrame, doc, viewer } = ctl;
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const stageRef = useRef<HTMLDivElement | null>(null);
+  const stageSize = useStageSize(stageRef);
+  const aspect = useShotAspect(ctl.props.project, ctl.props.shotId);
   const [split, setSplit] = useState(0.5);
   const centreRef = useRef<HTMLDivElement | null>(null);
 
@@ -537,10 +541,8 @@ export function CompViewer({ ctl }: { ctl: CompController }) {
   const toView = (e: ReactPointerEvent): number | null => {
     const el = stageRef.current;
     if (!el || !view) return null;
-    const rect = el.getBoundingClientRect();
-    const s = Math.min(rect.width / view.width, rect.height / view.height) || 1;
-    const ox = (rect.width - view.width * s) / 2;
-    return Math.max(0, Math.min(1, (e.clientX - rect.left - ox) / s / view.width));
+    const p = clientToImage(el, view, aspect.display, e.clientX, e.clientY, true);
+    return p ? Math.max(0, Math.min(1, p.x / view.width)) : null;
   };
   const nameA = compNode(doc, viewer.a)?.name ?? null;
   const nameB = compNode(doc, viewer.b)?.name ?? null;
@@ -604,9 +606,10 @@ export function CompViewer({ ctl }: { ctl: CompController }) {
             if (x !== null) setWipe(x);
           }}
         >
+          <FrameBox stage={stageSize} size={view} pixelAspect={aspect.display}>
           {view ? <canvas ref={canvasRef} className="key-canvas" aria-label={`${mode === 'wipe' ? `${nameA} | ${nameB}` : mode === 'a' ? nameA : nameB} on frame ${view.frame}${channel === 'alpha' ? ', alpha' : ''}`} /> : null}
           {view && mode === 'wipe' ? (
-            <svg className="key-overlay" viewBox={`0 0 ${view.width} ${view.height}`} preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+            <svg className="key-overlay" viewBox={`0 0 ${view.width} ${view.height}`} preserveAspectRatio={overlayAspect(stageSize)} aria-hidden="true">
               <line className="key-wipe" x1={wipe * view.width} x2={wipe * view.width} y1={0} y2={view.height} />
               <text x={wipe * view.width - 6} y={14} textAnchor="end" className="comp-wipe-label">
                 1
@@ -616,6 +619,8 @@ export function CompViewer({ ctl }: { ctl: CompController }) {
               </text>
             </svg>
           ) : null}
+          </FrameBox>
+          {view ? <AspectTag aspect={aspect} /> : null}
           {message ? <div className="key-message">{message}</div> : null}
           {ctl.loading && view ? <div className="key-busy" aria-live="polite">Computing…</div> : null}
         </div>

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { PixelAspectViewProvider } from './components/FrameBox';
 import { createPortal } from 'react-dom';
 import {
   PREP_TASKS,
@@ -673,6 +674,7 @@ export function App({ api, now = () => new Date() }: { api: VcvfxApi; now?: () =
   // --- render ---------------------------------------------------------------
   const mod = modKey();
   return (
+    <PixelAspectViewProvider>
     <NoticeDock.Provider value={setNoticeDock}>
     <div className="app">
       <header className="topbar">
@@ -863,6 +865,7 @@ export function App({ api, now = () => new Date() }: { api: VcvfxApi; now?: () =
       ) : null}
     </div>
     </NoticeDock.Provider>
+    </PixelAspectViewProvider>
   );
 }
 

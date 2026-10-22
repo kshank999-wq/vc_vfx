@@ -1,11 +1,12 @@
 import { existsSync } from 'node:fs';
 import { open, stat, writeFile, mkdir } from 'node:fs/promises';
-import { basename, extname, join } from 'node:path';
+import { basename, dirname, extname, join, resolve } from 'node:path';
 import {
   TEXTURE_TASK,
   TEXTURE_UNIT_METRES,
   findLensProfile,
   handoffShot,
+  pixelAspectOf,
   shotState,
   textureBuildProblem,
   textureDoc,
@@ -171,12 +172,33 @@ export async function textureIngest(
         if (profile) camera = { ...camera, distortion: profile.distortion, lensProfileId: profile.id };
       }
       const linear = ext === 'exr' || ext === 'hdr';
-      out.push({ ...base, kind, width: size.width, height: size.height, points: null, encoding: linear ? 'linear_rec709' : 'srgb', camera });
+      // Pixel aspect (addendum 17): a frame of the shot's own clip has the shot's; else what the file's header says.
+      const aspect = referencePixelAspect(project, shotId, file, size);
+      out.push({ ...base, kind, width: size.width, height: size.height, points: null, encoding: linear ? 'linear_rec709' : 'srgb', camera, ...aspect });
     }
     i += 1;
   }
   o.onProgress?.(sources.length, sources.length);
   return out;
+}
+
+/**
+ * A picture's pixel aspect on ingest: the shot's when the file is in the
+ * folder of the shot's source (a frame of its own clip, the same size), else
+ * the file's own sample aspect, else square (a still).
+ */
+export function referencePixelAspect(project: Project, shotId: string, file: string, size: { width: number; height: number; sampleAspect?: number }): { pixelAspect: number | null; pixelAspectFrom: 'shot' | 'file' | null } {
+  const shot = handoffShot(project, shotId);
+  const source = shot ? resolveFromHandoff(project.handoffPath, shot.sourcePath) : null;
+  const res = shot?.resolution ?? shotState(project, shotId)?.probe?.resolution ?? null;
+  const sameFolder = source ? dirname(resolve(source)) === dirname(resolve(file)) || resolve(source) === resolve(file) : false;
+  const sameSize = !res || (res.width === size.width && res.height === size.height);
+  if (sameFolder && sameSize) {
+    const a = pixelAspectOf(project, shotId);
+    if (a !== 1) return { pixelAspect: a, pixelAspectFrom: 'shot' };
+  }
+  if (size.sampleAspect && Math.abs(size.sampleAspect - 1) > 1e-3) return { pixelAspect: size.sampleAspect, pixelAspectFrom: 'file' };
+  return { pixelAspect: null, pixelAspectFrom: null };
 }
 
 /** The newest build of this task version and whether it used the settings as they are now. */

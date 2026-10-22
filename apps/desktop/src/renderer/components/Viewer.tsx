@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
-import { contactSheetFrames, encodingLabel, handoffShot, serializeProject, shotState, versionTag, type Project, type ViewTransformId } from '@vcvfx/domain';
+import { contactSheetFrames, encodingLabel, formatPixelAspect, handoffShot, isSquare, serializeProject, shotState, shotTiming, versionTag, type Project, type ViewTransformId } from '@vcvfx/domain';
+import { AspectTag, FrameBox, useShotAspect, useStageSize } from './FrameBox';
 import type { ViewerFrame, ViewerLayer, ViewerSources, VcvfxApi } from '../../shared/bridge';
 import { clampFrame, viewerTimeline } from '../../shared/viewer';
 
@@ -64,7 +65,15 @@ export function Viewer({ api, project, shotId, projectKey, canEdit, frame, onFra
   const loaded = useRef(new Map<string, Loaded>());
   const pending = useRef(new Set<string>());
   const stageRef = useRef<HTMLDivElement | null>(null);
+  const boxRef = useRef<HTMLDivElement | null>(null);
   const setFrame = onFrame;
+  // Pixel aspect: the picture is shown de-squeezed (view only) unless "Show squeezed" is on.
+  const aspect = useShotAspect(project, shotId);
+  const stageSize = useStageSize(stageRef);
+  const [natural, setNatural] = useState<{ width: number; height: number } | null>(null);
+  const resolution = useMemo(() => (shot ? (shotTiming(project, shot)?.resolution ?? null) : null), [project, shot]);
+  // The frame's stored shape: the shot's resolution, else the picture's own.
+  const frameSize = resolution ?? natural;
 
   // A new shot starts afresh.
   useEffect(() => {
@@ -200,7 +209,8 @@ export function Viewer({ api, project, shotId, projectKey, canEdit, frame, onFra
   const dragWipe = (e: ReactPointerEvent<HTMLDivElement>) => {
     if (!comparing || compare !== 'wipe') return;
     if (e.type === 'pointermove' && e.buttons !== 1) return;
-    const box = e.currentTarget.getBoundingClientRect();
+    // The wipe is a fraction of the picture, which sits in its frame box.
+    const box = (boxRef.current?.querySelector('.frame-box') ?? e.currentTarget).getBoundingClientRect();
     if (box.width > 0) setWipe(Math.min(1, Math.max(0, (e.clientX - box.left) / box.width)));
   };
 
@@ -215,7 +225,19 @@ export function Viewer({ api, project, shotId, projectKey, canEdit, frame, onFra
   const sheet = timeline ? contactSheetFrames(timeline.first, timeline.last, 12) : [];
   const unavailable = !available(primary) ? (primary === 'source' ? sources?.source.reason : 'No plates written for this shot yet.') : null;
 
-  const img = (l: Loaded | undefined, alt: string) => (l && 'url' in l ? <img className="frame" src={l.url} alt={alt} draggable={false} /> : null);
+  const img = (l: Loaded | undefined, alt: string) =>
+    l && 'url' in l ? (
+      <img
+        className="frame"
+        src={l.url}
+        alt={alt}
+        draggable={false}
+        onLoad={(e) => {
+          const el = e.currentTarget;
+          if (!resolution && el.naturalWidth > 0 && (natural?.width !== el.naturalWidth || natural?.height !== el.naturalHeight)) setNatural({ width: el.naturalWidth, height: el.naturalHeight });
+        }}
+      />
+    ) : null;
 
   return (
     <section className="viewer" aria-label={`Viewer — ${name}`}>
@@ -283,13 +305,22 @@ export function Viewer({ api, project, shotId, projectKey, canEdit, frame, onFra
           {!timeline ? <p className="viewer-message">The frame range is unknown. Read it from the clip first (step 1, Read from clip).</p> : null}
           {timeline && unavailable ? <p className="viewer-message">{unavailable}</p> : null}
           {current && 'error' in current ? <p className="viewer-message error">{current.error}</p> : null}
-          {img(current, `${primary === 'source' ? 'Source' : plateLabel} frame ${frame}`)}
+          <div ref={boxRef} className="viewer-frame-layer">
+            <FrameBox stage={stageSize} size={frameSize} pixelAspect={aspect.display}>
+              {img(current, `${primary === 'source' ? 'Source' : plateLabel} frame ${frame}`)}
+              {comparing && compare === 'wipe' ? (
+                <>
+                  <div className="wipe-b" style={{ clipPath: `inset(0 0 0 ${wipe * 100}%)` }}>
+                    {img(second, `${plateLabel} frame ${frame}`)}
+                  </div>
+                  <div className="wipe-line" style={{ left: `${wipe * 100}%` }} aria-hidden="true" />
+                </>
+              ) : null}
+            </FrameBox>
+          </div>
+          <AspectTag aspect={aspect} />
           {comparing && compare === 'wipe' ? (
             <>
-              <div className="wipe-b" style={{ clipPath: `inset(0 0 0 ${wipe * 100}%)` }}>
-                {img(second, `${plateLabel} frame ${frame}`)}
-              </div>
-              <div className="wipe-line" style={{ left: `${wipe * 100}%` }} aria-hidden="true" />
               <span className="wipe-tag a">A · Source</span>
               <span className="wipe-tag b">B · {plateLabel}</span>
             </>
@@ -341,6 +372,13 @@ export function Viewer({ api, project, shotId, projectKey, canEdit, frame, onFra
             {frame}
           </span>
           {timeline?.timecode(frame) ? <span className="mono muted tc">TC {timeline.timecode(frame)}</span> : null}
+          {aspect.decision && (!isSquare(aspect.pixelAspect) || aspect.decision.warnings.length) ? (
+            <span className={`muted par-label${aspect.decision.warnings.length ? ' warn' : ''}`} title={[aspect.decision.summary, ...aspect.decision.warnings].join('\n')}>
+              Pixel aspect {formatPixelAspect(aspect.pixelAspect)}
+              {frameSize && !isSquare(aspect.pixelAspect) ? ` · ${frameSize.width}×${frameSize.height} shown ${Math.round(frameSize.width * aspect.pixelAspect)}×${frameSize.height}` : ''}
+              {aspect.decision.warnings.length ? ' ⚠' : ''}
+            </span>
+          ) : null}
           {timeline && (frame < timeline.editorialIn || frame > timeline.editorialOut) ? <span className="tag">handle</span> : null}
           <span className="muted view-label" title="Viewing only: never applied to plates">
             {viewLabel ?? (view === 'raw' ? 'Raw values' : `${encodingLabel(encodingOf(primary))} → Rec.709 (approx.)`)} · viewing only

@@ -174,7 +174,9 @@ export const textureSizeText = (s: TextureSize) => `${+s.width.toFixed(3)} × ${
 // References (§12 "ingest high-resolution reference photos plus optional panorama and LiDAR mesh/point cloud")
 // ---------------------------------------------------------------------------
 
-export type TextureReferenceInput = Omit<TextureReference, 'id' | 'addedBy' | 'addedAt' | 'camera' | 'scan' | 'panorama'> & {
+export type TextureReferenceInput = Omit<TextureReference, 'id' | 'addedBy' | 'addedAt' | 'camera' | 'scan' | 'panorama' | 'pixelAspect' | 'pixelAspectFrom'> & {
+  pixelAspect?: number | null;
+  pixelAspectFrom?: TextureReference['pixelAspectFrom'];
   camera?: Partial<TextureCamera> | null;
   scan?: Partial<TextureScanInfo> | null;
   panorama?: Partial<TexturePanoramaInfo> | null;
@@ -204,7 +206,7 @@ export function addTextureReference(p: Project, shotId: string, input: TextureRe
     const what =
       r.kind === 'scan'
         ? `${r.points?.toLocaleString('en') ?? '?'} points, ${r.scan!.units}, ${r.scan!.up.toUpperCase()}-up`
-        : `${r.width}×${r.height}${r.encoding ? `, read as ${r.encoding}` : ''}${r.camera?.focalMm ? `, ${r.camera.focalMm} mm` : ''}${r.camera?.distortion ? ', lens distortion known' : ''}`;
+        : `${r.width}×${r.height}${r.pixelAspect && r.pixelAspect !== 1 ? ` at pixel aspect ${+r.pixelAspect.toFixed(4)} (${r.pixelAspectFrom ?? 'set'})` : ''}${r.encoding ? `, read as ${r.encoding}` : ''}${r.camera?.focalMm ? `, ${r.camera.focalMm} mm` : ''}${r.camera?.distortion ? ', lens distortion known' : ''}`;
     return {
       doc: { ...doc, references: [...doc.references, r], seq },
       detail: `${r.id} ${r.kind} ${r.name} (${r.from}: ${r.path}; ${what}${r.checksum ? `; sha256 ${r.checksum.value.slice(0, 12)}…` : ''})`,
@@ -216,6 +218,8 @@ export function addTextureReference(p: Project, shotId: string, input: TextureRe
 
 export interface TextureReferenceChange {
   name?: string;
+  /** The picture's pixel aspect (null: square). */
+  pixelAspect?: number | null;
   encoding?: TextureReference['encoding'];
   camera?: Partial<TextureCamera> | null;
   scan?: Partial<TextureScanInfo>;
@@ -237,6 +241,13 @@ export function setTextureReference(p: Project, shotId: string, id: string, chan
       if (ref.kind === 'scan') return 'A scan has no colour encoding';
       next.encoding = change.encoding;
       details.push(`read as ${change.encoding ?? 'unknown'}`);
+    }
+    if (change.pixelAspect !== undefined && (change.pixelAspect ?? 1) !== (ref.pixelAspect ?? 1)) {
+      if (ref.kind === 'scan') return 'A scan has no pixel aspect';
+      if (change.pixelAspect !== null && !(change.pixelAspect >= 0.25 && change.pixelAspect <= 4)) return 'A pixel aspect is a number from 0.25 to 4';
+      next.pixelAspect = change.pixelAspect === null || change.pixelAspect === 1 ? null : change.pixelAspect;
+      next.pixelAspectFrom = next.pixelAspect === null ? null : 'artist';
+      details.push(`pixel aspect ${next.pixelAspect === null ? 'square' : +next.pixelAspect.toFixed(4)}`);
     }
     if (change.camera !== undefined) {
       if (ref.kind === 'scan') return 'A scan has no camera';

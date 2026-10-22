@@ -2935,3 +2935,42 @@ table.queue td.col-progress {
 .keys-hint {
   font-size: 13px;
 }
+
+/* Pixel aspect (addendum 17): the frame's box at its de-squeezed shape. */
+.frame-box {
+  position: absolute;
+  inset: 0;
+}
+.frame-box.fitted {
+  right: auto;
+  bottom: auto;
+}
+.frame-box.fitted img.frame,
+.frame-box.fitted .key-canvas,
+.frame-box.fitted canvas {
+  object-fit: fill;
+}
+.viewer-frame-layer {
+  position: absolute;
+  inset: 0;
+}
+.aspect-tag {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  z-index: 4;
+  padding: 3px 9px;
+  font-size: 12px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: rgba(10, 12, 16, 0.78);
+  color: var(--text, #e6e8eb);
+  cursor: pointer;
+}
+.aspect-tag.squeezed {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.par-label.warn {
+  color: var(--warning, #e0a43a);
+}
