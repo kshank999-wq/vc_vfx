@@ -36,7 +36,9 @@ describe('module tabs', () => {
   it('lists every module in the top toolbar and switches between them', async () => {
     await openSample();
     const tabs = within(screen.getByRole('tablist', { name: 'Modules' })).getAllByRole('tab');
-    expect(tabs.map((t) => t.getAttribute('aria-label'))).toEqual(['Shots', 'Plates', 'Roto', 'Key', 'Clean Plate', 'Sky & BG', 'Textures', 'Camera Track', '2D Track', 'Deliver']);
+    expect(tabs.map((t) => t.getAttribute('aria-label'))).toEqual(['Shots', 'Plates', 'Roto', 'Key', 'Clean Plate', 'Sky & BG', 'Textures', 'Comp', 'Camera Track', '2D Track', 'Deliver']);
+    // Every tab but Textures has a digit (eleven tabs, ten digits).
+    expect(tabs.map((t) => /\((?:⌘|Ctrl\+)(\d)\)/.exec(t.getAttribute('title') ?? '')?.[1] ?? null)).toEqual(['1', '2', '3', '4', '5', '6', null, '7', '8', '9', '0']);
     expect(selected('Shots')).toBe(true);
     expect(screen.getByRole('table', { name: 'Shot queue' })).toBeTruthy();
 
@@ -52,7 +54,7 @@ describe('module tabs', () => {
     expect(screen.getByRole('region', { name: 'Package contents' }).textContent).toContain('02_MATTES_ROTO');
   });
 
-  it('switches with ⌘/Ctrl+1…9 and 0, and the View menu', async () => {
+  it('switches with ⌘/Ctrl+1…9 and 0 (Textures by click), and the View menu', async () => {
     let send: (c: MenuCommand) => void = () => undefined;
     await openSample(stubBridge({ onMenu: (l) => ((send = l), () => undefined) }));
     fireEvent.keyDown(window, { key: '3', ctrlKey: true });
@@ -62,7 +64,9 @@ describe('module tabs', () => {
     fireEvent.keyDown(window, { key: '6', ctrlKey: true });
     expect(selected('Sky & BG')).toBe(true);
     fireEvent.keyDown(window, { key: '7', ctrlKey: true });
-    expect(selected('Textures')).toBe(true);
+    expect(selected('Comp')).toBe(true);
+    fireEvent.keyDown(window, { key: '8', ctrlKey: true });
+    expect(selected('Camera Track')).toBe(true);
     fireEvent.keyDown(window, { key: '9', metaKey: true });
     expect(selected('2D Track')).toBe(true);
     fireEvent.keyDown(window, { key: '0', metaKey: true });
@@ -77,6 +81,8 @@ describe('module tabs', () => {
     expect(selected('Sky & BG')).toBe(true);
     act(() => send('show-texture'));
     expect(selected('Textures')).toBe(true);
+    act(() => send('show-comp'));
+    expect(selected('Comp')).toBe(true);
     act(() => send('show-shots'));
     expect(selected('Shots')).toBe(true);
   });
@@ -98,13 +104,15 @@ describe('module tabs', () => {
     expect(moduleForDigit('1')).toBe('shots');
     expect(moduleForDigit('5')).toBe('cleanplate');
     expect(moduleForDigit('6')).toBe('isolate');
-    expect(moduleForDigit('7')).toBe('texture');
+    expect(moduleForDigit('7')).toBe('comp');
+    expect(moduleForDigit('8')).toBe('camera');
     expect(moduleForDigit('9')).toBe('track2d');
     expect(moduleForDigit('0')).toBe('deliver');
     expect(moduleForDigit('10')).toBeNull();
     expect(moduleForDigit('a')).toBeNull();
     expect(moduleDigit('deliver')).toBe('0');
-    expect(moduleDigit('texture')).toBe('7');
+    expect(moduleDigit('texture')).toBeNull();
+    expect(moduleDigit('comp')).toBe('7');
     const p = sample();
     expect(moduleToOpen(p, '010_030', null)).toBe('track2d');
     expect(moduleToOpen(p, '010_030', 'roto')).toBe('track2d');

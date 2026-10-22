@@ -89,19 +89,20 @@ export async function buildMenu(getWindow: () => BrowserWindow | null, isDevelop
         // browser preview has them too; the menu shows them without registering.
         ...(
           [
-            ['Shots', 'show-shots'],
-            ['Plates', 'show-plates'],
-            ['Roto', 'show-roto'],
-            ['Key', 'show-key'],
-            ['Clean Plate', 'show-cleanplate'],
-            ['Sky & BG', 'show-isolate'],
-            ['Textures', 'show-texture'],
-            ['Camera Track', 'show-camera'],
-            ['2D Track', 'show-track2d'],
-            ['Deliver', 'show-deliver'],
+            ['Shots', 'show-shots', '1'],
+            ['Plates', 'show-plates', '2'],
+            ['Roto', 'show-roto', '3'],
+            ['Key', 'show-key', '4'],
+            ['Clean Plate', 'show-cleanplate', '5'],
+            ['Sky & BG', 'show-isolate', '6'],
+            ['Textures', 'show-texture', null],
+            ['Comp', 'show-comp', '7'],
+            ['Camera Track', 'show-camera', '8'],
+            ['2D Track', 'show-track2d', '9'],
+            ['Deliver', 'show-deliver', '0'],
           ] as const
-          // Ten tabs: the tenth is ⌘/Ctrl+0.
-        ).map(([label, command], i) => ({ label, accelerator: `CmdOrCtrl+${(i + 1) % 10}`, registerAccelerator: false, click: send(command) })),
+          // Eleven tabs, ten digits: Textures (the least used) has none (renderer/modules.ts MODULE_DIGITS).
+        ).map(([label, command, digit]) => ({ label, ...(digit ? { accelerator: `CmdOrCtrl+${digit}`, registerAccelerator: false } : {}), click: send(command) })),
         { type: 'separator' },
         { label: 'Previous Shot', accelerator: 'CmdOrCtrl+Up', registerAccelerator: false, click: send('previous-shot') },
         { label: 'Next Shot', accelerator: 'CmdOrCtrl+Down', registerAccelerator: false, click: send('next-shot') },

@@ -29,6 +29,7 @@ import { registerKeyHandlers } from './key/ipc-key';
 import { registerCleanPlateHandlers } from './cleanplate/ipc-cleanplate';
 import { registerIsolateHandlers } from './isolate/ipc-isolate';
 import { registerTextureHandlers } from './texture/ipc-texture';
+import { registerCompHandlers } from './comp/ipc-comp';
 import { trackCommand, trackFrame, trackSession, trackView, type CameraEnv } from './camera/api';
 import { COMMAND_SPECS, type CameraCommand } from '../shared/camera/commands';
 import { checkerboardPdf, checkerboardPixels } from '../shared/camera/calibration';
@@ -576,6 +577,25 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null, isDev
         workerFile: join(__dirname, 'texture-worker.js'),
         generator: `VC VFX ${app.getVersion()}`,
       };
+    },
+  });
+
+  // The prep compositor (addendum 13): handlers in comp/ipc-comp.ts, with the other modules' rules. Module nodes read
+  // the modules' exports in the shot package; renders and exports run in the comp worker.
+  registerCompHandlers({
+    handle,
+    viewerProject,
+    projectFrom,
+    outputRootFor,
+    ensureOutputRoot,
+    licensed: async () => (await capability()) === 'full',
+    readOnlyReason: READ_ONLY_REASON,
+    startJob,
+    endJob,
+    progress: (event, id, label) => progressSender(event.sender, id, label),
+    env: async () => {
+      const t = await currentTools();
+      return { ffmpeg: t.ffmpeg, caps: t.caps, workerFile: join(__dirname, 'comp-worker.js'), generator: `VC VFX ${app.getVersion()}` };
     },
   });
 

@@ -54,6 +54,14 @@ const PATHS: Record<IconName, JSX.Element> = {
       <path d="M17 14v7M13 17.5h8" />
     </>
   ),
+  comp: (
+    <>
+      <rect x="2.5" y="3" width="7" height="5" rx="1" />
+      <rect x="14.5" y="3" width="7" height="5" rx="1" />
+      <rect x="8.5" y="16" width="7" height="5" rx="1" />
+      <path d="M6 8v3.5c0 1.4 1 2.5 2.5 2.5H11v2M18 8v3.5c0 1.4-1 2.5-2.5 2.5H13v2" />
+    </>
+  ),
   camera: (
     <>
       <rect x="2.5" y="7" width="13" height="10" rx="1.5" />

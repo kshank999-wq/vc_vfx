@@ -15,4 +15,5 @@ export * from './key.js';
 export * from './cleanplate.js';
 export * from './isolate.js';
 export * from './texture.js';
+export * from './comp.js';
 export * from './ai-usage.js';

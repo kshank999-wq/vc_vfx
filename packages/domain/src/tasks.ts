@@ -44,7 +44,7 @@ export const PREP_TASKS: Record<PrepTaskKind, PrepTaskInfo> = {
   background_removal: { label: 'Background removal', short: 'BG Removal', folder: '02_MATTES_ROTO', available: true },
   texture_extraction: { label: 'Texture extraction', short: 'Textures', folder: '07_TEXTURES_REFERENCES', available: true },
   lighting_analysis: { label: 'Lighting and lens analysis', short: 'Lighting', folder: '09_PROJECT_DATA', available: false },
-  composite: { label: 'Prep composite', short: 'Comp', folder: '09_PROJECT_DATA', available: false },
+  composite: { label: 'Prep composite', short: 'Comp', folder: '09_PROJECT_DATA', available: true },
 };
 
 /** Per-task state. Approval is a separate, explicit act (§15.6). */

@@ -27,9 +27,10 @@ import { KeyInfo, KeyViewer, keyStepDefs, useKeyController, type KeyWorkspacePro
 import { CleanPlateInfo, CleanPlateViewer, cleanPlateStepDefs, useCleanPlateController, type CleanPlateWorkspaceProps } from './cleanplate/CleanPlateWorkspace';
 import { IsolateInfo, IsolateViewer, isolateStepDefs, useIsolateController, type IsolateWorkspaceProps } from './isolate/IsolateWorkspace';
 import { TextureInfo, TextureViewer, textureStepDefs, useTextureController, type TextureWorkspaceProps } from './texture/TextureWorkspace';
+import { CompInfo, CompViewer, compStepDefs, useCompController, type CompWorkspaceProps } from './comp/CompWorkspace';
 
 /**
- * The Plates, Key, Clean Plate, Sky & BG, Textures and Deliver tabs (addendum 08). The Key tab
+ * The Plates, Key, Clean Plate, Sky & BG, Textures, Comp and Deliver tabs (addendum 08). The Key tab
  * places the key workspace's steps, viewer and numbers (key/KeyWorkspace.tsx,
  * addendum 09) in the shell's zones; the Clean Plate tab does the same with
  * cleanplate/CleanPlateWorkspace.tsx (addendum 10), and Sky & BG with
@@ -417,6 +418,54 @@ export function TextureModule(props: ModuleScreenProps & { work: TextureWork }) 
     >
       {task && ctl.supported ? (
         <TextureViewer ctl={ctl} />
+      ) : (
+        <Viewer api={props.api} project={project} shotId={shotId} projectKey={props.projectKey} canEdit={props.canEdit} frame={props.frame} onFrame={props.onFrame} onClose={props.onClose} onToggleMark={props.onToggleMark} />
+      )}
+    </ModuleLayout>
+  );
+}
+
+// ------------------------------------------------------------------ Comp
+
+/** What the Comp tab needs from the app beyond a module screen's props. */
+export type CompWork = Pick<CompWorkspaceProps, 'actor' | 'runJob' | 'notify' | 'onComp'>;
+
+/** The Comp tab (addendum 13): the steps, the viewer above the node graph, the selected node's parameters. */
+export function CompModule(props: ModuleScreenProps & { work: CompWork }) {
+  const { project, shotId } = props;
+  const state = shotState(project, shotId);
+  const shot = handoffShot(project, shotId);
+  const ctl = useCompController({
+    api: props.api,
+    project,
+    shotId,
+    projectKey: props.projectKey,
+    canEdit: props.canEdit,
+    busy: props.busy,
+    actor: props.work.actor,
+    frame: props.frame,
+    onFrame: props.onFrame,
+    onComp: props.work.onComp,
+    runJob: props.work.runJob,
+    notify: props.work.notify,
+  });
+  if (!state || !shot) return null;
+  const task = state.tasks.find((t) => t.kind === 'composite');
+  const info = (
+    <>
+      {task ? <CompInfo ctl={ctl} /> : null}
+      {shot.supervisorNotes ? (
+        <InfoSection title="Supervisor notes">
+          <p className="info-line">{shot.supervisorNotes}</p>
+        </InfoSection>
+      ) : null}
+      {task ? <TaskInfo props={props} kind="composite" /> : null}
+    </>
+  );
+  return (
+    <ModuleLayout label="Comp" steps={task ? <StepList steps={compStepDefs(ctl)} resetKey={shotId} /> : <MissingCard props={props} module="comp" />} info={info}>
+      {task && ctl.supported ? (
+        <CompViewer ctl={ctl} />
       ) : (
         <Viewer api={props.api} project={project} shotId={shotId} projectKey={props.projectKey} canEdit={props.canEdit} frame={props.frame} onFrame={props.onFrame} onClose={props.onClose} onToggleMark={props.onToggleMark} />
       )}
