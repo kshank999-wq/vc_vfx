@@ -129,7 +129,8 @@ export function GraphEditor(p: GraphEditorProps) {
       if (edge) return setDrag({ kind: 'link', from: edge.from, at: g, detach: { to: id, input } });
       return;
     }
-    const hit = nodeAt(g);
+    const el = (e.target as Element).closest('[data-node-id]');
+    const hit = (el ? p.doc.nodes.find((n) => n.id === el.getAttribute('data-node-id')) : undefined) ?? nodeAt(g);
     if (hit) {
       const sel = e.shiftKey ? (p.selected.includes(hit.id) ? p.selected.filter((x) => x !== hit.id) : [...p.selected, hit.id]) : p.selected.includes(hit.id) ? [...p.selected] : [hit.id];
       if (!e.shiftKey && !p.selected.includes(hit.id)) p.onSelect(sel);
@@ -267,6 +268,7 @@ export function GraphEditor(p: GraphEditorProps) {
         width={box.w}
         height={box.h}
         viewBox={`${view.x} ${view.y} ${box.w / view.k} ${box.h / view.k}`}
+        data-view={`${view.x},${view.y},${view.k}`}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
