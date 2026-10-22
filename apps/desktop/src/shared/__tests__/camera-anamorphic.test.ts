@@ -109,3 +109,95 @@ describe('camera solver: anamorphic plates kept squeezed', () => {
     expect(err.maxRotationDeg).toBeLessThan(0.2);
   }, 60 * SECONDS);
 });
+
+describe('camera commands on a 2× plate: solve and export through the session', () => {
+  it('tracks the squeezed frames, solves at the shot’s pixel aspect, records focal mm on the de-squeezed back, exports it', async () => {
+    const { SAMPLE_HANDOFF, createProject, parseHandoff, setShotPixelAspect, shotState } = await import('@vcvfx/domain');
+    const { applyOps, dispatch } = await import('../camera/commands');
+    const { MemoryStore, sessionBase } = await import('../camera/session');
+    const { TsCameraSolver } = await import('../camera/solver');
+    const { roomScene, renderScene } = await import('../camera/render');
+    const { grayOf } = await import('../camera/klt');
+    const SHOT = '020_010';
+    const W = 360; // stored
+    const H = 300;
+    const A = 2; // shown 720 × 300
+    const N = 30;
+    const intr: Intrinsics = { f: 0.86 * W * A, cx: (W - 1) / 2, cy: (H - 1) / 2, k1: 0, k2: 0, k3: 0, p1: 0, p2: 0, a: A };
+    const quads = roomScene(5);
+    const path = cameraPath('pan', N, 9);
+    const frames = path.map((p) => grayOf(renderScene(quads, { width: W, height: H, intr, R: p.R, t: p.t })));
+    const h = parseHandoff(JSON.stringify(SAMPLE_HANDOFF));
+    if (!h.ok) throw new Error('sample');
+    let project = createProject(h.handoff, '/drive/handoff.json', 'Ana', new Date('2026-10-22T10:00:00Z'));
+    const par = setShotPixelAspect(project, SHOT, { value: A, note: '2× anamorphic' }, 'Ana', new Date('2026-10-22T10:00:00Z'));
+    if (!par.ok) throw new Error(par.reason);
+    project = par.project;
+    const store = new MemoryStore();
+    const written: { name: string; data: Uint8Array | string }[] = [];
+    const run = async (cmd: Parameters<typeof dispatch>[1]) => {
+      const out = await dispatch(
+        {
+          ...sessionBase(project, SHOT, { first: 1001, last: 1000 + N, fps: 24 }, { width: W, height: H }, { width: W, height: H }),
+          io: { frame: async (f) => frames[f - 1001]!, writeExport: async (folder, files) => (written.push(...files), { folder: folder.name, files: files.map((f) => f.name) }) },
+          store,
+          solver: new TsCameraSolver(),
+          actor: 'Ana',
+          now: () => new Date('2026-10-22T12:00:00Z'),
+          generator: 'VC VFX test',
+        },
+        cmd,
+      );
+      if (!out.ok) throw new Error(`${cmd.verb}: ${out.error}`);
+      const r = applyOps(project, SHOT, out.ops, 'Ana', new Date('2026-10-22T12:00:00Z'));
+      if (!r.ok) throw new Error(r.reason);
+      project = r.project;
+      return out;
+    };
+    // A 12 × 10 mm sensor area behind a 2× lens: the picture is 24 mm wide.
+    await run({ verb: 'set_camera', filmBackMm: { width: 12, height: 10 } });
+    const trueMm = (intr.f * 24) / (W * A);
+    await run({ verb: 'set_lens', focalMode: 'approx', focalMm: trueMm * 1.1 });
+    await run({ verb: 'set_track_settings', maxFeatures: 300 });
+    await run({ verb: 'auto_track' });
+    await run({ verb: 'solve' });
+    const rec = shotState(project, SHOT)!.camtrack!.solves.at(-1)!;
+    expect(rec.intrinsics.pixelAspect).toBe(2);
+    expect(rec.stats.framesSolved).toBe(N);
+    expect(rec.stats.rms).toBeLessThan(1);
+    expect(Math.abs(rec.intrinsics.focalMm! - trueMm) / trueMm).toBeLessThan(0.02);
+    await run({ verb: 'export_camera', formats: ['nuke', 'blender', 'json'], stmaps: false });
+    const nk = written.find((f) => f.name.endsWith('.nk'))!.data as string;
+    expect(nk).toContain(`format "${W} ${H} 0 0 ${W} ${H} 2 `);
+    expect(Number(/haperture ([\d.]+)/.exec(nk)![1])).toBeCloseTo(24, 3);
+    const json = JSON.parse(written.find((f) => f.name.endsWith('.json'))!.data as string);
+    expect(json.plate.pixelAspect).toBe(2);
+    expect(json.filmBackMm.sensor).toEqual({ width: 12, height: 10 });
+    const report = written.find((f) => f.name.endsWith('_report.html'))!.data as string;
+    expect(report).toMatch(/pixel aspect 2<\/b>/);
+  }, 120 * SECONDS);
+});
+
+describe('checkerboard calibration of an anamorphic lens', () => {
+  it('measures fx ≠ fy (the pixel aspect) and gives the solver f and physical distortion', async () => {
+    const { boardPoints, calibrateZhang, calibrationIntrinsics, measuredPixelAspect } = await import('../camera/calibration');
+    const { rodrigues } = await import('../camera/geometry');
+    const lens: Intrinsics = { f: 1800, cx: 640, cy: 538, k1: -0.15, k2: 0.04, k3: 0, p1: 0, p2: 0, a: 1.5 };
+    const board = boardPoints({ cols: 10, rows: 7, squareMm: 30 });
+    const poses: [number, number, number, number, number][] = [
+      [0, 0, 0, 0, 0], [0.35, 0, 0, 0, 0], [-0.3, 0.2, 0.1, 0, 0], [0, 0.4, -0.05, 0, 0],
+      [0.2, 0.25, 0.05, -150, -85], [-0.2, 0.25, -0.05, 150, -85], [0.2, -0.25, 0.05, -150, 85], [-0.2, -0.25, -0.05, 150, 85],
+    ];
+    const views = poses.map(([rx, ry, rz, tx, ty]) => {
+      const R = rodrigues([rx, ry, rz]);
+      const t = [tx - 135, ty - 90, 800];
+      return board.map(([X, Y]) => project(lens, R, t, [X, Y, 0])!);
+    });
+    const c = calibrateZhang(board, views, {});
+    expect(measuredPixelAspect(c)).toBeCloseTo(1.5, 3);
+    const k = calibrationIntrinsics(c, 1.5);
+    expect(Math.abs(k.f - lens.f) / lens.f).toBeLessThan(0.002);
+    expect(k.k1).toBeCloseTo(lens.k1, 3);
+    expect(k.a).toBe(1.5);
+  });
+});

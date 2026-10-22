@@ -518,9 +518,18 @@ export function calibrateZhang(board: readonly [number, number][], views: readon
   return { ...P, rms: Math.sqrt(cost / (r.length / 2)), perView, poses: views.map((_, i) => ({ R: rodrigues(w[i]!), t: tr[i]! })) };
 }
 
-/** The calibration as the solver's intrinsics (square pixels: the mean of fx and fy). */
-export function calibrationIntrinsics(c: CalibrationResult): Intrinsics {
-  return { f: (c.fx + c.fy) / 2, cx: c.cx, cy: c.cy, k1: c.k1, k2: c.k2, k3: c.k3, p1: c.p1, p2: c.p2 };
+/**
+ * The calibration as the solver's intrinsics at the plate's pixel aspect
+ * (addendum 17): fx = f / a, fy = f, so f is the mean of fy and fx · a. Zhang's
+ * distortion is already on physical (de-squeezed) normalised coordinates.
+ */
+export function calibrationIntrinsics(c: CalibrationResult, pixelAspect = 1): Intrinsics {
+  return { f: (c.fx * pixelAspect + c.fy) / 2, cx: c.cx, cy: c.cy, k1: c.k1, k2: c.k2, k3: c.k3, p1: c.p1, p2: c.p2, ...(pixelAspect !== 1 ? { a: pixelAspect } : {}) };
+}
+
+/** The pixel aspect the board measured (fy / fx): a check on the shot's pixel aspect. */
+export function measuredPixelAspect(c: Pick<CalibrationResult, 'fx' | 'fy'>): number {
+  return c.fy / c.fx;
 }
 
 export { applyH };
