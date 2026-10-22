@@ -79,6 +79,12 @@ export const KeyParamsSchema = z.object({
   cleanPlateFrames: z.number().int().min(1).max(16).default(5),
   /** Cells across the clean-plate grid (its smoothness). */
   cleanPlateGrid: z.number().int().min(4).max(128).default(64),
+  /**
+   * Follow the screen in detail on each frame — the folds of the cloth, its
+   * fall-off, shadows on it — from the frame's own screen pixels round the
+   * subject (a per-frame clean plate). A shadow cast on the screen keys out.
+   */
+  screenDetail: z.boolean().default(true),
 });
 export type KeyParams = z.infer<typeof KeyParamsSchema>;
 export const DEFAULT_KEY_PARAMS: KeyParams = KeyParamsSchema.parse({});

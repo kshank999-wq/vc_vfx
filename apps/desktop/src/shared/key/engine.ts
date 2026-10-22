@@ -1,6 +1,6 @@
 import { contactSheetFrames, type KeyDocument, type KeyMetrics, type KeyRunResult, type ScreenKind } from '@vcvfx/domain';
 import { CancelledError } from '../roto/engine';
-import { buildScreenModel, evalScreenModel, flatScreenModel, screenGain, type ScreenModel } from './cleanplate';
+import { buildScreenModel, evalScreenModel, flatScreenModel, localScreen, modelSeen, screenGain, type ScreenModel } from './cleanplate';
 import { keyerSettings, keyFrame, type KeyFrameOutput } from './keyer';
 import type { LinearImage } from './linear';
 import { backgroundNear } from './look';
@@ -80,6 +80,7 @@ export interface KeyAtOptions {
  */
 export class ShotKeyer {
   private modelAt = new Map<string, Float32Array>();
+  private seenAt = new Map<string, Uint8Array | null>();
   private bgAt = new Map<string, { bg: LinearImage | null; near: Float32Array | null }>();
 
   constructor(
@@ -89,7 +90,8 @@ export class ShotKeyer {
     if (!settings.screen) throw new Error('Pick the screen colour first (Auto key, or the eyedropper).');
   }
 
-  private screenFor(img: LinearImage): Float32Array {
+  /** The screen of this frame (model × gain, then detail), and the model × gain alone. */
+  private screenFor(img: LinearImage): { screen: Float32Array; model: Float32Array } {
     const key = `${img.width}x${img.height}`;
     let base = this.modelAt.get(key);
     if (!base) {
@@ -97,16 +99,20 @@ export class ShotKeyer {
       this.modelAt.set(key, base);
     }
     const screen = this.settings.screen!;
-    if (!screen.track) return base;
-    const gain = screenGain(img, base, { kind: screen.kind, rgb: screen.rgb });
-    if (gain.every((g) => Math.abs(g - 1) < 1e-3)) return base;
-    const out = new Float32Array(base.length);
-    for (let i = 0; i < base.length; i += 3) {
-      out[i] = base[i]! * gain[0];
-      out[i + 1] = base[i + 1]! * gain[1];
-      out[i + 2] = base[i + 2]! * gain[2];
+    let out = base;
+    if (screen.track) {
+      if (!this.seenAt.has(key)) this.seenAt.set(key, modelSeen(this.model, img.width, img.height));
+      const gain = screenGain(img, base, { kind: screen.kind, rgb: screen.rgb }, this.seenAt.get(key)!);
+      if (!gain.every((g) => Math.abs(g - 1) < 1e-3)) {
+        out = new Float32Array(base.length);
+        for (let i = 0; i < base.length; i += 3) {
+          out[i] = base[i]! * gain[0];
+          out[i + 1] = base[i + 1]! * gain[1];
+          out[i + 2] = base[i + 2]! * gain[2];
+        }
+      }
     }
-    return out;
+    return { screen: this.settings.params.screenDetail ? localScreen(img, out, screen.kind) : out, model: out };
   }
 
   private async background(io: KeyIO, w: number, h: number, pxScale: number) {
@@ -122,7 +128,7 @@ export class ShotKeyer {
 
   async keyAt(io: KeyIO, frame: number, img: LinearImage, o: KeyAtOptions): Promise<KeyFrameOutput & { screen: Float32Array; background: LinearImage | null; links: ResolvedLink[] }> {
     const s = this.settings;
-    const screen = this.screenFor(img);
+    const { screen, model } = this.screenFor(img);
     const links: ResolvedLink[] = [];
     const rotoCache = new Map<string, Float32Array | null>();
     for (const l of s.links) if (l.source.type === 'roto' && !rotoCache.has(l.source.partId)) rotoCache.set(l.source.partId, await io.roto(l.source.partId, frame, img.width, img.height));
@@ -132,6 +138,7 @@ export class ShotKeyer {
     const out = keyFrame({
       image: img,
       screen,
+      model,
       settings: keyerSettings(s.screen!.kind, s.params, o.pxScale),
       links,
       matteOnly: !o.foreground,

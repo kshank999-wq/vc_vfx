@@ -25,6 +25,11 @@ export interface ScreenModel {
   grid: Float32Array;
   /** Share of cells that had screen pixels (the rest were inpainted). */
   observed: number;
+  /**
+   * Per cell, how well the screen was seen there (0 … 1, before inpainting).
+   * Absent: everywhere (a flat model).
+   */
+  support?: Float32Array;
 }
 
 export interface ScreenRef {
@@ -176,7 +181,7 @@ function fitGrid(frames: readonly LinearImage[], masks: readonly Uint8Array[], g
     weight[c] = Math.min(1, support / Math.max(1, frames.length) / 0.3);
   }
   const filled = pullPush(grid, weight, gw, gh, 3);
-  return { gw, gh, grid: filled, observed: observed / (gw * gh) };
+  return { gw, gh, grid: filled, observed: observed / (gw * gh), support: weight };
 }
 
 /** The screen model's colour at every pixel of a w × h image (bilinear between cell centres). */
@@ -224,11 +229,115 @@ export function buildScreenModel(frames: readonly LinearImage[], screen: ScreenR
 }
 
 /**
+ * The screen of this one frame, in detail (addendum 16): the model, times a
+ * fine per-channel ratio field measured on this frame's own screen pixels and
+ * filled across what hides the screen from the screen round it (pull–push) —
+ * the way a per-frame clean plate is pulled from an eroded screen. The model
+ * is smooth (its grid is coarse, and the camera may move), so on a real
+ * screen the folds of the cloth, the fall-off towards the floor and shadows
+ * on the screen differ from it locally, and a pixel of screen 30 % darker
+ * than the model keys 30 % solid. Screen pixels here are those whose
+ * chromaticity is within `tol` of the model's at that pixel and whose
+ * brightness is 0.25 … 2 × the model's, eroded so soft edges stay out; cells
+ * are `cell` pixels. A shadow the subject casts on the screen is screen too:
+ * it keys out.
+ */
+export function localScreen(img: LinearImage, model: Float32Array, kind: ScreenKind, options: { cell?: number; tol?: number; erode?: number; maxKey?: number } = {}): Float32Array {
+  const { width: w, height: h, data } = img;
+  const n = w * h;
+  const tol = options.tol ?? 0.04;
+  const maxKey = options.maxKey ?? 0.5;
+  const [sc, ac, cc] = kind === 'green' ? [1, 0, 2] : [2, 0, 1];
+  const cand = new Uint8Array(n);
+  for (let i = 0; i < n; i += 1) {
+    const q = 3 * i;
+    const r = data[q]!;
+    const g = data[q + 1]!;
+    const b = data[q + 2]!;
+    const mr = model[q]!;
+    const mg = model[q + 1]!;
+    const mb = model[q + 2]!;
+    const s = r + g + b;
+    const ms = mr + mg + mb;
+    if (!(ms > 1e-6) || !(s > 0.25 * ms) || s > 2 * ms || r < 0 || g < 0 || b < 0) continue;
+    // Not what the key against the model already calls mostly subject: a costume the screen's
+    // bounce has made screen-coloured is darker than the screen and must not become screen here.
+    const dS = model[q + sc]! - 0.5 * (model[q + ac]! + model[q + cc]!);
+    const dP = data[q + sc]! - 0.5 * (data[q + ac]! + data[q + cc]!);
+    if (!(dS > 1e-6) || 1 - dP / dS > maxKey) continue;
+    if ((r / s - mr / ms) ** 2 + (b / s - mb / ms) ** 2 > tol * tol) continue;
+    cand[i] = 1;
+  }
+  const e = options.erode ?? Math.max(1, Math.round(w / 640));
+  const mask = e > 0 ? morph(cand, w, h, -e) : cand;
+  const cell = Math.max(2, Math.round(options.cell ?? w / 240));
+  const gw = Math.max(1, Math.ceil(w / cell));
+  const gh = Math.max(1, Math.ceil(h / cell));
+  const sum = new Float32Array(gw * gh * 3);
+  const wt = new Float32Array(gw * gh);
+  for (let y = 0; y < h; y += 1) {
+    const cy = Math.floor(y / cell) * gw;
+    for (let x = 0; x < w; x += 1) {
+      const i = y * w + x;
+      if (!mask[i]) continue;
+      const c = cy + Math.floor(x / cell);
+      const q = 3 * i;
+      for (let k = 0; k < 3; k += 1) sum[3 * c + k]! += Math.max(0.25, Math.min(2, data[q + k]! / Math.max(1e-6, model[q + k]!)));
+      wt[c]! += 1;
+    }
+  }
+  const full = cell * cell * 0.25;
+  for (let c = 0; c < gw * gh; c += 1) {
+    if (!wt[c]) continue;
+    for (let k = 0; k < 3; k += 1) sum[3 * c + k]! /= wt[c]!;
+    wt[c] = Math.min(1, wt[c]! / full);
+  }
+  // Nowhere to measure (a frame without screen): the model as it is.
+  if (!wt.some((v) => v > 0)) return model.slice();
+  const ratio = pullPush(sum, wt, gw, gh, 3);
+  const out = new Float32Array(n * 3);
+  for (let y = 0; y < h; y += 1) {
+    const fy = Math.min(gh - 1, Math.max(0, (y + 0.5) / cell - 0.5));
+    const y0 = Math.floor(fy);
+    const y1 = Math.min(gh - 1, y0 + 1);
+    const ty = fy - y0;
+    for (let x = 0; x < w; x += 1) {
+      const fx = Math.min(gw - 1, Math.max(0, (x + 0.5) / cell - 0.5));
+      const x0 = Math.floor(fx);
+      const x1 = Math.min(gw - 1, x0 + 1);
+      const tx = fx - x0;
+      const q = 3 * (y * w + x);
+      for (let k = 0; k < 3; k += 1) {
+        const v = (ratio[3 * (y0 * gw + x0) + k]! * (1 - tx) + ratio[3 * (y0 * gw + x1) + k]! * tx) * (1 - ty) + (ratio[3 * (y1 * gw + x0) + k]! * (1 - tx) + ratio[3 * (y1 * gw + x1) + k]! * tx) * ty;
+        out[q + k] = model[q + k]! * v;
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * Where the model was seen (support ≥ ½ in the pixel's cell), per pixel of a
+ * w × h image; null for a model seen everywhere.
+ */
+export function modelSeen(model: ScreenModel, w: number, h: number): Uint8Array | null {
+  if (!model.support) return null;
+  const out = new Uint8Array(w * h);
+  for (let y = 0; y < h; y += 1) {
+    const cy = Math.min(model.gh - 1, Math.floor((y * model.gh) / h));
+    for (let x = 0; x < w; x += 1) out[y * w + x] = model.support[cy * model.gw + Math.min(model.gw - 1, Math.floor((x * model.gw) / w))]! >= 0.5 ? 1 : 0;
+  }
+  return out;
+}
+
+/**
  * The per-channel gain that brings the model to this frame's screen (drift:
  * flicker, clouds): the median ratio over this frame's certain screen pixels,
- * kept within ½ … 2.
+ * kept within ½ … 2. With `seen`, only where the model was itself measured:
+ * elsewhere it is inpainted, and screen-coloured things there (grass and
+ * trees round a green card held up outdoors) say nothing about the screen.
  */
-export function screenGain(img: LinearImage, model: Float32Array, screen: ScreenRef): [number, number, number] {
+export function screenGain(img: LinearImage, model: Float32Array, screen: ScreenRef, seen: Uint8Array | null = null): [number, number, number] {
   // Chromaticity only (a frame whose screen got much darker must still find its screen), on a
   // sparse grid, a sample counting only when its neighbours on the grid are screen too.
   const { width: w, height: h, data } = img;
@@ -248,6 +357,7 @@ export function screenGain(img: LinearImage, model: Float32Array, screen: Screen
   const ratios: [number[], number[], number[]] = [[], [], []];
   for (let y = step; y < h - step; y += step)
     for (let x = step; x < w - step; x += step) {
+      if (seen && !seen[y * w + x]) continue;
       if (!isScreen(x, y) || !isScreen(x - step, y) || !isScreen(x + step, y) || !isScreen(x, y - step) || !isScreen(x, y + step)) continue;
       const i = 3 * (y * w + x);
       for (let c = 0; c < 3; c += 1) {

@@ -39,7 +39,7 @@ export interface KeyExportJob {
   io: KeyIOJob;
   settings: KeySettings;
   /** The clean-plate model; null: built in the worker from `modelIO` (working size) first. */
-  model: { gw: number; gh: number; grid: number[]; observed: number } | null;
+  model: { gw: number; gh: number; grid: number[]; observed: number; support?: number[] } | null;
   modelIO?: KeyIOJob;
   shot: string;
   version: number;
@@ -59,8 +59,8 @@ export interface KeyExportResult {
   frames: { frame: number; confidence: number }[];
 }
 
-export const modelToJson = (m: ScreenModel) => ({ gw: m.gw, gh: m.gh, grid: Array.from(m.grid), observed: m.observed });
-export const modelFromJson = (m: NonNullable<KeyExportJob['model']>): ScreenModel => ({ gw: m.gw, gh: m.gh, grid: Float32Array.from(m.grid), observed: m.observed });
+export const modelToJson = (m: ScreenModel) => ({ gw: m.gw, gh: m.gh, grid: Array.from(m.grid), observed: m.observed, ...(m.support ? { support: Array.from(m.support) } : {}) });
+export const modelFromJson = (m: NonNullable<KeyExportJob['model']>): ScreenModel => ({ gw: m.gw, gh: m.gh, grid: Float32Array.from(m.grid), observed: m.observed, ...(m.support ? { support: Float32Array.from(m.support) } : {}) });
 
 /** Clear an unapproved version's own files; refuse an approved one that is on disk. */
 export async function clearKeyVersion(folder: string, shot: string, version: number, approved: boolean): Promise<void> {
