@@ -17,6 +17,7 @@ import {
   shotTiming,
   versionTag,
   type PlateRecordInput,
+  type ShotTiming,
   type ProbedMediaInput,
   type Project,
 } from '@vcvfx/domain';
@@ -76,12 +77,28 @@ export function hintsFrom(media: Pick<ProbedMediaInput, 'pixelFormat' | 'colorSp
   return { yuv: /^(yuv|nv|uyvy|yuyv|v210|ayuv|p0|p2)/.test(pix), colorSpace: media?.colorSpace, colorRange: media?.colorRange };
 }
 
-/** Resolve a shot's source to what ffmpeg reads: one clip, or an image sequence from the named first frame. */
-export async function sourceInputFor(absolute: string, frameRate: number): Promise<{ ok: true; source: SourceInput; sequenceCount: number | null } | { ok: false; reason: string }> {
+/**
+ * Resolve a shot's source to what ffmpeg reads: one clip, or an image
+ * sequence from the named first frame.
+ *
+ * An image sequence's file numbers are frame numbers. When the handoff gives
+ * its range in those numbers (frameIn at or after the first file) and no
+ * timecodeIn to place the clip, `clipStart` is the first file's number, for
+ * `clipRange` / `viewerTimeline`: frameIn 2000 of `C007_0001996.dpx …` is the
+ * fifth file, not the 2001st.
+ */
+export async function sourceInputFor(
+  absolute: string,
+  frameRate: number,
+  timing?: Pick<ShotTiming, 'frameIn' | 'timecodeIn' | 'from'> | null,
+): Promise<{ ok: true; source: SourceInput; sequenceCount: number | null; clipStart?: number } | { ok: false; reason: string }> {
   const raw = cameraRawProblem(absolute);
   if (raw) return { ok: false, reason: raw };
   const sequence = await detectImageSequence(absolute);
-  if (sequence) return { ok: true, source: { kind: 'sequence', pattern: sequence.pattern, startNumber: sequence.startNumber, frameRate }, sequenceCount: sequence.count };
+  if (sequence) {
+    const numbered = timing?.from === 'handoff' && !timing.timecodeIn && sequence.startNumber > 0 && timing.frameIn >= sequence.startNumber;
+    return { ok: true, source: { kind: 'sequence', pattern: sequence.pattern, startNumber: sequence.startNumber, frameRate }, sequenceCount: sequence.count, ...(numbered ? { clipStart: sequence.startNumber } : {}) };
+  }
   return { ok: true, source: { kind: 'clip', path: absolute }, sequenceCount: null };
 }
 
@@ -135,7 +152,7 @@ export async function generateSequence(input: SequenceInput): Promise<SequenceRe
   await mkdir(plates, { recursive: true });
   await mkdir(data, { recursive: true });
 
-  const resolved = await sourceInputFor(source, timing.frameRate);
+  const resolved = await sourceInputFor(source, timing.frameRate, timing);
   if (!resolved.ok) return { ok: false, reason: resolved.reason };
 
   // This version is not approved, so an earlier attempt at it may be cleared:
@@ -160,6 +177,7 @@ export async function generateSequence(input: SequenceInput): Promise<SequenceRe
       frameIn: timing.frameIn,
       // A probed range is already clip-relative (0 … frameCount − 1); its timecode only labels it.
       timecodeIn: timing.from === 'handoff' ? timing.timecodeIn : undefined,
+      clipStart: resolved.clipStart,
       compression: output.compression,
       color: transform ? { transform, decodeLut } : null,
       hints: hintsFrom(media),

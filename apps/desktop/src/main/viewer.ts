@@ -10,6 +10,7 @@ import {
   handoffShot,
   plateColorFor,
   shotState,
+  shotTiming,
   versionTag,
   viewDisplayCurve,
   viewTransform,
@@ -152,10 +153,10 @@ export async function viewerFrame(project: Project, req: ViewerFrameRequest, out
   let hints = hintsFrom(state.probe);
   if (req.layer === 'source') {
     const abs = resolveFromHandoff(project.handoffPath, shot.sourcePath)!;
-    const resolved = await sourceInputFor(abs, timeline.frameRate);
+    const resolved = await sourceInputFor(abs, timeline.frameRate, shotTiming(project, shot));
     if (!resolved.ok) throw new Error(resolved.reason);
     source = resolved.source;
-    const index = timeline.clipIndex(frame);
+    const index = (viewerTimeline(project, req.shotId, resolved.clipStart) ?? timeline).clipIndex(frame);
     frameArg = source.kind === 'sequence' ? source.startNumber + index : index;
     file = source.kind === 'sequence' ? source.pattern.replace(/%0(\d+)d/, (_m, n: string) => String(frameArg).padStart(Number(n), '0')) : abs;
     encoding = decision.sourceEncoding;

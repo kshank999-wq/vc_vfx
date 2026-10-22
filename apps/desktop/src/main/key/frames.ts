@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { readdir } from 'node:fs/promises';
 import { extname, join } from 'node:path';
-import { FORMAT_EXTENSIONS, handoffShot, plateColorFor, shotState, versionTag, type ColorEncodingId, type Project } from '@vcvfx/domain';
+import { FORMAT_EXTENSIONS, handoffShot, plateColorFor, shotState, shotTiming, versionTag, type ColorEncodingId, type Project } from '@vcvfx/domain';
 import type { DecodeHints, FfmpegCaps, SourceInput } from '../../shared/ffmpeg-args';
 import { buildLinearFramesArgs } from '../../shared/key/ffmpeg-key';
 import { convertLinear, decodePlanar, workingSpace, type LinearImage, type WorkingSpace } from '../../shared/key/linear';
@@ -47,7 +47,7 @@ export async function keyFrameSource(project: Project, shotId: string, outputRoo
   const state = shotState(project, shotId);
   if (!shot || !state) return { ok: false, reason: `No shot ${shotId}` };
   if (isSampleHandoff(project.handoffPath)) return { ok: false, reason: 'The sample project has no media on disk. Open a real handoff to key its frames.' };
-  const timeline = viewerTimeline(project, shotId);
+  let timeline = viewerTimeline(project, shotId);
   if (!timeline) return { ok: false, reason: 'The frame range is unknown. Read it from the clip first (Sequence plan › Read from clip).' };
   const decision = plateColorFor(project, shotId);
   const name = state.vfxShotId ?? shot.shotId;
@@ -77,8 +77,10 @@ export async function keyFrameSource(project: Project, shotId: string, outputRoo
     }
   }
   const abs = resolveFromHandoff(project.handoffPath, shot.sourcePath)!;
-  const resolved = await sourceInputFor(abs, timeline.frameRate);
+  const resolved = await sourceInputFor(abs, timeline.frameRate, shotTiming(project, shot));
   if (!resolved.ok) return { ok: false, reason: resolved.reason };
+  // An image sequence numbered in the handoff's frames maps from its first file.
+  if (resolved.clipStart !== undefined) timeline = viewerTimeline(project, shotId, resolved.clipStart) ?? timeline;
   const index = timeline.clipIndex(timeline.first);
   const spec: KeyFrameSpec = {
     ffmpeg: tools.ffmpeg,

@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
-import { FORMAT_EXTENSIONS, handoffShot, plateColorFor, shotState, versionTag, viewTransform, type Project, type ViewPipeline } from '@vcvfx/domain';
+import { FORMAT_EXTENSIONS, handoffShot, plateColorFor, shotState, shotTiming, versionTag, viewTransform, type Project, type ViewPipeline } from '@vcvfx/domain';
 import { buildRawFramesArgs, type DecodeHints, type FfmpegCaps, type SourceInput } from '../../shared/ffmpeg-args';
 import type { RGBImage } from '../../shared/roto/image';
 import { viewerTimeline } from '../../shared/viewer';
@@ -57,7 +57,7 @@ export async function rotoFrameSource(
   const state = shotState(project, shotId);
   if (!shot || !state) return { ok: false, reason: `No shot ${shotId}` };
   if (isSampleHandoff(project.handoffPath)) return { ok: false, reason: 'The sample project has no media on disk. Open a real handoff to paint roto on its frames.' };
-  const timeline = viewerTimeline(project, shotId);
+  let timeline = viewerTimeline(project, shotId);
   if (!timeline) return { ok: false, reason: 'The frame range is unknown. Read it from the clip first (Sequence plan › Read from clip).' };
   const decision = plateColorFor(project, shotId);
   const name = state.vfxShotId ?? shot.shotId;
@@ -95,8 +95,10 @@ export async function rotoFrameSource(
   }
 
   const abs = resolveFromHandoff(project.handoffPath, shot.sourcePath)!;
-  const resolved = await sourceInputFor(abs, timeline.frameRate);
+  const resolved = await sourceInputFor(abs, timeline.frameRate, shotTiming(project, shot));
   if (!resolved.ok) return { ok: false, reason: resolved.reason };
+  // An image sequence numbered in the handoff's frames maps from its first file.
+  if (resolved.clipStart !== undefined) timeline = viewerTimeline(project, shotId, resolved.clipStart) ?? timeline;
   const view = viewTransform(decision.sourceEncoding, 'rec709');
   const luts = await viewLuts(tools.cacheDir, view);
   const index = timeline.clipIndex(timeline.first);
