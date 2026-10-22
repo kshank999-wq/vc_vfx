@@ -1,0 +1,224 @@
+#! nuke file written by VC VFX test at 2026-10-22T12:00:00.000Z
+version 13.0 v1
+# 010_020 prep comp v001: 12 VC VFX nodes. See the graph manifest beside this script for every parameter and asset.
+Root {
+ inputs 0
+ name "[file dirname [value root.name]]/010_020_comp_v001.nk"
+ first_frame 1001
+ last_frame 1002
+ fps 24
+ format "4096 2160 0 0 4096 2160 1 010_020_plate"
+ colorManagement OCIO
+ OCIO_config aces_1.2
+ workingSpaceLUT "ACES - ACEScg"
+}
+StickyNote {
+ inputs 0
+ name Roto1_note
+ label "VC VFX Roto node Roto1: Roto v001 matte
+The module's own exported, versioned output is read here; change it in VC VFX's Roto tab."
+ note_font_size 14
+ xpos 570
+ ypos 140
+}
+StickyNote {
+ inputs 0
+ name LightWrap1_note
+ label "VC VFX LightWrap node LightWrap1 (width 16, intensity 0.6, lumaWeight 0.5)
+Nuke has no LightWrap node: this Read is VC VFX's render of it (baked), made from the inputs drawn above it."
+ note_font_size 14
+ xpos 270
+ ypos 65
+}
+StickyNote {
+ inputs 0
+ name Keyer1_note
+ label "VC VFX Keyer node Keyer1: Key v001 foreground
+screen green, despill average
+The module's own exported, versioned output is read here; change it in VC VFX's Key tab."
+ note_font_size 14
+ xpos 270
+ ypos -10
+}
+Constant {
+ inputs 0
+ color {1 0.5 0 1}
+ format "4096 2160 0 0 4096 2160 1 010_020_plate"
+ name Insert
+ xpos 600
+ ypos 0
+}
+CornerPin2D {
+ to1 {{curve x1001 4.5 x1002 5.5} {curve x1001 2149.5 x1002 2149.5}}
+ to2 {{curve x1001 12.5 x1002 13.5} {curve x1001 2149.5 x1002 2149.5}}
+ to3 {{curve x1001 12.5 x1002 13.5} {curve x1001 2155.5 x1002 2155.5}}
+ to4 {{curve x1001 4.5 x1002 5.5} {curve x1001 2155.5 x1002 2155.5}}
+ from1 {4.5 2149.5}
+ from2 {12.5 2149.5}
+ from3 {12.5 2155.5}
+ from4 {4.5 2155.5}
+ filter Keys
+ name CornerPin1
+ label "corner pin screen matchmove"
+ xpos 600
+ ypos 75
+}
+Read {
+ inputs 0
+ file "[file dirname [value root.name]]/../../02_MATTES_ROTO/010_020_matte_v001/010_020_matte_v001.%04d.png"
+ format "4096 2160 0 0 4096 2160 1 010_020_plate"
+ first 1001
+ last 1002
+ origfirst 1001
+ origlast 1002
+ origset true
+ on_error black
+ raw true
+ name Roto1_read
+ label "Roto v001 matte"
+ xpos 450
+ ypos 110
+}
+Shuffle {
+ red red
+ green red
+ blue red
+ alpha red
+ name Roto1
+ label "matte to alpha"
+ xpos 450
+ ypos 150
+}
+Read {
+ inputs 0
+ file "[file dirname [value root.name]]/baked/010_020_comp_LightWrap1_v001.%04d.exr"
+ format "4096 2160 0 0 4096 2160 1 010_020_plate"
+ first 1001
+ last 1002
+ origfirst 1001
+ origlast 1002
+ origset true
+ on_error black
+ colorspace "ACES - ACEScg"
+ premultiplied true
+ name LightWrap1
+ label "LightWrap1 (baked)"
+ xpos 150
+ ypos 75
+}
+Read {
+ inputs 0
+ file "VFX/SCENE_12A/BG/city_night_plate.exr"
+ format "4096 2160 0 0 4096 2160 1 010_020_plate"
+ first 1
+ last 1
+ origfirst 1
+ origlast 1
+ origset true
+ before hold
+ after hold
+ on_error black
+ colorspace "ACES - ACEScg"
+ name Read_background_read
+ label "Background city_night_plate.exr"
+ xpos 300
+ ypos -40
+}
+Reformat {
+ format "4096 2160 0 0 4096 2160 1 010_020_plate"
+ resize distort
+ name Read_background
+ xpos 300
+ ypos 0
+}
+set Nn3 [stack 0]
+Merge2 {
+ inputs 2
+ operation over
+ mix 0.8
+ name Merge1
+ xpos 300
+ ypos 150
+}
+Grade {
+ inputs 2
+ blackpoint 0
+ whitepoint 1
+ black 0
+ white 1.2
+ multiply 2
+ add 0
+ gamma 1
+ black_clamp true
+ white_clamp false
+ maskChannelInput rgba.alpha
+ name Grade1
+ xpos 300
+ ypos 225
+}
+Merge2 {
+ inputs 2
+ operation over
+ name Merge2
+ xpos 300
+ ypos 300
+}
+Write {
+ channels rgba
+ file "[file dirname [value root.name]]/nuke_render/010_020_comp_nk_v001.%04d.exr"
+ file_type exr
+ datatype "16 bit half"
+ compression "Zip (16 scanlines)"
+ colorspace "ACES - ACEScg"
+ create_directories true
+ use_limit true
+ first 1001
+ last 1002
+ name Write1
+ xpos 300
+ ypos 375
+}
+Read {
+ inputs 0
+ file "[file dirname [value root.name]]/../../01_PLATES/010_020_plate_v001.%04d.exr"
+ format "4096 2160 0 0 4096 2160 1 010_020_plate"
+ first 1001
+ last 1002
+ origfirst 1001
+ origlast 1002
+ origset true
+ on_error black
+ colorspace "ACES - ACEScg"
+ name Read_plate
+ label "plates v001"
+ xpos 0
+ ypos 0
+}
+Transform {
+ translate {10 -5}
+ rotate 15
+ scale {1 1}
+ center {2048 1080}
+ filter Keys
+ name Transform1
+ label "image y down in VC VFX; y-up here"
+ xpos 0
+ ypos 150
+}
+Read {
+ inputs 0
+ file "[file dirname [value root.name]]/../../03_KEYS/010_020_key_v001/010_020_key_fg_v001.%04d.exr"
+ format "4096 2160 0 0 4096 2160 1 010_020_plate"
+ first 1001
+ last 1002
+ origfirst 1001
+ origlast 1002
+ origset true
+ on_error black
+ colorspace "ACES - ACEScg"
+ premultiplied true
+ name Keyer1
+ label "Key v001 foreground"
+ xpos 150
+ ypos 0
+}

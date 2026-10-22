@@ -300,7 +300,7 @@ export const COMP_NODES: Record<CompNodeType, CompNodeInfo> = {
       num('multiply', 'Multiply', 1, 0, 8, 0.01),
       num('offset', 'Offset', 0, -1, 1, 0.005),
       num('gamma', 'Gamma', 1, 0.2, 5, 0.01),
-      num('exposure', 'Exposure', 0, -8, 8, 0.05, { unit: ' stops', hint: 'Multiplies by 2^stops before the grade' }),
+      num('exposure', 'Exposure', 0, -8, 8, 0.05, { unit: ' stops', hint: 'Scales the multiply by 2^stops (Nuke: multiply × 2^stops)' }),
       flag('blackClamp', 'Black clamp', true),
       flag('whiteClamp', 'White clamp', false),
       flag('unpremult', 'Unpremult by alpha', false),
