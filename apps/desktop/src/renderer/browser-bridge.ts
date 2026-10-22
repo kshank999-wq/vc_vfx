@@ -7,6 +7,7 @@ import { createCleanPlatePreview } from './cleanplate-preview';
 import { createIsolatePreview } from './isolate-preview';
 import { createTexturePreview } from './texture-preview';
 import { createCompPreview } from './comp-preview';
+import { createLightingPreview } from './lighting-preview';
 import { createRotoPreview } from './roto-preview';
 
 /**
@@ -188,6 +189,7 @@ export function createBrowserBridge(): BrowserBridge {
   const isolating = createIsolatePreview({ desktopOnly, progress: (p) => progressListeners.forEach((l) => l(p)) });
   const texturing = createTexturePreview({ desktopOnly, progress: (p) => progressListeners.forEach((l) => l(p)) });
   const compositing = createCompPreview({ desktopOnly });
+  const lighting = createLightingPreview({ desktopOnly, progress: (p) => progressListeners.forEach((l) => l(p)) });
 
   return {
     command,
@@ -321,8 +323,15 @@ export function createBrowserBridge(): BrowserBridge {
     compFrame: (input) => compositing.compFrame(input),
     compRender: (input) => compositing.compRender(input),
     compExport: (input) => compositing.compExport(input),
+    // The lighting analysis: the sample's storeroom shot is a synthetic lit shot analysed here (lighting-preview.ts).
+    lightingSession: (input) => lighting.lightingSession(input),
+    lightingIngest: (input) => lighting.lightingIngest(input),
+    lightingFrame: (input) => lighting.lightingFrame(input),
+    lightingImage: (input) => lighting.lightingImage(input),
+    lightingAnalyse: (input) => lighting.lightingAnalyse(input),
+    lightingExport: (input) => lighting.lightingExport(input),
     cancelJob: async (jobId) => {
-      if (!camera.cancel(jobId) && !keying.cancel(jobId) && !cleaning.cancel(jobId) && !isolating.cancel(jobId) && !texturing.cancel(jobId)) roto.cancel(jobId);
+      if (!camera.cancel(jobId) && !keying.cancel(jobId) && !cleaning.cancel(jobId) && !isolating.cancel(jobId) && !texturing.cancel(jobId) && !lighting.cancel(jobId)) roto.cancel(jobId);
     },
     onProgress: (listener) => {
       progressListeners.add(listener);

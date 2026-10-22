@@ -14,11 +14,12 @@ changed; the same components do the same work inside new frames.
 
 ## 1. The top toolbar
 
-`Shots · Plates · Roto · Key · Clean Plate · Sky & BG · Textures · Comp · Camera Track · 2D Track · Deliver`
+`Shots · Plates · Roto · Key · Clean Plate · Sky & BG · Textures · Comp · Lighting · Camera Track · 2D Track · Deliver`
 (Clean Plate added with [addendum 10](addendum-10-clean-plate.md), Sky & BG
 with [addendum 11](addendum-11-sky-background.md), Textures with
 [addendum 12](addendum-12-textures.md), Comp with
-[addendum 13](addendum-13-compositor.md)), each an
+[addendum 13](addendum-13-compositor.md), Lighting with
+[addendum 14](addendum-14-lighting-lens.md)), each an
 icon and a word (`components/Layout.tsx` `ModuleTabs`, definitions in
 `renderer/modules.ts`), then **Help** (the tour), the licence pill (Account)
 and **Settings** on the right. The brand block shows the project's name and an
@@ -35,17 +36,19 @@ unsaved-changes dot.
   with the offer at the top of its steps. Sky & BG works on two tasks: its
   tab speaks for the one further from done, and greys out only when the shot
   has neither (offering to add either).
-- ⌘/Ctrl+1…9 and 0 switch tabs, in the browser preview too. Eleven tabs and
-  ten digits since the Comp tab (addendum 13): Shots 1, Plates 2, Roto 3, Key
-  4, Clean Plate 5, Sky & BG 6, Comp 7, Camera Track 8, 2D Track 9, Deliver 0;
-  Textures — the least used, a set's references rather than every shot — has
-  no digit (one click, and in the View menu without an accelerator).
+- ⌘/Ctrl+1…9 and 0 switch tabs, in the browser preview too. Twelve tabs and
+  ten digits since the Lighting tab (addendum 14): Shots 1, Plates 2, Roto 3,
+  Key 4, Clean Plate 5, Sky & BG 6, Comp 7, Camera Track 8, 2D Track 9,
+  Deliver 0 — unchanged, so no one's fingers have to relearn them. Textures
+  and Lighting — the least used, a set's references and a look to rebuild
+  rather than every shot — have no digit (one click, and in the View menu
+  without an accelerator; the status bar says "Textures, Lighting: click").
   `MODULE_DIGITS` in `renderer/modules.ts` is the one table; the tooltips, the
   menu and the status bar follow it. The renderer owns the
   keys, and the desktop's new **View** menu lists the tabs (and Previous /
   Next Shot) with their accelerators shown but not registered
   (`registerAccelerator: false`), so nothing fires twice. Menu commands
-  `show-shots` … `show-deliver` (with `show-cleanplate`, `show-isolate`, `show-texture` and `show-comp`) and `show-tour` were added to
+  `show-shots` … `show-deliver` (with `show-cleanplate`, `show-isolate`, `show-texture`, `show-comp` and `show-lighting`) and `show-tour` were added to
   `MENU_COMMANDS`; **Help › Show the Tour** reopens the tour.
 
 - **Fitting eleven tabs** (addendum 13). At 1440 px the ten tabs already
@@ -58,6 +61,13 @@ unsaved-changes dot.
   end at 943 px (the right-hand buttons start at 1105), at 1280 × 800 the
   short ones end at 794 (buttons at 1049); no two tabs overlap, no label
   leaves its tab, the toolbar never scrolls.
+- **Fitting twelve tabs** (addendum 14). Lighting's short label is *Light*.
+  Measured the same way in the built preview with the Lighting tab open: at
+  1440 × 900 the twelve long labels end at 1016 px (the right-hand buttons
+  start at 1105), at 1280 × 800 the short ones end at 842 (buttons at 1049);
+  the smallest gap between two tabs is 2 px, no two overlap, no label leaves
+  its tab, the toolbar never scrolls, and nothing in the centre zone passes
+  its right edge.
 
 ## 2. The shot bar
 
@@ -69,7 +79,7 @@ filtered list, so filters carry over.
 
 Selecting a shot on Shots and clicking a tab opens that tab on it.
 Double-clicking a shot opens the last module used if the shot has that task,
-else its first task module (Plates, Roto, 2D Track, Camera Track, Key, Clean Plate, Sky & BG, Textures), else
+else its first task module (Plates, Roto, 2D Track, Camera Track, Key, Clean Plate, Sky & BG, Textures, Comp, Lighting), else
 Deliver (`moduleToOpen`).
 
 ## 3. Every module: three zones
@@ -100,6 +110,7 @@ the task's card — state, version, approval, *Submit for review*,
 | **Clean Plate** | Five steps ([addendum 10](addendum-10-clean-plate.md)): choose what to remove (roto parts, boxes, matte growth) · still or sequence, alignment and reference frame · build · review & fix (next problem, prefer / leave out a frame, patch a region from a chosen frame) · export. The centre is the clean-plate viewer (source, plate, unresolved in red, confidence, what is removed, A/B wipe, a timeline coloured by confidence). | Frames built, mode, seen in other frames, low confidence, alignment residual, problem frames; the camera's motion and exposure; this frame's measurements; version; the Clean plate task card |
 | **Sky & BG** | One tab for two tasks (Sky isolation / replacement prep and Background removal; [addendum 11](addendum-11-sky-background.md)), five steps: what to isolate (the sky, or a subject from its background; the other task added from here) · find the sky (automatic: more/less sky, keep what moves in front, optional paint) or show the subject (box, paint or roto part on a seed frame; Track or SAM 2.1) · build · review & fix (next problem, looks right, flag, paint *Keep in front* / *Make sky* on any frame, carried to the frames around it; edge softness, detail, grow, temporal smoothing, spill folded) · export. The centre is the isolation viewer (source, matte, foreground over a checkerboard, sky/background plate with the unseen part in red, overlay with the sky side tinted, the uncertain edge amber and a doubtful matte red, A/B wipe, paint strokes and the subject's box drawn over the picture, a timeline coloured by confidence with painted frames marked). | Frames built, confidence, flicker, uncertain edge, unseen sky/background, problem frames; this frame's measurements and problem; version, export, engine, settings revision; the task card of the target shown |
 | **Comp** | Five steps ([addendum 13](addendum-13-compositor.md)): start the graph (from the suggested graph, whose nodes are listed, or empty) · edit the graph (the keys, and every problem — loops, missing inputs, a matte where colour is needed, a module export missing — as a link to its node) · preview (1 and 2, proxy, the time and how many nodes were computed or taken from the cache) · render (range, review encode) · export for Nuke. The centre is split, resizable: the viewer on top (1, 2, A/B wipe, RGB / alpha, timeline) and the node graph under it (pan, zoom, drag nodes, drag output → input, Tab menu, D, Delete, 1/2, L, F, ⌘/Ctrl+Z). | The selected node's parameters (name, bypass, view as 1 / 2, every parameter with its own reset and *Reset all*, what it reads, its problems); nodes, problems, preview time, rendered; version, graph revision, export, plate, colour; the module outputs read; the task card |
+| **Lighting** | Five steps ([addendum 14](addendum-14-lighting-lens.md)): frames and references (the frame that places the rig; chrome ball, grey ball, HDRI from disk or the preview's sample set, a ball's circle dragged in the viewer, the HDRI's heading or *aligned by the analysis*) · analyse (subject matte source, subject distance, the camera's white balance, use the sky; what the analysis knows about the lens and the camera track) · review the lights (the list with role, type, direction and stops; on/off, remove/restore, add a light by role; the selected light's figures in the right panel) · lens and camera *(optional)* (focal, film back, field of view, distortion, aperture, each with its source; artist overrides) · export (formats, the exposure reference in lux, Unreal / USD / Blender / report; versioned, never overwritten). The centre is the plate with the overlays (each light's arrow in its range cone from the subject's centre, practicals circled, shadow lines, the balls, vanishing points), *Relit* (the subject re-lit by the rig), an A/B wipe of plate against relit, and *Reference* (a ball or the HDRI, the circle drawn on it); beside it the rig from above or from the side (drag a light to move it: azimuth and distance from above, elevation from the side; range wedges), a grey ball lit by the rig and the match score. | Lights found, key confidence, focal estimate, match; the key's direction in words; the selected light's role, type, every figure as a slider with its estimate and range and a Lock, its evidence and motivation; the AI review (a note, *Ask AI*, each suggestion to accept or reject); version, export, revisions; the task card |
 | **Textures** | Six steps ([addendum 12](addendum-12-textures.md)): add references (photos, the 360° panorama, the scan: from disk, from the handoff, or the preview's sample set; lens, colour encoding, scan units and up axis, panorama heading folded) · mark a region (drag a box on the photo, drag its four corners onto the surface; name and real size) · correct and build (undistort, rectify, flatten the light and its scale, one exposure across a surface, resolution or texel density) · make seamless (across, or across and down; overlap; the seam score) · placement on the scan (the photo's suggestion: plane, direction, confidence; *Accept*, *Reject*, put it on a plane; the region's plane; next problem, looks right, flag) · export. The centre is the texture viewer (photo with the region quads and corner handles, rectified, delit with an A/B wipe against the original, tiled 3×3, the panorama with each photo's suggested direction pinned, the scan in 3D with the region's plane highlighted and the patches marked; a strip of the photos under it). | Regions built, texel density, seam score, light left, placement confidence, problems; the region's measurements and its problem; the photo's placement note and decision; version, export, settings revision; the task card |
 | **Camera Track** | 1 Choose camera & lens (distortion and profiles folded) · 2 Find & track features (tracker settings folded) · 3 Solve · 4 Review errors (worst tracks, delete, 3D view) · 5 Align to LiDAR *(optional)* · 6 Export (scene orientation and formats folded) | RMS error, focal length, frames solved, confidence, tracks, exported; solve number, nodal, warnings, alignment; task |
 | **2D Track** | 1 Draw a surface or point · 2 Track it · 3 Fix drifting frames (corrections, *Hidden by* roto parts) · 4 Preview an insert *(optional)* · 5 Export | Tracks, frames tracked, lowest confidence, lost frames, key frames, exported; the selected track; task |
@@ -191,5 +202,5 @@ its frame controlled by the App; `AiAssistant` renders inline;
 `ShotDetail` exports its pieces (`TaskCard`, `ApprovalPanel`, `SequencePlan`,
 `PlateColorPanel`, `SourceDetails`, `ShotLog`…). Tests:
 `__tests__/layout.test.tsx` (tabs, keys and menu, shot bar, task-missing,
-Key, Clean Plate and Sky & BG panels, the digit of every tab (Textures none), tour and *What's here* persistence); `__tests__/setup.ts` starts
+Key, Clean Plate and Sky & BG panels, the digit of every tab (Textures and Lighting none), tour and *What's here* persistence); `__tests__/setup.ts` starts
 renderer tests with the tour dismissed.

@@ -32,8 +32,8 @@ export default defineConfig(({ mode }) => {
       define: buildEnv,
       build: {
         // The roto worker thread is its own entry (out/main/roto-worker.js; addendum 04).
-        // The camera-tracking worker likewise (out/main/camera-worker.js; addendum 06), the key worker (addendum 09), the clean-plate worker (addendum 10), the isolation worker (addendum 11), the texture worker (addendum 12) and the comp worker (addendum 13).
-        rollupOptions: { input: { index: resolve(__dirname, 'src/main/index.ts'), 'roto-worker': resolve(__dirname, 'src/main/roto/worker.ts'), 'camera-worker': resolve(__dirname, 'src/main/camera/worker.ts'), 'key-worker': resolve(__dirname, 'src/main/key/worker.ts'), 'cleanplate-worker': resolve(__dirname, 'src/main/cleanplate/worker.ts'), 'isolate-worker': resolve(__dirname, 'src/main/isolate/worker.ts'), 'texture-worker': resolve(__dirname, 'src/main/texture/worker.ts'), 'comp-worker': resolve(__dirname, 'src/main/comp/worker.ts') } },
+        // The camera-tracking worker likewise (out/main/camera-worker.js; addendum 06), the key worker (addendum 09), the clean-plate worker (addendum 10), the isolation worker (addendum 11), the texture worker (addendum 12), the comp worker (addendum 13) and the lighting worker (addendum 14).
+        rollupOptions: { input: { index: resolve(__dirname, 'src/main/index.ts'), 'roto-worker': resolve(__dirname, 'src/main/roto/worker.ts'), 'camera-worker': resolve(__dirname, 'src/main/camera/worker.ts'), 'key-worker': resolve(__dirname, 'src/main/key/worker.ts'), 'cleanplate-worker': resolve(__dirname, 'src/main/cleanplate/worker.ts'), 'isolate-worker': resolve(__dirname, 'src/main/isolate/worker.ts'), 'texture-worker': resolve(__dirname, 'src/main/texture/worker.ts'), 'comp-worker': resolve(__dirname, 'src/main/comp/worker.ts'), 'lighting-worker': resolve(__dirname, 'src/main/lighting/worker.ts') } },
       },
     },
     preload: {

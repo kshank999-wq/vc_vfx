@@ -36,9 +36,9 @@ describe('module tabs', () => {
   it('lists every module in the top toolbar and switches between them', async () => {
     await openSample();
     const tabs = within(screen.getByRole('tablist', { name: 'Modules' })).getAllByRole('tab');
-    expect(tabs.map((t) => t.getAttribute('aria-label'))).toEqual(['Shots', 'Plates', 'Roto', 'Key', 'Clean Plate', 'Sky & BG', 'Textures', 'Comp', 'Camera Track', '2D Track', 'Deliver']);
-    // Every tab but Textures has a digit (eleven tabs, ten digits).
-    expect(tabs.map((t) => /\((?:⌘|Ctrl\+)(\d)\)/.exec(t.getAttribute('title') ?? '')?.[1] ?? null)).toEqual(['1', '2', '3', '4', '5', '6', null, '7', '8', '9', '0']);
+    expect(tabs.map((t) => t.getAttribute('aria-label'))).toEqual(['Shots', 'Plates', 'Roto', 'Key', 'Clean Plate', 'Sky & BG', 'Textures', 'Comp', 'Lighting', 'Camera Track', '2D Track', 'Deliver']);
+    // Every tab but Textures and Lighting has a digit (twelve tabs, ten digits).
+    expect(tabs.map((t) => /\((?:⌘|Ctrl\+)(\d)\)/.exec(t.getAttribute('title') ?? '')?.[1] ?? null)).toEqual(['1', '2', '3', '4', '5', '6', null, '7', null, '8', '9', '0']);
     expect(selected('Shots')).toBe(true);
     expect(screen.getByRole('table', { name: 'Shot queue' })).toBeTruthy();
 
@@ -83,6 +83,8 @@ describe('module tabs', () => {
     expect(selected('Textures')).toBe(true);
     act(() => send('show-comp'));
     expect(selected('Comp')).toBe(true);
+    act(() => send('show-lighting'));
+    expect(selected('Lighting')).toBe(true);
     act(() => send('show-shots'));
     expect(selected('Shots')).toBe(true);
   });
@@ -112,6 +114,7 @@ describe('module tabs', () => {
     expect(moduleForDigit('a')).toBeNull();
     expect(moduleDigit('deliver')).toBe('0');
     expect(moduleDigit('texture')).toBeNull();
+    expect(moduleDigit('lighting')).toBeNull();
     expect(moduleDigit('comp')).toBe('7');
     const p = sample();
     expect(moduleToOpen(p, '010_030', null)).toBe('track2d');

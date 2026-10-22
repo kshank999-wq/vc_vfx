@@ -30,6 +30,7 @@ import { registerCleanPlateHandlers } from './cleanplate/ipc-cleanplate';
 import { registerIsolateHandlers } from './isolate/ipc-isolate';
 import { registerTextureHandlers } from './texture/ipc-texture';
 import { registerCompHandlers } from './comp/ipc-comp';
+import { registerLightingHandlers } from './lighting/ipc-lighting';
 import { trackCommand, trackFrame, trackSession, trackView, type CameraEnv } from './camera/api';
 import { COMMAND_SPECS, type CameraCommand } from '../shared/camera/commands';
 import { checkerboardPdf, checkerboardPixels } from '../shared/camera/calibration';
@@ -776,6 +777,59 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null, isDev
   handle('ai:frames', z.object({ projectKey: z.string().min(1).max(4200), allowed: z.boolean().optional() }), async (_e, input) => {
     if (input.allowed !== undefined) await updateSettings((s) => ({ ...s, aiFrames: { ...(s.aiFrames ?? {}), [input.projectKey]: input.allowed! } }));
     return Boolean((await readSettings()).aiFrames?.[input.projectKey]);
+  });
+
+  // Lighting and lens analysis (addendum 14): handlers in lighting/ipc-lighting.ts, with the other modules' rules.
+  // References are chosen here (read only); analyses and exports run in the lighting worker. The optional AI review
+  // goes to vc-vfx.com like the tracking assistant — signed in, metered, and only with this project's frames allowed.
+  registerLightingHandlers({
+    handle,
+    viewerProject,
+    projectFrom,
+    outputRootFor,
+    ensureOutputRoot,
+    licensed: async () => (await capability()) === 'full',
+    readOnlyReason: READ_ONLY_REASON,
+    startJob,
+    endJob,
+    progress: (event, id, label) => progressSender(event.sender, id, label),
+    chooseFiles: async (kind) => {
+      const window = parent();
+      const options: Electron.OpenDialogOptions = {
+        title: kind === 'hdri' ? 'Add the HDRI (equirectangular)' : kind === 'chrome_ball' ? 'Add a still of the chrome ball' : 'Add a still of the grey ball',
+        properties: ['openFile'],
+        filters: [{ name: kind === 'hdri' ? 'HDR panoramas' : 'Pictures', extensions: ['exr', 'hdr', 'jpg', 'jpeg', 'png', 'tif', 'tiff', 'dpx'] }, { name: 'All files', extensions: ['*'] }],
+      };
+      const choice = window ? await dialog.showOpenDialog(window, options) : await dialog.showOpenDialog(options);
+      return choice.canceled ? null : choice.filePaths;
+    },
+    env: async () => {
+      const t = await currentTools();
+      return {
+        ffmpeg: t.ffmpeg,
+        caps: t.caps,
+        workerFile: join(__dirname, 'lighting-worker.js'),
+        generator: `VC VFX ${app.getVersion()}`,
+        trackCacheRoot: join(app.getPath('userData'), 'Track Cache'),
+        ai: isCloudConfigured()
+          ? {
+              model: aiModel,
+              framesAllowed: async (key: string) => Boolean((await readSettings()).aiFrames?.[key]),
+              signedIn: async () => (await cloud.accountStatus().catch(() => ({ signedIn: false }))).signedIn,
+              jpeg: (rgb: Uint8ClampedArray, width: number, height: number) => {
+                const bgra = Buffer.alloc(width * height * 4);
+                for (let i = 0; i < width * height; i += 1) {
+                  bgra[4 * i] = rgb[3 * i + 2]!;
+                  bgra[4 * i + 1] = rgb[3 * i + 1]!;
+                  bgra[4 * i + 2] = rgb[3 * i]!;
+                  bgra[4 * i + 3] = 255;
+                }
+                return nativeImage.createFromBitmap(bgra, { width, height }).toJPEG(82).toString('base64');
+              },
+            }
+          : null,
+      };
+    },
   });
 
   handle('job:cancel', jobId, async (_e, id) => cancelJob(id));

@@ -7,7 +7,7 @@ import { shotState, shotStatus, type PrepTaskKind, type Project, type ShotStatus
  * the task) when the shot does not have that task.
  */
 
-export const MODULE_IDS = ['shots', 'plates', 'roto', 'key', 'cleanplate', 'isolate', 'texture', 'comp', 'camera', 'track2d', 'deliver'] as const;
+export const MODULE_IDS = ['shots', 'plates', 'roto', 'key', 'cleanplate', 'isolate', 'texture', 'comp', 'lighting', 'camera', 'track2d', 'deliver'] as const;
 export type ModuleId = (typeof MODULE_IDS)[number];
 
 export interface ModuleInfo {
@@ -32,6 +32,7 @@ export const MODULES: Record<ModuleId, ModuleInfo> = {
   isolate: { id: 'isolate', label: 'Sky & BG', short: 'Sky/BG', task: 'sky_replacement', also: ['background_removal'], blurb: 'Separate the sky, or a subject from its background: matte, foreground and plate, kept consistent through the shot.' },
   texture: { id: 'texture', label: 'Textures', short: 'Textures', task: 'texture_extraction', blurb: 'Turn set photos into flat, seamless textures and place them on the LiDAR scan with the 360° panorama.' },
   comp: { id: 'comp', label: 'Comp', short: 'Comp', task: 'composite', blurb: 'Connect the prep in a node graph — plate, key, roto, clean plate — preview it, render it, and hand it to Nuke.' },
+  lighting: { id: 'lighting', label: 'Lighting', short: 'Light', task: 'lighting_analysis', blurb: 'Work out how the shot was lit — key, fill, rim, practicals — and the lens, with honest ranges; tune the rig and send it to Unreal.' },
   camera: { id: 'camera', label: 'Camera Track', short: 'Camera', task: 'camera_track', blurb: 'Work out how the camera moved, for 3D; align it to a LiDAR scan if you have one.' },
   track2d: { id: 'track2d', label: '2D Track', short: '2D Track', task: 'track_2d', blurb: 'Pin a flat surface (a screen, a sign) or a point through the shot for a replacement.' },
   deliver: { id: 'deliver', label: 'Deliver', short: 'Deliver', task: null, blurb: 'Verify the sources, approve, write the vendor package and print the shot list.' },
@@ -67,14 +68,14 @@ export function moduleTasks(id: ModuleId): PrepTaskKind[] {
 /** The module a double-click opens: the last one used if the shot has its task, else the shot's first task module. */
 export function moduleToOpen(project: Project, shotId: string, last: ModuleId | null): ModuleId {
   if (last && last !== 'shots' && moduleStatus(project, shotId, last).kind !== 'missing') return last;
-  const order: ModuleId[] = ['plates', 'roto', 'track2d', 'camera', 'key', 'cleanplate', 'isolate', 'texture', 'comp'];
+  const order: ModuleId[] = ['plates', 'roto', 'track2d', 'camera', 'key', 'cleanplate', 'isolate', 'texture', 'comp', 'lighting'];
   return order.find((m) => moduleStatus(project, shotId, m).kind === 'task') ?? 'deliver';
 }
 
 /**
- * ⌘/Ctrl+digit per tab. Eleven tabs and ten digits: Textures, the least
- * used (a set's references, not every shot), has none; it is one click, and
- * in the View menu.
+ * ⌘/Ctrl+digit per tab. Twelve tabs and ten digits: Textures and Lighting,
+ * the least used (a set's references, a look to rebuild — not every shot),
+ * have none; each is one click, and in the View menu.
  */
 export const MODULE_DIGITS: Partial<Record<ModuleId, string>> = { shots: '1', plates: '2', roto: '3', key: '4', cleanplate: '5', isolate: '6', comp: '7', camera: '8', track2d: '9', deliver: '0' };
 
@@ -84,7 +85,7 @@ export function moduleForDigit(key: string): ModuleId | null {
   return (Object.keys(MODULE_DIGITS) as ModuleId[]).find((id) => MODULE_DIGITS[id] === key) ?? null;
 }
 
-/** The digit of a module's shortcut, or null (Textures). */
+/** The digit of a module's shortcut, or null (Textures, Lighting). */
 export function moduleDigit(id: ModuleId): string | null {
   return MODULE_DIGITS[id] ?? null;
 }
