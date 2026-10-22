@@ -14,7 +14,7 @@ import { detectScreen, type ScreenEstimate } from './screen';
  * the browser preview; cancellation is checked between frames.
  */
 
-export const KEY_ENGINE_VERSION = '1.0.0';
+export const KEY_ENGINE_VERSION = '1.1.0';
 
 export interface KeyIO {
   /** A frame at the size the key works at, in linear working RGB. */

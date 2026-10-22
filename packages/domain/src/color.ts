@@ -481,7 +481,7 @@ export interface PlateColorDecision {
   policy: PlateColorPolicy;
   /** The source encoding the decision used, and where it came from. */
   sourceEncoding: ColorEncodingId | null;
-  sourceEncodingFrom: 'operator' | 'handoff' | 'unknown';
+  sourceEncodingFrom: 'operator' | 'handoff' | 'probe' | 'unknown';
   /** The transform, for `convert`; null for `as_shot`. */
   transform: ColorTransform | null;
   /** The encoding the plate's pixels are in once written. */
@@ -502,6 +502,26 @@ export interface PlateColorInput {
   /** Operator's pick, overriding the handoff's text. */
   operatorEncoding: ColorEncodingId | null;
   handoffText: (string | null | undefined)[];
+  /** The clip's own colour tags as ffprobe read them, used when the handoff names no encoding. */
+  probeTags?: { transfer?: string | undefined; primaries?: string | undefined } | null;
+}
+
+/**
+ * A video file's colour tags as an encoding, when they say it unambiguously:
+ * Rec.709 primaries with the BT.709 (or BT.601) curve, the sRGB curve, or
+ * linear. A real ProRes or H.264 from a camera or an online is tagged; a
+ * VCDIT handoff (which carries no colour) otherwise leaves such a clip
+ * "unknown" and its EXR plates would keep the video curve. Null when untagged
+ * or anything else (HLG, PQ, wide gamuts): the operator says.
+ */
+export function encodingFromTags(tags: PlateColorInput['probeTags']): ColorEncodingId | null {
+  const t = tags?.transfer?.toLowerCase();
+  const p = tags?.primaries?.toLowerCase();
+  if (!t || !p || p !== 'bt709') return null;
+  if (t === 'bt709' || t === 'smpte170m' || t === 'bt470bg' || t === 'bt2020-10' || t === 'bt2020-12') return t.startsWith('bt2020') ? null : 'rec709';
+  if (t === 'iec61966-2-1') return 'srgb';
+  if (t === 'linear') return 'linear_rec709';
+  return null;
 }
 
 const formatLabel = (format: PlateColorInput['format'], bitDepth: number) =>
@@ -517,10 +537,12 @@ const formatLabel = (format: PlateColorInput['format'], bitDepth: number) =>
  */
 export function decidePlateColor(input: PlateColorInput): PlateColorDecision {
   const parsed = parseColorEncoding(...input.handoffText);
-  const sourceEncoding = input.operatorEncoding ?? parsed.encoding;
-  const sourceEncodingFrom = input.operatorEncoding ? 'operator' : parsed.encoding ? 'handoff' : 'unknown';
+  const tagged = parsed.encoding ? null : encodingFromTags(input.probeTags);
+  const sourceEncoding = input.operatorEncoding ?? parsed.encoding ?? tagged;
+  const sourceEncodingFrom = input.operatorEncoding ? 'operator' : parsed.encoding ? 'handoff' : tagged ? 'probe' : 'unknown';
   const warnings: string[] = [];
   if (!input.operatorEncoding && parsed.note) warnings.push(parsed.note);
+  if (sourceEncodingFrom === 'probe') warnings.push(`The handoff names no source encoding; the clip is tagged ${input.probeTags!.transfer}/${input.probeTags!.primaries}, read as ${ENCODINGS[tagged!].label}. Choose another if the tags are wrong.`);
   const isFloat = input.format === 'exr';
   const fmt = formatLabel(input.format, input.bitDepth);
   const srcLabel = sourceEncoding ? ENCODINGS[sourceEncoding].label : 'an unknown encoding';

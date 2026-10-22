@@ -88,7 +88,7 @@ describe('the Sky & BG workspace', () => {
     fireEvent.click(build);
     await waitFor(() => expect(isolateDoc(shotState(project, SHOT), 'sky')?.frames.length).toBe(56), { timeout: 110_000 });
     const sky = isolateDoc(shotState(project, SHOT), 'sky')!;
-    expect(sky.runs[0]).toMatchObject({ engine: 'sky-cues@1.0.0', alignment: 'homography', taskVersion: 1 });
+    expect(sky.runs[0]).toMatchObject({ engine: 'sky-cues@1.1.0', alignment: 'homography', taskVersion: 1 });
     expect(task('sky_replacement').state).toBe('needs_review');
     expect(task('sky_replacement').approval).toBeNull();
     expect(task('background_removal').state).toBe('pending');

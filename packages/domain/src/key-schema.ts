@@ -15,7 +15,7 @@ import { z } from 'zod';
 
 export const KEY_FORMAT_VERSION = 1;
 /** The keyer: colour difference against a clean-plate screen model, unmixing edge refinement (addendum 09 §3). */
-export const KEY_ALGORITHM = { id: 'vcvfx-cdk', version: '1.0.0' } as const;
+export const KEY_ALGORITHM = { id: 'vcvfx-cdk', version: '1.1.0' } as const;
 
 export const SCREEN_KINDS = ['green', 'blue'] as const;
 export type ScreenKind = (typeof SCREEN_KINDS)[number];

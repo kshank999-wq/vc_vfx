@@ -36,7 +36,7 @@ import { HARD_BG, HARD_FG, binaryCut, cleanSky, cutSize, separationOf, skyFeatur
  *     what to remove — and what no frame saw filled spatially and flagged.
  */
 
-export const ISOLATE_ENGINE_VERSION = '1.0.0';
+export const ISOLATE_ENGINE_VERSION = '1.1.0';
 /** The roto-part id the plate builder is given for the foreground (never a real part). */
 const FOREGROUND_PART = '__isolate_fg';
 

@@ -18,7 +18,7 @@ import { RotoStrokeSchema } from './roto-schema.js';
 
 export const ISOLATE_FORMAT_VERSION = 1;
 /** Cues + graph cut + unmixing edge refinement + motion-compensated smoothing; plates by temporal fill (addendum 11 §3). */
-export const ISOLATE_ALGORITHM = { id: 'vcvfx-isolate', version: '1.0.0' } as const;
+export const ISOLATE_ALGORITHM = { id: 'vcvfx-isolate', version: '1.1.0' } as const;
 
 export const ISOLATE_TARGETS = ['sky', 'background'] as const;
 export type IsolateTarget = (typeof ISOLATE_TARGETS)[number];

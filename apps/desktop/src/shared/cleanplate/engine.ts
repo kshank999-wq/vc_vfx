@@ -16,7 +16,7 @@ import { HoleFill, fillStats, grow, type Candidate, type FillResult } from './fi
  * light; nothing here writes anything.
  */
 
-export const CLEANPLATE_ENGINE_VERSION = '1.0.0';
+export const CLEANPLATE_ENGINE_VERSION = '1.1.0';
 
 export type CleanPlateSettings = Pick<CleanPlateDocument, 'remove' | 'mode' | 'alignment' | 'referenceFrame' | 'params' | 'guidance'>;
 

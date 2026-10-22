@@ -8,6 +8,7 @@ import {
   colorTransform,
   cube1D,
   decidePlateColor,
+  encodingFromTags,
   decodeCube,
   describeTransform,
   gamutMatrix,
@@ -218,6 +219,18 @@ describe('decidePlateColor', () => {
     expect(d.policy).toEqual({ mode: 'as_shot' });
     expect(d.warnings.join(' ')).toMatch(/Source encoding unknown/);
     expect(d.summary).toMatch(/as shot, source encoding unknown/);
+  });
+
+  it('reads a tagged clip as its tags when the handoff names no encoding (a VCDIT ProRes; addendum 16)', () => {
+    const d = decidePlateColor({ ...base, handoffText: [], probeTags: { transfer: 'bt709', primaries: 'bt709' } });
+    expect(d.policy).toEqual({ mode: 'convert', from: 'rec709', to: 'acescg' });
+    expect(d.sourceEncodingFrom).toBe('probe');
+    expect(d.warnings.join(' ')).toMatch(/tagged bt709\/bt709, read as Rec.709/);
+    // The handoff's text wins over the tags; untagged, HLG or wide-gamut tags say nothing.
+    expect(decidePlateColor({ ...base, probeTags: { transfer: 'bt709', primaries: 'bt709' } }).sourceEncoding).toBe('arri_logc4_awg4');
+    expect(decidePlateColor({ ...base, handoffText: [], probeTags: {} }).sourceEncoding).toBeNull();
+    expect(encodingFromTags({ transfer: 'arib-std-b67', primaries: 'bt2020' })).toBeNull();
+    expect(encodingFromTags({ transfer: 'iec61966-2-1', primaries: 'bt709' })).toBe('srgb');
   });
 
   it('keeps DPX in the camera encoding', () => {

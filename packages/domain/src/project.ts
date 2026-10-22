@@ -571,6 +571,7 @@ export function plateColorFor(p: Project, shotId: string): PlateColorDecision {
     projectExr: p.plateColorDefault,
     operatorEncoding: state.sourceEncoding,
     handoffText: [shot.color.sourceColorSpace, shot.color.gamma],
+    probeTags: state.probe ? { transfer: state.probe.colorTransfer, primaries: state.probe.colorPrimaries } : null,
   });
 }
 
