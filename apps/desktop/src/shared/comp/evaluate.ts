@@ -105,6 +105,11 @@ export class CompEvaluator {
     this.clear();
   }
 
+  /** A new IO whose source versions say what changed (the keys carry them): the cache is kept. */
+  setIOKeepCache(io: CompIO): void {
+    this.io = io;
+  }
+
   clear(): void {
     this.cache.clear();
     this.bytes = 0;

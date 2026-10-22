@@ -1,0 +1,377 @@
+/*
+ * The Comp workspace (addendum 13). It uses the Key's viewer and control
+ * styles (key.css) and the Clean Plate's rows (cleanplate.css); what is here
+ * is its own: the centre split into the viewer and the node graph, the graph
+ * editor (nodes, ports, connections, the add-node menu) and the parameters.
+ */
+
+.module-center > .comp-centre {
+  flex: 1;
+}
+.comp-centre {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+.comp-viewer {
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+.comp-viewer-bar {
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+.comp-viewer-bar .key-modes {
+  flex-wrap: nowrap;
+  min-width: 0;
+  overflow: hidden;
+}
+.comp-viewer-bar .key-modes > button {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.comp-stage {
+  min-height: 120px;
+  margin: 8px 10px 4px;
+}
+.comp-stage.tool-wipe {
+  cursor: ew-resize;
+}
+.comp-wipe-label {
+  fill: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  paint-order: stroke;
+  stroke: rgba(0, 0, 0, 0.7);
+  stroke-width: 3px;
+}
+.comp-timeline {
+  min-width: 0;
+}
+.comp-scrub {
+  flex: 1 1 auto;
+  min-width: 60px;
+}
+.comp-count {
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+.comp-split {
+  cursor: row-resize;
+  background: var(--border);
+  border-top: 1px solid var(--border-strong);
+  touch-action: none;
+}
+.comp-split:hover {
+  background: var(--accent-soft);
+}
+
+/* ---------------------------------------------------------------- the graph */
+.comp-graph {
+  position: relative;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  background: #0d0f13;
+  outline: none;
+}
+.comp-graph:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--accent-soft);
+}
+.comp-graph-empty {
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+}
+.comp-graph-svg {
+  display: block;
+  touch-action: none;
+  user-select: none;
+  cursor: grab;
+}
+.comp-graph-tools {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  display: flex;
+  gap: 6px;
+}
+.comp-graph-legend {
+  position: absolute;
+  right: 10px;
+  bottom: 8px;
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--muted);
+  pointer-events: none;
+}
+.comp-graph-legend i {
+  display: inline-block;
+  width: 10px;
+  height: 3px;
+  margin-right: 4px;
+  vertical-align: middle;
+}
+.comp-edge path {
+  fill: none;
+  stroke-width: 2px;
+  opacity: 0.85;
+}
+.comp-edge-label {
+  fill: var(--muted);
+  font-size: 10px;
+}
+.comp-edge-drag {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2px;
+  stroke-dasharray: 5 4;
+}
+.comp-node {
+  cursor: move;
+}
+.comp-node-body {
+  stroke: rgba(255, 255, 255, 0.18);
+  stroke-width: 1px;
+}
+.comp-node.on .comp-node-body {
+  stroke: var(--accent);
+  stroke-width: 2.5px;
+}
+.comp-node.error .comp-node-body {
+  stroke: #ff5b5b;
+  stroke-width: 2px;
+}
+.comp-node.warning .comp-node-body {
+  stroke: #f2c14e;
+}
+.comp-node.on.error .comp-node-body {
+  stroke: var(--accent);
+}
+.comp-node.unused {
+  opacity: 0.72;
+}
+.comp-node.bypassed .comp-node-body {
+  fill-opacity: 0.45;
+}
+.comp-node-bypass {
+  stroke: #f2a33a;
+  stroke-width: 2px;
+  opacity: 0.8;
+}
+.comp-node-name {
+  fill: #f2f3f5;
+  font-size: 12px;
+  font-weight: 650;
+  pointer-events: none;
+}
+.comp-node-type {
+  fill: rgba(255, 255, 255, 0.6);
+  font-size: 10px;
+  pointer-events: none;
+}
+.comp-node-view rect {
+  fill: var(--accent);
+}
+.comp-node-view text {
+  fill: #111;
+  font-size: 11px;
+  font-weight: 800;
+  pointer-events: none;
+}
+.comp-port {
+  cursor: crosshair;
+}
+.comp-port circle:first-child {
+  stroke: #0d0f13;
+  stroke-width: 2px;
+}
+.comp-port.in circle:first-child {
+  fill: #9aa3ad;
+}
+.comp-port.in.optional circle:first-child {
+  fill: #59616b;
+}
+.comp-port.in.connected circle:first-child {
+  fill: #dfe3e8;
+}
+.comp-port-hit {
+  fill: transparent;
+  stroke: none;
+}
+.comp-port:hover circle:first-child {
+  stroke: var(--accent);
+}
+.comp-add-menu {
+  position: absolute;
+  z-index: 5;
+  width: 264px;
+  max-height: calc(100% - 12px);
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+.comp-add-menu input {
+  margin: 8px;
+  min-height: 32px;
+}
+.comp-add-menu ul {
+  list-style: none;
+  margin: 0;
+  padding: 0 4px 6px;
+  overflow: auto;
+}
+.comp-add-menu li button {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 1px 8px;
+  text-align: left;
+  border: none;
+  background: none;
+  padding: 5px 8px;
+  border-radius: 5px;
+}
+.comp-add-menu li button.on {
+  background: var(--accent-soft);
+}
+.comp-add-name {
+  font-weight: 650;
+}
+.comp-add-cat {
+  color: var(--muted);
+  font-size: 12px;
+}
+.comp-add-blurb {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---------------------------------------------------------------- steps and parameters */
+.comp-problems {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+.comp-problem button {
+  text-align: left;
+  white-space: normal;
+}
+.comp-problem.error button {
+  color: #ff8a8a;
+}
+.comp-problem.warning button {
+  color: #f2c14e;
+}
+.comp-problem.info button {
+  color: var(--muted);
+}
+.comp-ok {
+  color: var(--ok);
+}
+.comp-range .key-field {
+  flex: 1 1 70px;
+  min-width: 0;
+}
+.comp-range input {
+  width: 100%;
+  min-width: 0;
+}
+.comp-params h4 .muted {
+  font-weight: 500;
+}
+.comp-name-row {
+  align-items: flex-end;
+}
+.comp-name-row .key-field {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.comp-name-row input {
+  width: 100%;
+  min-width: 0;
+}
+.comp-param-list {
+  display: grid;
+  gap: 4px;
+  margin-top: 6px;
+}
+.comp-param {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 26px;
+  align-items: center;
+  gap: 4px;
+}
+.comp-param-field {
+  min-width: 0;
+}
+.comp-param-field .key-slider {
+  min-width: 0;
+}
+.comp-param.changed .key-slider-label,
+.comp-param.changed .key-field > span:first-child {
+  color: var(--accent);
+}
+.comp-reset {
+  min-width: 26px;
+  min-height: 26px;
+  padding: 0;
+}
+.comp-select {
+  display: grid;
+  gap: 2px;
+}
+.comp-select select {
+  width: 100%;
+  min-width: 0;
+}
+.comp-vec {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) repeat(2, minmax(0, 72px));
+  align-items: end;
+  gap: 6px;
+}
+.comp-color {
+  grid-template-columns: minmax(0, 1fr) repeat(4, minmax(0, 54px));
+}
+.comp-num {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.comp-num input {
+  width: 100%;
+  min-width: 0;
+}
+.comp-num > span {
+  font-size: 12px;
+  color: var(--muted);
+}
+.comp-sources {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+  font-size: 13px;
+}
+.comp-sources li.missing {
+  color: #ff8a8a;
+}

@@ -6,6 +6,7 @@ import { createKeyPreview } from './key-preview';
 import { createCleanPlatePreview } from './cleanplate-preview';
 import { createIsolatePreview } from './isolate-preview';
 import { createTexturePreview } from './texture-preview';
+import { createCompPreview } from './comp-preview';
 import { createRotoPreview } from './roto-preview';
 
 /**
@@ -186,6 +187,7 @@ export function createBrowserBridge(): BrowserBridge {
   const cleaning = createCleanPlatePreview({ desktopOnly, progress: (p) => progressListeners.forEach((l) => l(p)) });
   const isolating = createIsolatePreview({ desktopOnly, progress: (p) => progressListeners.forEach((l) => l(p)) });
   const texturing = createTexturePreview({ desktopOnly, progress: (p) => progressListeners.forEach((l) => l(p)) });
+  const compositing = createCompPreview({ desktopOnly });
 
   return {
     command,
@@ -314,6 +316,11 @@ export function createBrowserBridge(): BrowserBridge {
     textureScan: (input) => texturing.textureScan(input),
     textureBuild: (input) => texturing.textureBuild(input),
     textureExport: (input) => texturing.textureExport(input),
+    // The compositor: the graph is evaluated here on the sample's green-screen shot (comp-preview.ts).
+    compSession: (input) => compositing.compSession(input),
+    compFrame: (input) => compositing.compFrame(input),
+    compRender: (input) => compositing.compRender(input),
+    compExport: (input) => compositing.compExport(input),
     cancelJob: async (jobId) => {
       if (!camera.cancel(jobId) && !keying.cancel(jobId) && !cleaning.cancel(jobId) && !isolating.cancel(jobId) && !texturing.cancel(jobId)) roto.cancel(jobId);
     },

@@ -135,7 +135,7 @@ async function resolve(project: Project, shotId: string, outputRoot: string | nu
 export async function compSession(project: Project, shotId: string, outputRoot: string | null, env: CompEnv): Promise<CompSessionInfo> {
   const state = shotState(project, shotId);
   if (!state) throw new Error(`No shot ${shotId}`);
-  const empty: CompSessionInfo = { available: false, reason: null, frames: '', plate: null, first: 0, last: 0, fps: 24, encoding: { label: '', linear: false, note: null }, exportable: false, sources: [] };
+  const empty: CompSessionInfo = { available: false, reason: null, frames: '', plate: null, first: 0, last: 0, fps: 24, previewWidth: 960, encoding: { label: '', linear: false, note: null }, exportable: false, sources: [] };
   if (!state.tasks.some((t) => t.kind === COMP_TASK)) return { ...empty, reason: 'This shot has no Prep composite task. Add it to work on it here.' };
   const src = await plateSource(project, shotId, outputRoot, env);
   if (!src.ok) return { ...empty, reason: src.reason };
@@ -149,6 +149,7 @@ export async function compSession(project: Project, shotId: string, outputRoot: 
     first: src.spec.first,
     last: src.spec.last,
     fps: src.spec.frameRate,
+    previewWidth: 960,
     encoding: { label: src.space.label, linear: src.space.linear, note: src.space.linear ? null : 'The source encoding is unknown: the comp works on code values, not linear light. Set the source encoding in Plates.' },
     exportable: true,
     sources: (doc?.nodes ?? [])

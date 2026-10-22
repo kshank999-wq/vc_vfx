@@ -22,6 +22,8 @@ export interface CompSessionInfo {
   first: number;
   last: number;
   fps: number;
+  /** The preview's longest edge at full quality (the proxy is half of it). */
+  previewWidth: number;
   encoding: { label: string; linear: boolean; note: string | null };
   /** Rendering and exporting write into the shot package (not in the browser preview). */
   exportable: boolean;
