@@ -101,6 +101,8 @@ export async function textureSession(project: Project, shotId: string, env: Text
   if (!env.ffmpeg) return { ...empty, reason: noFfmpeg };
   const handoff: TextureHandoffReference[] = shot.references
     .filter((r) => KIND_OF[r.kind])
+    // One file named twice (a 360 listed as the panorama and as the HDRI) is one reference.
+    .filter((r, i, all) => all.findIndex((o) => o.path === r.path && KIND_OF[o.kind]) === i)
     .map((r) => {
       const file = resolveFromHandoff(project.handoffPath, r.path);
       return { kind: KIND_OF[r.kind]!, path: r.path, name: basename(r.path), onDisk: Boolean(file && existsSync(file)) };
