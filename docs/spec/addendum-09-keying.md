@@ -311,6 +311,10 @@ desktop (the preview's Roto tab has its own demo shot).
 
 ## 10. Not verified, and limits
 
+- Run end to end in the real app on a synthetic LogC4 DPX green screen
+  ([addendum 15](addendum-15-verification.md)); OpenEXR 3.5.2 reads the alpha
+  EXR as one half channel `Y` and the foreground as RGBA half, premultiplied
+  (no colour where α = 0), its α equal to the alpha file.
 - Real production green and blue screens: real spill, motion blur, defocus,
   transparency, compression noise, crushed or clipped screens. Only the
   synthetic shot and a ProRes encode of it were keyed.

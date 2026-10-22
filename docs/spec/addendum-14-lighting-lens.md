@@ -319,6 +319,13 @@ domain in `packages/domain/src/__tests__/lighting.test.ts`; the tab in
 
 ## 9. Limits
 
+- Opened outside VC VFX ([addendum 15](addendum-15-verification.md)): the
+  Blender script in Blender 4.5.3 (types, positions and aim to 5e-7, energy
+  from candela / lux), the USD in usd-core 26.08 (UsdLux types, −Z aim,
+  relative intensity, colour temperature, the DomeLight texture, no
+  UsdValidation errors); the Unreal script only against a recording stub. The
+  HDRI is referenced on the drive by a relative path, not copied into the
+  package; the Blender rig does not load it as the world texture.
 - **The shading needs a subject matte** exported by Roto, Key or Sky & BG;
   without one only shadows, practicals and the references speak.
 - **The fill's direction from shading alone is rough** (±30°) and the key's

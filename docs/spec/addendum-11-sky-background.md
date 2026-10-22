@@ -388,6 +388,10 @@ is the desktop app's.
 
 ## 9. Not verified, and limits
 
+- Run end to end in the real app ([addendum 15](addendum-15-verification.md)):
+  OpenEXR 3.5.2 reads the foreground as RGBA half premultiplied with α equal
+  to the matte EXR (one half channel `Y`), the plate as RGB half. On the
+  synthetic rooftop the chart's 90 % white patch was taken for sky (flagged).
 - **Not yet tried on production footage.** Only the synthetic shots (and an
   EXR encode of one) were isolated: real skies (sunsets, haze, sun glare,
   lens flare, gradients through a graduated filter), foliage moving in wind,

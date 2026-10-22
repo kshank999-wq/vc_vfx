@@ -346,6 +346,11 @@ background is exact outside the subject, the subject opaque inside.
 
 ## 9. Limits
 
+- The end-to-end comp's script passes an offline structural check
+  ([addendum 15](addendum-15-verification.md), `verify-package-nk.py`):
+  Nuke's classes and input counts, the stack (Merge1: B the clean plate, A the
+  baked light wrap), curve syntax, every Read's file present. OpenEXR reads
+  the render as RGBA half ZIP16, premultiplied. Still not Nuke.
 - **Not checked against a running Nuke.** No Nuke here. The script follows
   the .nk format as documented and as other exporters here write it, and its
   stack topology is verified by our own reader; the knob names (`black`,

@@ -322,6 +322,9 @@ written; exporting says it is the desktop app's.
 
 ## 10. Not verified, and limits
 
+- Run end to end in the real app ([addendum 15](addendum-15-verification.md)):
+  the roto subject removed from a locked-off shot, a still exported; OpenEXR
+  3.5.2 reads it as RGB half, ZIP16, full window.
 - **Not yet tried on production footage.** Only the synthetic shot (and an
   EXR encode of it) was built: real parallax, motion blur, rolling shutter,
   lens distortion, moving shadows and reflections, compression noise and

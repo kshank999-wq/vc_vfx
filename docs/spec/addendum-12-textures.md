@@ -421,6 +421,11 @@ written; exporting says it is the desktop app's.
 
 ## 11. Limits
 
+- Opened outside VC VFX ([addendum 15](addendum-15-verification.md)): the OBJ
+  + MTL of a region built in the real app imports into Blender 4.5.3 as one
+  patch of its real size with UVs 0…1 and the PNG texture resolved and wired;
+  OpenEXR reads the texture EXR as RGB half. A placement accepted needs a
+  rebuild (it is part of the settings revision); the decision is kept.
 - **Not yet tried on production photography** — every number above is on the
   synthetic storeroom.
 - Lambertian surfaces: speculars are flagged, not removed; delighting cannot

@@ -298,6 +298,15 @@ RMS 74 mm, LiDAR-constrained solve 29 mm; planar track forward 47 frames in
   settings, positions converted correctly.
 - The Unity C# compiled with Mono against stand-ins for the Unity API
   members it uses — a syntax and consistency check, not Unity.
+- End to end ([addendum 15](addendum-15-verification.md)): a track solved in
+  the real app (RMS 0.33 px, the rendered focal recovered exactly) and its
+  exports checked — Blender `.py` 1.2e-7 m over 48 frames, the `.usda` in
+  Blender's importer and in usd-core 26.08 with every UsdValidation validator,
+  `.chan` against the JSON (ZXY = Z applied first), STMaps read by OpenEXR,
+  the `.nk` structurally, the Unreal script against a recording stub (API
+  names, 336 keys, locations and rotators through FRotationMatrix to 1e-8).
+  Blender refuses the ASCII FBX (it reads binary only): Blender users have the
+  `.py` and `.usda`.
 
 **Not opened in the application here** — structurally validated only: Nuke,
 Maya, After Effects, 3ds Max, FBX (no FBX SDK), Unreal Engine, Unity,

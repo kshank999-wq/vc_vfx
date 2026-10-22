@@ -160,6 +160,23 @@ it (`image-sequence.ts`). Plates enter the sequence at the first wanted file
 frames past a gap is refused with the count. Probing a sequence takes its
 length from the files and its pixel format from the first frame.
 
+A sequence's file numbers are frame numbers. When the handoff gives its range
+in them (frameIn at or after the first file) and no `timecodeIn`,
+`sourceInputFor` returns the first file's number as `clipStart`, and
+`clipRange` / `viewerTimeline` place the shot by it: frameIn 2000 of
+`C007C011_0001996.dpx …` is the fifth file. With a `timecodeIn` (the clip's
+first frame's timecode) or a range below the first file number, nothing
+changes. Found by the end-to-end run ([addendum 15](addendum-15-verification.md)):
+plates were refused and the viewer read `…_0003996.dpx`.
+
+EXR plates are written with the compression ffmpeg has (none, RLE, ZIP1,
+ZIP16; anything else — PIZ, DWA — becomes ZIP16, `exrCompressionWritten`).
+The Plates panel and the prep report name what is in the files and what was
+asked; the plate record's notes, now also the manifest's `plates.notes`, say
+so. OpenEXR 3.5.2 reads the plates as RGB half, ZIP16, full window, and the
+chart's 18 % / 90 % / 3 % patches of a LogC4 DPX source as 0.1804 / 0.9038 /
+0.0297 in ACEScg (addendum 15).
+
 ## 4. The frame viewer and contact sheet
 
 Double-click a shot (or **View frames** in its panel). Since

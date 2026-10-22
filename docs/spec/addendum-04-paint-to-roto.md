@@ -301,6 +301,11 @@ ground truth mean 0.990, min 0.946.
 
 **Not verified:**
 
+- End to end ([addendum 15](addendum-15-verification.md)) the Track engine ran
+  in the real app (28 frames, lowest confidence 0.99) and its PNG + EXR
+  mattes were exported and read by OpenEXR. SAM 2.1 could not: huggingface.co
+  is blocked here and the files are unpinned, so the app refuses the
+  download; onnxruntime itself loads in Electron.
 - **SAM 2 on real weights.** No SAM 2 inference has run here; the model source,
   file names and the actual segmentation quality are unconfirmed. Pins are
   placeholders.
