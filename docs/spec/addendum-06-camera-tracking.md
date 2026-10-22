@@ -345,6 +345,12 @@ behind `CameraSolver` is the obvious speed-up.
 - Anamorphic squeeze is recorded (and set from an anamorphic mode) but the
   solver models square pixels.
 
+- On real footage ([addendum 16](addendum-16-real-footage.md)): a nodal telephoto pan (ProRes, runner excluded by
+  its roto part) solved 129 / 129 frames at 0.64 px. A soft, compressed,
+  handheld DVCPRO HD survey registered 59 / 146 frames at 300 features
+  (109 / 146 at 600); its 1.5 pixel aspect is not modelled (above). Planar dot
+  sheets moved by hand are object tracks, degenerate for a camera solve.
+
 ## 13. Camera database
 
 `packages/domain/src/camera-db-data.ts` (the data) and `camera-db.ts` (schema,

@@ -352,3 +352,9 @@ domain in `packages/domain/src/__tests__/lighting.test.ts`; the tab in
 decoder: ffmpeg 6.1 converting a grey PNG to `gbrpf32le` went through YUV
 and returned wrong values, which biased mattes read for the comp and for
 the lighting analysis.
+- On real footage ([addendum 16](addendum-16-real-footage.md)): a chrome and a grey ball held up in a ProRes take
+  gave a key from −118° azimuth, 46° elevation, consistent with the grey
+  ball's lit edge; a 10K HDRI analyses in about 8 s. Fixed: the reference just
+  added is the one selected (marking a second ball moved the first's circle),
+  and the Reference view no longer shows the previous shot's picture while a
+  new one loads.

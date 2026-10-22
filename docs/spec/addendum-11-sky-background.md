@@ -405,6 +405,13 @@ is the desktop app's.
   (a power line far from its poles) borrows the foreground colour from
   further away and overestimates their coverage by 5–20 % (more at low
   resolution, where the line is under a pixel).
+- On real footage ([addendum 16](addendum-16-real-footage.md)): three handheld ProRes 2K sky shots — the matte
+  holds soldiers, chimney, railing and treeline (2.1 s/frame). Fixed: a slate
+  frame in the handles was pasted into the sky plate (unaligned frames are no
+  longer borrowed from); unseen sky behind an edge counts only in proportion
+  to the detail of the sky beside it (`skyFlatness`), so an overcast sky is not
+  a problem on every frame. Still: handheld parallax gives 9–20 px alignment
+  residuals and most frames stay flagged; a white roof can read as sky.
 - One homography per frame: a skyline with depth seen by a translating camera
   (a drone flying past buildings) has parallax the alignment cannot follow; it
   is measured (the residual) but not corrected; the temporal prior and

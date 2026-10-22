@@ -348,4 +348,9 @@ written; exporting says it is the desktop app's.
 - A still is made in the reference frame's coordinates; a stabilised
   sequence is not written (the per-frame homographies in the metadata give
   it).
+- On real footage ([addendum 16](addendum-16-real-footage.md)) a runner was removed from a panning ProRes shot
+  (100 % of the removed area seen elsewhere, residual 0.62 px); what the roto
+  missed (his shoes) stays. Frames whose alignment fails (residual over 8 px
+  and 4 × the shot's median: a slate or flash frame in the handles) are never
+  borrowed from (`ShotCleaner.unaligned`).
 - Packaged Electron with the worker entry, Windows and macOS; a signed build.

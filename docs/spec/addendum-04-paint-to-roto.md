@@ -319,6 +319,16 @@ ground truth mean 0.990, min 0.946.
   guided filter only.
 - Packaged Electron (asar) with the worker entry; a signed build.
 
+### On real footage ([addendum 16](addendum-16-real-footage.md))
+
+A runner crossing a panning car park (ProRes 1920×1080, Track engine, three
+key frames): the matte follows him but misses feet, sticks to wall and bushes
+he passes and leaves blobs on the road after he exits (no "lost" detection);
+plan a key frame every ~10 frames. Fixed: a matte propagated from a further
+key *through* a newer key frame no longer blocks that key's propagation
+(`rivalFrames` counts only mattes that reached their frame without passing
+the new key, from a key that still exists).
+
 ## 9. Performance
 
 Measured on a 4-core Intel Xeon @ 2.1 GHz (this environment), Node 22, one

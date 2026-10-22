@@ -233,6 +233,19 @@ LogC4 scene and ACEScg plates from it, raw and Rec.709), labelled "sample
 frames". A real project's viewer says frames are read from the drive by the
 desktop app.
 
+## 5. On real footage ([addendum 16](addendum-16-real-footage.md))
+
+ProRes 422 HQ (Rec.709, 23.976, timecode track), an untagged H.264 and PNG
+sequences gave frame-exact plates (each sampled frame equal to an independent
+decode at the clip index `clipRange` names; ACEScg within 2.4e-4 at the 99th
+percentile). Fixed: the decode cube of a video encoding (Rec.709, sRGB) now
+covers code values 0–1.25 so super-whites survive (`VIDEO_CODE_MAX`); and when
+the handoff names no encoding (a VCDIT handoff never does), a clip tagged
+BT.709 / sRGB / linear with BT.709 primaries is read as its tags
+(`encodingFromTags`, shown as "From the clip's tags"), with a warning. Still:
+sub-black codes clamp at 0; pixel aspect (DVCPRO HD 1.5, 1.333; anamorphic) is
+not recorded or shown — the viewer shows the squeezed raster.
+
 ## Open questions
 
 - **Legal vs full range for camera log in YCbCr files.** The curves are applied

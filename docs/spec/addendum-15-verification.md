@@ -158,5 +158,6 @@ to set up its environment.
   is part of the settings revision); it keeps the decision.
 - Windows and macOS: not run here (paths with drive letters, `\`, the
   macOS sandbox and notarised builds, code signing).
-- Real camera originals (ProRes, MXF, ARRIRAW transcodes) and production
-  footage: not tried; the media here are synthetic.
+- Real camera originals and production footage: the media here are synthetic;
+  ProRes, H.264 and real plates were run in [addendum 16](addendum-16-real-footage.md). MXF and ARRIRAW
+  transcodes are still untried.

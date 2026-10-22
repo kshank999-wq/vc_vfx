@@ -330,5 +330,13 @@ desktop (the preview's Roto tab has its own demo shot).
   when EXR, as sRGB otherwise; other encodings are not offered.
 - The match suggestion is a statistics transfer between the edge bands; it is
   often a poor match for busy backgrounds and is metadata only.
+- **Real green screens** ([addendum 16](addendum-16-real-footage.md)): the coarse model left real cloth folds,
+  floor fall-off and shadows on the screen keying 10–40 % solid; the keyer now
+  follows the screen per frame (*Screen detail*, on by default: light shadows
+  on the screen key out, a deep one stays), and the per-frame gain is measured only where the
+  model saw the screen. A costume lit by the screen's bounce to the screen's
+  chromaticity (the astronaut's suit) still keys part-transparent: holdout or
+  repair from roto. A processed key is not marked stale when the engine
+  version changes (*Process again*).
 - Packaged Electron with the worker entry, Windows and macOS; a signed build.
 - Alpha EXR channel is named Y by ffmpeg's encoder (as roto's).

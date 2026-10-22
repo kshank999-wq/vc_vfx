@@ -446,3 +446,6 @@ written; exporting says it is the desktop app's.
   at that size.
 - Lens distortion is Brown–Conrady (k1, k2, k3, p1, p2); fisheye stills are
   not modelled.
+- On real footage ([addendum 16](addendum-16-real-footage.md)): a frame of an anamorphic DVCPRO HD plate used as a
+  photo rectifies to the squeezed aspect (0.69 for a square card): photos have
+  no pixel aspect. A 10000×5000 EXR panorama loads in about a second.

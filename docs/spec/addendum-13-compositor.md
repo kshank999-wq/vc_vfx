@@ -372,3 +372,7 @@ background is exact outside the subject, the subject opaque inside.
   absolute, raw Read; generate plates for a portable script.
 - The browser preview evaluates the sample's green-screen shot only; on other
   sample shots it says so.
+- On real footage ([addendum 16](addendum-16-real-footage.md)): an SD key over the 720×486 embassy render rendered
+  136 frames at 4.8 fps and exported for Nuke. The background reference is one
+  file: a background *sequence* (a render that moves with the camera) is read
+  as its first frame.
