@@ -28,6 +28,7 @@ import { verifyProject } from './verify';
 import { registerKeyHandlers } from './key/ipc-key';
 import { registerCleanPlateHandlers } from './cleanplate/ipc-cleanplate';
 import { registerIsolateHandlers } from './isolate/ipc-isolate';
+import { registerTextureHandlers } from './texture/ipc-texture';
 import { trackCommand, trackFrame, trackSession, trackView, type CameraEnv } from './camera/api';
 import { COMMAND_SPECS, type CameraCommand } from '../shared/camera/commands';
 import { checkerboardPdf, checkerboardPixels } from '../shared/camera/calibration';
@@ -536,6 +537,44 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null, isDev
         generator: `VC VFX ${app.getVersion()}`,
         engines: async () => (await engineInfo(await rotoEnv())).map((e) => ({ id: e.id, label: e.label, available: e.available, reason: e.reason })),
         sam2: async () => sam2Files(await rotoEnv()),
+      };
+    },
+  });
+
+  // Texture extraction (addendum 12): handlers in texture/ipc-texture.ts, with the clean plate's rules. References are
+  // chosen here (read only) and only ever read.
+  registerTextureHandlers({
+    handle,
+    viewerProject,
+    projectFrom,
+    ensureOutputRoot,
+    licensed: async () => (await capability()) === 'full',
+    readOnlyReason: READ_ONLY_REASON,
+    startJob,
+    endJob,
+    progress: (event, id, label) => progressSender(event.sender, id, label),
+    chooseFiles: async (kind) => {
+      const window = parent();
+      const filters =
+        kind === 'scan'
+          ? [{ name: 'Point clouds, meshes, survey', extensions: ['e57', 'ply', 'las', 'obj', 'xyz', 'pts', 'csv', 'txt'] }]
+          : [{ name: kind === 'panorama' ? 'Equirectangular panoramas' : 'Photographs', extensions: ['jpg', 'jpeg', 'png', 'tif', 'tiff', 'exr', 'hdr', 'dpx'] }];
+      const options: Electron.OpenDialogOptions = {
+        title: kind === 'photo' ? 'Add reference photos' : kind === 'panorama' ? 'Add the 360° panorama' : 'Add the LiDAR scan or mesh',
+        properties: kind === 'photo' ? ['openFile', 'multiSelections'] : ['openFile'],
+        filters: [...filters, { name: 'All files', extensions: ['*'] }],
+      };
+      const choice = window ? await dialog.showOpenDialog(window, options) : await dialog.showOpenDialog(options);
+      return choice.canceled ? null : choice.filePaths;
+    },
+    env: async () => {
+      const t = await currentTools();
+      return {
+        ffmpeg: t.ffmpeg,
+        caps: t.caps,
+        cacheRoot: join(app.getPath('userData'), 'Texture Cache'),
+        workerFile: join(__dirname, 'texture-worker.js'),
+        generator: `VC VFX ${app.getVersion()}`,
       };
     },
   });

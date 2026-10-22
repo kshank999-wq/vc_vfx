@@ -3,6 +3,7 @@ import type { FinishReport, QuadProposal } from './ai/tools';
 import type { KeyBridge } from './key/bridge-types';
 import type { CleanPlateBridge } from './cleanplate/bridge-types';
 import type { IsolateBridge } from './isolate/bridge-types';
+import type { TextureBridge } from './texture/bridge-types';
 import type { AiAllowance, ColorEncodingId, LicenseStatus, PlateRecordInput, ProbedMediaInput, QueueFilter, RotoDirection, RotoEngineId, RotoExportInput, RotoPropagationResult, ViewTransformId } from '@vcvfx/domain';
 
 /**
@@ -350,6 +351,7 @@ export const MENU_COMMANDS = [
   'show-key',
   'show-cleanplate',
   'show-isolate',
+  'show-texture',
   'show-camera',
   'show-track2d',
   'show-deliver',
@@ -357,8 +359,8 @@ export const MENU_COMMANDS = [
 ] as const;
 export type MenuCommand = (typeof MENU_COMMANDS)[number] | `open-recent:${string}`;
 
-/** The key's (addendum 09), the clean plate's (addendum 10) and the isolation's (addendum 11) methods are optional, like the AI assistant's: a host may not offer them. */
-export interface VcvfxApi extends Partial<KeyBridge>, Partial<CleanPlateBridge>, Partial<IsolateBridge> {
+/** The key's (addendum 09), the clean plate's (addendum 10), the isolation's (addendum 11) and the textures' (addendum 12) methods are optional, like the AI assistant's: a host may not offer them. */
+export interface VcvfxApi extends Partial<KeyBridge>, Partial<CleanPlateBridge>, Partial<IsolateBridge>, Partial<TextureBridge> {
   appInfo(): Promise<AppInfo>;
 
   openHandoffDialog(): Promise<ApiResult<OpenedFile | null>>;

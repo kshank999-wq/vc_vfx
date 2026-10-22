@@ -42,7 +42,7 @@ export const PREP_TASKS: Record<PrepTaskKind, PrepTaskInfo> = {
   camera_track: { label: 'Camera track / matchmove', short: 'Cam Track', folder: '06_CAMERA_TRACK', available: true },
   sky_replacement: { label: 'Sky isolation / replacement prep', short: 'Sky', folder: '02_MATTES_ROTO', available: true },
   background_removal: { label: 'Background removal', short: 'BG Removal', folder: '02_MATTES_ROTO', available: true },
-  texture_extraction: { label: 'Texture extraction', short: 'Textures', folder: '07_TEXTURES_REFERENCES', available: false },
+  texture_extraction: { label: 'Texture extraction', short: 'Textures', folder: '07_TEXTURES_REFERENCES', available: true },
   lighting_analysis: { label: 'Lighting and lens analysis', short: 'Lighting', folder: '09_PROJECT_DATA', available: false },
   composite: { label: 'Prep composite', short: 'Comp', folder: '09_PROJECT_DATA', available: false },
 };

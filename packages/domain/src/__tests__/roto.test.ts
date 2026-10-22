@@ -84,7 +84,7 @@ describe('roto document in the project file', () => {
     const parsed = parseProject(JSON.stringify(v1));
     if (!parsed.ok) throw new Error(parsed.reason);
     expect(parsed.project.version).toBe(PROJECT_VERSION);
-    expect(PROJECT_VERSION).toBe(6);
+    expect(PROJECT_VERSION).toBe(7);
     expect(parsed.project.shots.every((s) => s.roto === null)).toBe(true);
   });
 

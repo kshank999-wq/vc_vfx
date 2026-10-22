@@ -42,7 +42,7 @@ import { ShotDetail, type ShotDetailProps } from './components/ShotDetail';
 import { AccountDialog, IssuesDialog, PromptDialog, SettingsDialog } from './components/Dialogs';
 import { Icon } from './components/Icons';
 import { ModuleTabs, NoticeDock, ShotBar, Tour, WhatsHere, modKey } from './components/Layout';
-import { CleanPlateModule, DeliverModule, IsolateModule, KeyModule, PlatesModule, TaskInfo } from './components/Modules';
+import { CleanPlateModule, DeliverModule, IsolateModule, KeyModule, PlatesModule, TaskInfo, TextureModule } from './components/Modules';
 import { RotoWorkspace } from './components/RotoWorkspace';
 import { TrackWorkspace } from './components/TrackWorkspace';
 import { MODULES, MODULE_IDS, PREF, moduleForDigit, moduleToOpen, readPref, type ModuleId } from './modules';
@@ -498,7 +498,7 @@ export function App({ api, now = () => new Date() }: { api: VcvfxApi; now?: () =
     setSelected(rows[next]!.shot.shotId);
     setMarked([]);
   };
-  // The keys the App owns: ⌘/Ctrl+1…9 the tabs, ⌘/Ctrl+↑/↓ the shot (anywhere); ↑/↓ the shot on
+  // The keys the App owns: ⌘/Ctrl+1…9 and 0 the tabs, ⌘/Ctrl+↑/↓ the shot (anywhere); ↑/↓ the shot on
   // the Shots tab; ←/→ the frame and Esc back to Shots in the tabs whose viewer does not do it itself.
   const keys = useRef<(e: KeyboardEvent) => void>(() => undefined);
   keys.current = (e: KeyboardEvent) => {
@@ -643,6 +643,8 @@ export function App({ api, now = () => new Date() }: { api: VcvfxApi; now?: () =
         return <CleanPlateModule {...screen} work={{ actor, runJob, notify, onCleanPlate: (fn) => apply((p) => fn(p, actor, now())) }} />;
       case 'isolate':
         return <IsolateModule {...screen} work={{ actor, runJob, notify, onIsolate: (fn) => apply((p) => fn(p, actor, now())) }} />;
+      case 'texture':
+        return <TextureModule {...screen} work={{ actor, runJob, notify, onTexture: (fn) => apply((p) => fn(p, actor, now())) }} />;
       case 'roto':
         return <RotoWorkspace {...work} onRoto={(fn) => apply((p) => fn(p, actor, now()))} onAddRotoTask={() => apply((p) => addTask(p, selected, 'roto', actor, now()))} taskInfo={<TaskInfo props={props} kind="roto" />} />;
       case 'camera':
@@ -804,7 +806,7 @@ export function App({ api, now = () => new Date() }: { api: VcvfxApi; now?: () =
           </div>
         ) : (
           <span className="muted keys-hint">
-            {mod}1–{MODULE_IDS.length} tabs · {mod}↑/↓ shots
+            {mod}1–9, {mod}0 tabs · {mod}↑/↓ shots
           </span>
         )}
       </footer>

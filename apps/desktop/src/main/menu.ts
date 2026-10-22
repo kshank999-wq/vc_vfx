@@ -95,11 +95,13 @@ export async function buildMenu(getWindow: () => BrowserWindow | null, isDevelop
             ['Key', 'show-key'],
             ['Clean Plate', 'show-cleanplate'],
             ['Sky & BG', 'show-isolate'],
+            ['Textures', 'show-texture'],
             ['Camera Track', 'show-camera'],
             ['2D Track', 'show-track2d'],
             ['Deliver', 'show-deliver'],
           ] as const
-        ).map(([label, command], i) => ({ label, accelerator: `CmdOrCtrl+${i + 1}`, registerAccelerator: false, click: send(command) })),
+          // Ten tabs: the tenth is ⌘/Ctrl+0.
+        ).map(([label, command], i) => ({ label, accelerator: `CmdOrCtrl+${(i + 1) % 10}`, registerAccelerator: false, click: send(command) })),
         { type: 'separator' },
         { label: 'Previous Shot', accelerator: 'CmdOrCtrl+Up', registerAccelerator: false, click: send('previous-shot') },
         { label: 'Next Shot', accelerator: 'CmdOrCtrl+Down', registerAccelerator: false, click: send('next-shot') },

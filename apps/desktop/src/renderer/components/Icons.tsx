@@ -46,6 +46,14 @@ const PATHS: Record<IconName, JSX.Element> = {
       <path d="M7 21h10" />
     </>
   ),
+  texture: (
+    <>
+      <path d="M3 8.5 9.5 5l6.5 3.5-6.5 3.5Z" />
+      <path d="M3 8.5v7l6.5 3.5v-7" />
+      <path d="M13 14h8v7h-8z" />
+      <path d="M17 14v7M13 17.5h8" />
+    </>
+  ),
   camera: (
     <>
       <rect x="2.5" y="7" width="13" height="10" rx="1.5" />

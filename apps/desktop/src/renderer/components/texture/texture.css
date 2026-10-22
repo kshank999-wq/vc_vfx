@@ -1,0 +1,190 @@
+/*
+ * The Textures workspace (addendum 12). It uses the Key's viewer and control
+ * styles (key.css) and the Clean Plate's small rows (cleanplate.css); what is
+ * here is its own: the reference and region lists, the region quads and
+ * their corner handles, the panorama pins, the photo strip under the viewer.
+ */
+
+.tex-refs .key-link-name,
+.tex-regions .tex-region-name {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.tex-ref-meta {
+  color: var(--muted);
+  font-size: 12.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.key-link-dot.tex-kind-photo {
+  background: #f2a33a;
+}
+.key-link-dot.tex-kind-panorama {
+  background: #6aa8ff;
+}
+.key-link-dot.tex-kind-scan {
+  background: #3fc7a4;
+}
+.tex-region-name {
+  flex: 1 1 auto;
+  text-align: left;
+  justify-content: flex-start;
+  padding: 2px 0;
+  white-space: normal;
+}
+.tex-region.on {
+  border-color: var(--accent);
+}
+.tex-add > button {
+  flex: 1 1 90px;
+}
+.tex-form {
+  display: grid;
+  gap: 6px;
+  margin-top: 6px;
+}
+.tex-fields {
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+.tex-fields .key-field {
+  flex: 1 1 72px;
+  min-width: 0;
+}
+.tex-fields input,
+.tex-fields select {
+  width: 100%;
+  min-width: 0;
+  min-height: 32px;
+}
+.tex-size .tex-times {
+  flex: 0 0 auto;
+  padding-bottom: 8px;
+  color: var(--muted);
+}
+.tex-size .tex-units {
+  flex: 0 0 64px;
+}
+.tex-placement {
+  display: grid;
+  gap: 6px;
+}
+.tex-decision {
+  color: var(--muted);
+}
+
+/* ---------------------------------------------------------------- viewer */
+.tex-quad polygon {
+  fill: rgba(242, 163, 58, 0.06);
+  stroke: #6aa8ff;
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+.tex-quad.on polygon {
+  stroke: var(--accent);
+  fill: rgba(242, 163, 58, 0.12);
+  stroke-width: 2;
+}
+.tex-quad.off polygon {
+  stroke-dasharray: 4 4;
+  opacity: 0.6;
+}
+.tex-handle {
+  fill: var(--accent);
+  stroke: #000;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+.tex-quad-label {
+  fill: #fff;
+  font-size: 13px;
+  paint-order: stroke;
+  stroke: rgba(0, 0, 0, 0.75);
+  stroke-width: 3px;
+}
+.tex-pin circle {
+  fill: #6aa8ff;
+  stroke: #000;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+.tex-pin.decided circle {
+  fill: #3fc7a4;
+}
+.tex-pin.on circle {
+  fill: var(--accent);
+}
+.tex-pin text {
+  fill: #fff;
+  font-size: 14px;
+  paint-order: stroke;
+  stroke: rgba(0, 0, 0, 0.8);
+  stroke-width: 3px;
+}
+.tex-scan {
+  background: #050607;
+}
+.tex-scan > canvas,
+.tex-scan > div:first-child {
+  position: absolute;
+  inset: 0;
+}
+.tex-hint-corners {
+  bottom: 12px;
+  font-size: 13px;
+}
+.tex-strip {
+  display: flex;
+  gap: 6px;
+  padding: 0 10px 8px;
+  overflow-x: auto;
+  min-width: 0;
+}
+.tex-chip {
+  flex: 0 1 220px;
+  min-width: 120px;
+  display: grid;
+  gap: 2px;
+  justify-items: start;
+  text-align: left;
+  padding: 6px 10px;
+  min-height: 0;
+}
+.tex-chip.on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.tex-chip-name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.tex-chip-meta {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* Long labels in the steps wrap rather than widen the panel. */
+.steps-panel .key-tool.key-wrap,
+.tex-add > button,
+.tex-placement button {
+  white-space: normal;
+  min-width: 0;
+}
+.steps-panel .step-body {
+  min-width: 0;
+}
+
+/* A select's options would otherwise set the steps panel's minimum width. */
+.key-field select.tex-select,
+select.tex-select {
+  width: 0;
+  min-width: 100%;
+}
+.tex-steps .steps > .step {
+  min-width: 0;
+}

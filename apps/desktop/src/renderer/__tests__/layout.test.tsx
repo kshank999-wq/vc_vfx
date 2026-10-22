@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import type { MenuCommand } from '../../shared/bridge';
 import { App } from '../App';
-import { moduleForDigit, moduleStatus, moduleToOpen } from '../modules';
+import { moduleDigit, moduleForDigit, moduleStatus, moduleToOpen } from '../modules';
 import { SAMPLE_HANDOFF, createProject, parseHandoff } from '@vcvfx/domain';
 import { stubBridge } from './bridge-stub';
 
@@ -36,7 +36,7 @@ describe('module tabs', () => {
   it('lists every module in the top toolbar and switches between them', async () => {
     await openSample();
     const tabs = within(screen.getByRole('tablist', { name: 'Modules' })).getAllByRole('tab');
-    expect(tabs.map((t) => t.getAttribute('aria-label'))).toEqual(['Shots', 'Plates', 'Roto', 'Key', 'Clean Plate', 'Sky & BG', 'Camera Track', '2D Track', 'Deliver']);
+    expect(tabs.map((t) => t.getAttribute('aria-label'))).toEqual(['Shots', 'Plates', 'Roto', 'Key', 'Clean Plate', 'Sky & BG', 'Textures', 'Camera Track', '2D Track', 'Deliver']);
     expect(selected('Shots')).toBe(true);
     expect(screen.getByRole('table', { name: 'Shot queue' })).toBeTruthy();
 
@@ -52,7 +52,7 @@ describe('module tabs', () => {
     expect(screen.getByRole('region', { name: 'Package contents' }).textContent).toContain('02_MATTES_ROTO');
   });
 
-  it('switches with ⌘/Ctrl+1…9 and the View menu', async () => {
+  it('switches with ⌘/Ctrl+1…9 and 0, and the View menu', async () => {
     let send: (c: MenuCommand) => void = () => undefined;
     await openSample(stubBridge({ onMenu: (l) => ((send = l), () => undefined) }));
     fireEvent.keyDown(window, { key: '3', ctrlKey: true });
@@ -61,9 +61,11 @@ describe('module tabs', () => {
     expect(selected('Clean Plate')).toBe(true);
     fireEvent.keyDown(window, { key: '6', ctrlKey: true });
     expect(selected('Sky & BG')).toBe(true);
-    fireEvent.keyDown(window, { key: '8', metaKey: true });
-    expect(selected('2D Track')).toBe(true);
+    fireEvent.keyDown(window, { key: '7', ctrlKey: true });
+    expect(selected('Textures')).toBe(true);
     fireEvent.keyDown(window, { key: '9', metaKey: true });
+    expect(selected('2D Track')).toBe(true);
+    fireEvent.keyDown(window, { key: '0', metaKey: true });
     expect(selected('Deliver')).toBe(true);
     fireEvent.keyDown(window, { key: '1', ctrlKey: true });
     expect(selected('Shots')).toBe(true);
@@ -73,6 +75,8 @@ describe('module tabs', () => {
     expect(selected('Clean Plate')).toBe(true);
     act(() => send('show-isolate'));
     expect(selected('Sky & BG')).toBe(true);
+    act(() => send('show-texture'));
+    expect(selected('Textures')).toBe(true);
     act(() => send('show-shots'));
     expect(selected('Shots')).toBe(true);
   });
@@ -94,9 +98,13 @@ describe('module tabs', () => {
     expect(moduleForDigit('1')).toBe('shots');
     expect(moduleForDigit('5')).toBe('cleanplate');
     expect(moduleForDigit('6')).toBe('isolate');
-    expect(moduleForDigit('9')).toBe('deliver');
-    expect(moduleForDigit('0')).toBeNull();
+    expect(moduleForDigit('7')).toBe('texture');
+    expect(moduleForDigit('9')).toBe('track2d');
+    expect(moduleForDigit('0')).toBe('deliver');
     expect(moduleForDigit('10')).toBeNull();
+    expect(moduleForDigit('a')).toBeNull();
+    expect(moduleDigit('deliver')).toBe('0');
+    expect(moduleDigit('texture')).toBe('7');
     const p = sample();
     expect(moduleToOpen(p, '010_030', null)).toBe('track2d');
     expect(moduleToOpen(p, '010_030', 'roto')).toBe('track2d');
@@ -111,6 +119,10 @@ describe('module tabs', () => {
     expect(moduleStatus(p, '030_010', 'isolate')).toEqual({ kind: 'task', state: 'pending' });
     expect(moduleStatus(p, '020_010', 'isolate')).toMatchObject({ kind: 'missing' });
     expect(moduleToOpen(p, '030_010', null)).toBe('isolate');
+    // Textures: the storeroom shot.
+    expect(moduleStatus(p, '040_010', 'texture')).toEqual({ kind: 'task', state: 'pending' });
+    expect(moduleStatus(p, '030_010', 'texture')).toMatchObject({ kind: 'missing' });
+    expect(moduleToOpen(p, '040_010', null)).toBe('texture');
   });
 });
 
@@ -123,7 +135,7 @@ describe('the shot bar', () => {
     expect(bar.textContent).toContain('Scene 12A');
     expect(bar.textContent).toContain('Take 4');
     expect(bar.textContent).toContain('Ready for Prep');
-    expect(bar.textContent).toContain('1 of 4');
+    expect(bar.textContent).toContain('1 of 5');
     expect((within(bar).getByRole('button', { name: 'Previous shot' }) as HTMLButtonElement).disabled).toBe(true);
 
     fireEvent.click(within(bar).getByRole('button', { name: 'Next shot' }));
@@ -133,9 +145,11 @@ describe('the shot bar', () => {
     expect(shotBarName()).toBe('020_010');
     fireEvent.keyDown(window, { key: 'ArrowDown', ctrlKey: true });
     expect(shotBarName()).toBe('030_010');
+    fireEvent.keyDown(window, { key: 'ArrowDown', ctrlKey: true });
+    expect(shotBarName()).toBe('040_010');
     expect((within(screen.getByRole('region', { name: 'Current shot' })).getByRole('button', { name: 'Next shot' }) as HTMLButtonElement).disabled).toBe(true);
     fireEvent.keyDown(window, { key: 'ArrowUp', metaKey: true });
-    expect(shotBarName()).toBe('020_010');
+    expect(shotBarName()).toBe('030_010');
     fireEvent.change(screen.getByLabelText('Go to shot'), { target: { value: '010_020' } });
     expect(shotBarName()).toBe('010_020');
     // The Shots tab follows: the same shot is selected there.

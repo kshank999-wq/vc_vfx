@@ -5,6 +5,7 @@ import { createCameraPreview } from './camera-preview';
 import { createKeyPreview } from './key-preview';
 import { createCleanPlatePreview } from './cleanplate-preview';
 import { createIsolatePreview } from './isolate-preview';
+import { createTexturePreview } from './texture-preview';
 import { createRotoPreview } from './roto-preview';
 
 /**
@@ -184,6 +185,7 @@ export function createBrowserBridge(): BrowserBridge {
   const keying = createKeyPreview({ desktopOnly, progress: (p) => progressListeners.forEach((l) => l(p)) });
   const cleaning = createCleanPlatePreview({ desktopOnly, progress: (p) => progressListeners.forEach((l) => l(p)) });
   const isolating = createIsolatePreview({ desktopOnly, progress: (p) => progressListeners.forEach((l) => l(p)) });
+  const texturing = createTexturePreview({ desktopOnly, progress: (p) => progressListeners.forEach((l) => l(p)) });
 
   return {
     command,
@@ -305,8 +307,15 @@ export function createBrowserBridge(): BrowserBridge {
     isolateFrame: (input) => isolating.isolateFrame(input),
     isolateBuild: (input) => isolating.isolateBuild(input),
     isolateExport: (input) => isolating.isolateExport(input),
+    // Texture extraction: the engine runs here on the sample's synthetic storeroom set (texture-preview.ts).
+    textureSession: (input) => texturing.textureSession(input),
+    textureIngest: (input) => texturing.textureIngest(input),
+    textureImage: (input) => texturing.textureImage(input),
+    textureScan: (input) => texturing.textureScan(input),
+    textureBuild: (input) => texturing.textureBuild(input),
+    textureExport: (input) => texturing.textureExport(input),
     cancelJob: async (jobId) => {
-      if (!camera.cancel(jobId) && !keying.cancel(jobId) && !cleaning.cancel(jobId) && !isolating.cancel(jobId)) roto.cancel(jobId);
+      if (!camera.cancel(jobId) && !keying.cancel(jobId) && !cleaning.cancel(jobId) && !isolating.cancel(jobId) && !texturing.cancel(jobId)) roto.cancel(jobId);
     },
     onProgress: (listener) => {
       progressListeners.add(listener);

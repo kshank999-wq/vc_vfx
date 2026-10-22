@@ -21,6 +21,7 @@ import { CamTrackDocumentSchema, Track2dDocumentSchema } from './camtrack-schema
 import { KeyDocumentSchema } from './key-schema.js';
 import { CleanPlateDocumentSchema } from './cleanplate-schema.js';
 import { IsolateDocumentsSchema } from './isolate-schema.js';
+import { TextureDocumentSchema } from './texture-schema.js';
 import { CameraBodySchema, LensProfileSchema } from './camera-db.js';
 
 /**
@@ -46,11 +47,12 @@ export const PROJECT_FORMAT = 'vcvfx-project';
  * 5: shots carry a clean-plate document (`cleanPlate`; addendum 10).
  * 6: shots carry sky-isolation and background-removal documents (`isolate`;
  *    addendum 11).
+ * 7: shots carry a texture-extraction document (`texture`; addendum 12).
  * An older project opens (the new fields empty) and is saved as the current
  * version; an older VC VFX refuses a newer project rather than silently
  * dropping what it does not know about.
  */
-export const PROJECT_VERSION = 6;
+export const PROJECT_VERSION = 7;
 export const PROJECT_EXTENSION = 'vcvfx';
 
 export const ApprovalSchema = z.object({ by: z.string().min(1), at: z.string() });
@@ -172,6 +174,8 @@ export const ShotStateSchema = z.object({
   cleanPlate: CleanPlateDocumentSchema.nullable().default(null),
   /** Sky isolation and background removal (§11). Null documents until started. Mattes, foregrounds and plates are files, never here. */
   isolate: IsolateDocumentsSchema.default({ sky: null, background: null }),
+  /** Texture extraction (§12). Null until started. References are read in place; textures and meshes are files, never here. */
+  texture: TextureDocumentSchema.nullable().default(null),
 });
 export type ShotState = z.infer<typeof ShotStateSchema>;
 
@@ -237,6 +241,7 @@ export function createProject(handoff: Handoff, handoffPath: string, actor: stri
     key: null,
     cleanPlate: null,
     isolate: { sky: null, background: null },
+    texture: null,
   }));
   return log(
     { format: PROJECT_FORMAT, version: PROJECT_VERSION, createdAt: at, updatedAt: at, handoffPath, handoff, plateColorDefault: 'acescg', shots, lensProfiles: [], customCameras: [], log: [] },
@@ -258,7 +263,7 @@ export function parseProject(text: string): { ok: true; project: Project } | { o
 /**
  * Bring an older project up to `PROJECT_VERSION`. The schema's defaults have
  * already filled what an older project lacks (`roto`, `camtrack`, `track2d`,
- * `key`, `cleanPlate` null, no `isolate` documents; no lens profiles); this records the version it is now saved as.
+ * `key`, `cleanPlate`, `texture` null, no `isolate` documents; no lens profiles); this records the version it is now saved as.
  */
 export function migrateProject(p: Project): Project {
   return p.version === PROJECT_VERSION ? p : { ...p, version: PROJECT_VERSION };
@@ -426,6 +431,9 @@ export function approveTask(p: Project, shotId: string, kind: PrepTaskKind, appr
     const iso = isolateTarget ? s.isolate?.[isolateTarget] : null;
     if (iso && iso.frames.length > 0 && !iso.exports.some((e) => e.version === task.version)) {
       return `Export ${isolateTarget === 'sky' ? 'the sky isolation' : 'the background removal'} ${'v' + String(task.version).padStart(3, '0')} first; approval approves the files a vendor receives`;
+    }
+    if (kind === 'texture_extraction' && s.texture && s.texture.records.length > 0 && !s.texture.exports.some((e) => e.version === task.version)) {
+      return `Export textures ${'v' + String(task.version).padStart(3, '0')} first; approval approves the files a vendor receives`;
     }
     return { ...s, tasks: s.tasks.map((t) => (t.kind === kind ? { ...t, state: 'approved' as const, approval: { by: approver.trim(), at } } : t)) };
   });

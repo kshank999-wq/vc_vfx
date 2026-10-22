@@ -106,7 +106,7 @@ export function keyWorkingSize(plate: { width: number; height: number }, working
   return { width: width - (width % 2), height: height - (height % 2) };
 }
 
-function runRaw(ffmpeg: string, args: string[], frameBytes: number, count: number, onFrame: (index: number, buf: Buffer) => void, signal?: AbortSignal): Promise<number> {
+export function runRaw(ffmpeg: string, args: string[], frameBytes: number, count: number, onFrame: (index: number, buf: Buffer) => void, signal?: AbortSignal): Promise<number> {
   return new Promise((resolvePromise, reject) => {
     const child = spawn(ffmpeg, args, { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
     const abort = () => child.kill('SIGKILL');
@@ -142,7 +142,7 @@ function runRaw(ffmpeg: string, args: string[], frameBytes: number, count: numbe
   });
 }
 
-const planesOf = (buf: Buffer) => new Float32Array(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength));
+export const planesOf = (buf: Buffer) => new Float32Array(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength));
 
 /** Read `count` consecutive frames from delivered frame `from`, at `size`, decoded to linear. */
 export async function readLinearFrames(spec: KeyFrameSpec, from: number, count: number, size: { width: number; height: number }, onFrame: (frame: number, img: LinearImage) => void, signal?: AbortSignal): Promise<void> {

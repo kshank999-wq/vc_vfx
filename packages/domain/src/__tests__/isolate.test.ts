@@ -275,26 +275,26 @@ describe('the isolation documents', () => {
     expect(m.sky!.confidence.frames).toBe(2);
   });
 
-  it('is project format 6: projects of formats 3, 4 and 5 open with no isolation, and isolations survive a round trip', () => {
-    expect(PROJECT_VERSION).toBe(6);
+  it('since project format 6: projects of formats 3, 4 and 5 open with no isolation, and isolations survive a round trip', () => {
+    expect(PROJECT_VERSION).toBe(7);
     const v5 = JSON.parse(serializeProject(sample()));
     v5.version = 5;
     for (const s of v5.shots) delete s.isolate;
     const opened5 = parseProject(JSON.stringify(v5));
     if (!opened5.ok) throw new Error(opened5.reason);
-    expect(opened5.project.version).toBe(6);
+    expect(opened5.project.version).toBe(PROJECT_VERSION);
     expect(shotState(opened5.project, SHOT)!.isolate).toEqual({ sky: null, background: null });
     const v4 = JSON.parse(JSON.stringify(v5));
     v4.version = 4;
     for (const s of v4.shots) delete s.cleanPlate;
     const opened4 = parseProject(JSON.stringify(v4));
-    expect(opened4.ok && opened4.project.version).toBe(6);
+    expect(opened4.ok && opened4.project.version).toBe(PROJECT_VERSION);
     expect(opened4.ok && shotState(opened4.project, SHOT)!.isolate).toEqual({ sky: null, background: null });
     const v3 = JSON.parse(JSON.stringify(v4));
     v3.version = 3;
     for (const s of v3.shots) delete s.key;
     const opened3 = parseProject(JSON.stringify(v3));
-    expect(opened3.ok && opened3.project.version).toBe(6);
+    expect(opened3.ok && opened3.project.version).toBe(PROJECT_VERSION);
     let p = ok(addIsolateStroke(sample(), SHOT, 'sky', 1010, stroke('exclude'), 'ana', NOW));
     p = ok(setIsolateSeed(p, SHOT, 'background', { mode: 'box', rect: { x0: 1, y0: 2, x1: 30, y1: 40 } }, 'ana', NOW));
     p = ok(recordIsolateRun(p, SHOT, 'sky', result(p, [1001, 1002]), 'ana', NOW));

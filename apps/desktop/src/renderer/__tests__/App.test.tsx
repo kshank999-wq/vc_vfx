@@ -20,7 +20,7 @@ describe('shot queue', () => {
   it('renders the sample’s rows with frames, prep and status', async () => {
     const table = await openSample();
     const rows = shotRows(table);
-    expect(rows.map((r) => r.getAttribute('data-shot'))).toEqual(['010_020', '010_030', '020_010', '030_010']);
+    expect(rows.map((r) => r.getAttribute('data-shot'))).toEqual(['010_020', '010_030', '020_010', '030_010', '040_010']);
     expect(within(rows[0]!).getByText('1001–1128')).toBeTruthy();
     expect(within(rows[0]!).getByText('DPX + Roto + Key')).toBeTruthy();
     expect(within(rows[0]!).getByText('Ready for Prep')).toBeTruthy();
@@ -29,7 +29,7 @@ describe('shot queue', () => {
   it('filters to circle takes', async () => {
     const table = await openSample();
     fireEvent.click(screen.getByLabelText(/Circle takes only/));
-    expect(shotRows(table).map((r) => r.getAttribute('data-shot'))).toEqual(['010_020', '010_030', '030_010']);
+    expect(shotRows(table).map((r) => r.getAttribute('data-shot'))).toEqual(['010_020', '010_030', '030_010', '040_010']);
   });
 
   it('filters by status chip, scene and search', async () => {
@@ -84,7 +84,7 @@ describe('approval', () => {
   it('is read-only without a licence: browsing works, changing work does not', async () => {
     const openExternal = vi.fn(async () => undefined);
     const table = await openSample(stubBridge({ openExternal }, null));
-    expect(shotRows(table)).toHaveLength(4);
+    expect(shotRows(table)).toHaveLength(5);
     expect(screen.getByText(/Read-only\./)).toBeTruthy();
     const approve = screen.getByRole('button', { name: 'Approve shot…' }) as HTMLButtonElement;
     expect(approve.disabled).toBe(true);

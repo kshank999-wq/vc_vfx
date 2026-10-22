@@ -273,7 +273,7 @@ describe('approval, versions and outputs', () => {
   });
 
   it('since project format 5: a version 4 project opens with no clean plate, and plates survive a round trip', () => {
-    expect(PROJECT_VERSION).toBe(6);
+    expect(PROJECT_VERSION).toBe(7);
     expect(PREP_TASKS.clean_plate.available).toBe(true);
     expect(PREP_TASKS.clean_plate.folder).toBe('04_CLEAN_PLATES');
     const v4 = JSON.parse(serializeProject(sample()));

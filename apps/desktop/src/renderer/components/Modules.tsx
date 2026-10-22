@@ -26,13 +26,15 @@ import { Viewer } from './Viewer';
 import { KeyInfo, KeyViewer, keyStepDefs, useKeyController, type KeyWorkspaceProps } from './key/KeyWorkspace';
 import { CleanPlateInfo, CleanPlateViewer, cleanPlateStepDefs, useCleanPlateController, type CleanPlateWorkspaceProps } from './cleanplate/CleanPlateWorkspace';
 import { IsolateInfo, IsolateViewer, isolateStepDefs, useIsolateController, type IsolateWorkspaceProps } from './isolate/IsolateWorkspace';
+import { TextureInfo, TextureViewer, textureStepDefs, useTextureController, type TextureWorkspaceProps } from './texture/TextureWorkspace';
 
 /**
- * The Plates, Key, Clean Plate, Sky & BG and Deliver tabs (addendum 08). The Key tab
+ * The Plates, Key, Clean Plate, Sky & BG, Textures and Deliver tabs (addendum 08). The Key tab
  * places the key workspace's steps, viewer and numbers (key/KeyWorkspace.tsx,
  * addendum 09) in the shell's zones; the Clean Plate tab does the same with
  * cleanplate/CleanPlateWorkspace.tsx (addendum 10), and Sky & BG with
- * isolate/IsolateWorkspace.tsx (addendum 11). Roto, Camera Track and 2D Track are their
+ * isolate/IsolateWorkspace.tsx (addendum 11), and Textures with texture/TextureWorkspace.tsx
+ * (addendum 12). Roto, Camera Track and 2D Track are their
  * workspaces (RotoWorkspace, TrackWorkspace) in the same three-zone layout.
  */
 
@@ -358,6 +360,63 @@ export function IsolateModule(props: ModuleScreenProps & { work: IsolateWork }) 
     <ModuleLayout label="Sky & BG" steps={any ? <StepList steps={isolateStepDefs(ctl)} resetKey={`${shotId}|${ctl.target}`} /> : <MissingCard props={props} module="isolate" />} info={info}>
       {any && ctl.supported ? (
         <IsolateViewer ctl={ctl} />
+      ) : (
+        <Viewer api={props.api} project={project} shotId={shotId} projectKey={props.projectKey} canEdit={props.canEdit} frame={props.frame} onFrame={props.onFrame} onClose={props.onClose} onToggleMark={props.onToggleMark} />
+      )}
+    </ModuleLayout>
+  );
+}
+
+// ------------------------------------------------------------------ Textures
+
+/** What the Textures tab needs from the app beyond a module screen's props. */
+export type TextureWork = Pick<TextureWorkspaceProps, 'actor' | 'runJob' | 'notify' | 'onTexture'>;
+
+export function TextureModule(props: ModuleScreenProps & { work: TextureWork }) {
+  const { project, shotId } = props;
+  const state = shotState(project, shotId);
+  const shot = handoffShot(project, shotId);
+  const ctl = useTextureController({
+    api: props.api,
+    project,
+    shotId,
+    projectKey: props.projectKey,
+    canEdit: props.canEdit,
+    busy: props.busy,
+    actor: props.work.actor,
+    onTexture: props.work.onTexture,
+    runJob: props.work.runJob,
+    notify: props.work.notify,
+  });
+  if (!state || !shot) return null;
+  const task = state.tasks.find((t) => t.kind === 'texture_extraction');
+  const info = (
+    <>
+      {task ? <TextureInfo ctl={ctl} /> : null}
+      {shot.supervisorNotes ? (
+        <InfoSection title="Supervisor notes">
+          <p className="info-line">{shot.supervisorNotes}</p>
+        </InfoSection>
+      ) : null}
+      {task ? <TaskInfo props={props} kind="texture_extraction" /> : null}
+    </>
+  );
+  return (
+    <ModuleLayout
+      label="Textures"
+      steps={
+        task ? (
+          <div className="tex-steps">
+            <StepList steps={textureStepDefs(ctl)} resetKey={shotId} />
+          </div>
+        ) : (
+          <MissingCard props={props} module="texture" />
+        )
+      }
+      info={info}
+    >
+      {task && ctl.supported ? (
+        <TextureViewer ctl={ctl} />
       ) : (
         <Viewer api={props.api} project={project} shotId={shotId} projectKey={props.projectKey} canEdit={props.canEdit} frame={props.frame} onFrame={props.onFrame} onClose={props.onClose} onToggleMark={props.onToggleMark} />
       )}

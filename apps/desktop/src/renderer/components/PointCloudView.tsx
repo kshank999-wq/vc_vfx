@@ -35,6 +35,8 @@ export interface PointCloudViewProps {
   frameKey: string;
   /** What a click can pick (default both): e.g. only the cloud once a feature is chosen for a correspondence. */
   pickOnly?: 'clouds' | 'tracks';
+  /** The legend's entries (the camera track's by default: path, frame, correspondences). */
+  legend?: { color: string; label: string }[];
 }
 
 type Mat4 = Float32Array;
@@ -438,17 +440,27 @@ export function PointCloudView(props: PointCloudViewProps) {
         Frame all <kbd>F</kbd>
       </button>
       <div className="cloud-legend small">
-        <span>
-          <i style={{ background: '#f2c033' }} /> camera path
-        </span>
-        <span>
-          <i style={{ background: '#fff' }} /> frame {props.currentFrame}
-        </span>
-        {props.marks.length ? (
-          <span>
-            <i style={{ background: '#ff5f56' }} /> {props.marks.length} correspondence{props.marks.length === 1 ? '' : 's'}
-          </span>
-        ) : null}
+        {props.legend ? (
+          props.legend.map((l) => (
+            <span key={l.label}>
+              <i style={{ background: l.color }} /> {l.label}
+            </span>
+          ))
+        ) : (
+          <>
+            <span>
+              <i style={{ background: '#f2c033' }} /> camera path
+            </span>
+            <span>
+              <i style={{ background: '#fff' }} /> frame {props.currentFrame}
+            </span>
+            {props.marks.length ? (
+              <span>
+                <i style={{ background: '#ff5f56' }} /> {props.marks.length} correspondence{props.marks.length === 1 ? '' : 's'}
+              </span>
+            ) : null}
+          </>
+        )}
         <span className="muted">drag to orbit · right-drag or Shift to pan · wheel to zoom · click to pick · F to frame all</span>
       </div>
     </div>
