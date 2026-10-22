@@ -758,11 +758,14 @@ table.queue tbody tr.marked td:first-child {
 }
 .notice-dock {
   position: absolute;
-  /* Under the viewer's own toolbar (Show / compare), over the top of the picture. */
+  /*
+   * Under the viewer's own toolbar (Show / compare), over the top-left of the
+   * picture: some viewers keep their own controls on the right (the Lighting
+   * rig diagram), so the toasts stay left of centre.
+   */
   top: 64px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: min(420px, calc(100% - 24px));
+  left: 20px;
+  width: min(420px, calc(100% - 40px));
   z-index: 20;
   pointer-events: none;
 }

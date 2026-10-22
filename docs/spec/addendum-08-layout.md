@@ -164,7 +164,7 @@ Key; Esc back to Shots (in Camera Track it first cancels a picking tool);
 Roto's I / E / X, [ ], N, F and Camera Track's 3 and Delete as before.
 
 Toasts (at most three, repeats collapsed, information gone after 5 s, errors
-kept until dismissed) are docked at the top of the viewer, under its toolbar,
+kept until dismissed) are docked at the top left of the viewer, under its toolbar,
 on every module screen, so they never cover the steps or the details panel
 and its Approve buttons. On the Shots tab they sit at the top centre of the
 window. Hovering a toast holds it; leaving gives it another 2.5 s.
