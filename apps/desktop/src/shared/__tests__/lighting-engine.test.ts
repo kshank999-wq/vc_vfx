@@ -344,7 +344,7 @@ describe('exports', () => {
     expect(usd).toContain('metersPerUnit = 1');
     expect((usd.match(/def (RectLight|SphereLight|DistantLight|DomeLight) "/g) ?? []).length).toBe(rig.lights.length);
     expect(usd).toContain('bool inputs:enableColorTemperature = 1');
-    expect(usd).toMatch(/def Camera "camera"[\s\S]*float focalLength = 350/);
+    expect(usd).toMatch(/def Camera "camera"[\s\S]*float focalLength = 0\.35\n/);
     // Braces balance (a cheap structural check).
     expect((usd.match(/{/g) ?? []).length).toBe((usd.match(/}/g) ?? []).length);
     const zup = writeLightingUsda({ ...rig, upAxis: 'z' }, names);

@@ -61,9 +61,14 @@
 }
 .lt-diagram svg {
   display: block;
+  user-select: none;
   width: 100%;
   height: auto;
   touch-action: none;
+}
+.lt-diagram path,
+.lt-diagram line {
+  pointer-events: none;
 }
 .lt-ring {
   fill: none;
@@ -201,6 +206,14 @@
   min-width: 0;
   flex: 1 1 140px;
   white-space: normal;
+  overflow-wrap: anywhere;
+}
+.lt-ref-name > *,
+.lt-light-name > * {
+  display: block;
+  max-width: 100%;
+}
+.lt-file {
   overflow-wrap: anywhere;
 }
 .lt-meta {

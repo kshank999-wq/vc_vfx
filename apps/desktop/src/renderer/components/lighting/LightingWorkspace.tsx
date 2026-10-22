@@ -431,7 +431,8 @@ function ReferenceList({ ctl }: { ctl: LightingController }) {
                 ctl.setView('reference');
               }}
             >
-              <strong>{LIGHTING_REFERENCE_LABELS[r.kind]}</strong> {r.name}
+              <strong>{LIGHTING_REFERENCE_LABELS[r.kind]}</strong>
+              <span className="lt-file">{r.name}</span>
               <span className="lt-meta">
                 {r.from === 'plate' ? `plate frame ${r.frame}` : r.width ? `${r.width}×${r.height}` : ''}
                 {r.kind === 'hdri' ? ` · heading ${r.headingDeg === null ? 'aligned by the analysis' : `${r.headingDeg}°`}` : r.circle ? ` · circle r ${Math.round(r.circle.r)} px` : ''}
@@ -612,7 +613,8 @@ export function lightingStepDefs(ctl: LightingController): LightingStepDef[] {
       id: 'lights',
       title: 'Review the lights',
       hint: 'Select a light to tune it (right); drag it on the rig diagram. Your values are locked: a new analysis keeps them.',
-      done: Boolean(analysis) && summary.lights > 0 && ctl.pendingAi.length === 0,
+      // Done once the artist has looked: a light touched, or the rig exported (a fresh analysis opens this step).
+      done: Boolean(analysis) && summary.lights > 0 && ctl.pendingAi.length === 0 && Boolean(doc && (doc.edits.length || doc.added.length || doc.removed.length || doc.exports.length)),
       waiting: !analysis && !(doc?.added.length ?? 0) ? 'Analyse first (step 2), or add a light by hand.' : null,
       content: (
         <>
@@ -790,6 +792,21 @@ function FrameOverlay({ ctl, w, h }: { ctl: LightingController; w: number; h: nu
   const tilt = { pitchDeg: a?.ground?.pitchDeg ?? 0, rollDeg: 0 };
   const lights = ctl.live.filter((l) => l.spec.type !== 'dome');
   const stroke = Math.max(1.5, w / 360);
+  // Arrow tips can land close together (a practical beside the key): labels near one another step apart.
+  const font = Math.max(11, w / 62);
+  const placed = lights
+    .map((l) => {
+      const spec = ctl.draft && ctl.draft.id === l.id ? ({ ...l.spec, ...ctl.draft.fields } as LightSpec) : l.spec;
+      const arrow = frameArrow(spec, rangesOf(l), centre, len, tilt);
+      return { l, arrow, labelY: arrow.tip.y + stroke * 2 };
+    })
+    .sort((p, q) => p.labelY - q.labelY);
+  placed.forEach((p, i) => {
+    for (let j = 0; j < i; j += 1) {
+      const q = placed[j]!;
+      if (Math.abs(q.arrow.tip.x - p.arrow.tip.x) < font * 6 && p.labelY - q.labelY < font * 1.35) p.labelY = q.labelY + font * 1.35;
+    }
+  });
   return (
     <svg className="key-overlay lt-overlay" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="xMidYMid meet">
       {(a?.marks ?? []).map((m, i) => {
@@ -809,9 +826,7 @@ function FrameOverlay({ ctl, w, h }: { ctl: LightingController; w: number; h: nu
         if (m.kind === 'vanishing') return <path key={i} className="lt-vp" d={`M${x - 8} ${y}h16M${x} ${y - 8}v16`} strokeWidth={stroke} />;
         return null;
       })}
-      {lights.map((l) => {
-        const spec = ctl.draft && ctl.draft.id === l.id ? ({ ...l.spec, ...ctl.draft.fields } as LightSpec) : l.spec;
-        const arrow = frameArrow(spec, rangesOf(l), centre, len, tilt);
+      {placed.map(({ l, arrow, labelY }) => {
         const on = l.id === ctl.lightId;
         const col = ROLE_COLOURS[l.spec.role];
         return (
@@ -819,7 +834,7 @@ function FrameOverlay({ ctl, w, h }: { ctl: LightingController; w: number; h: nu
             {arrow.cone.length ? <polygon points={arrow.cone.map((p) => `${p.x},${p.y}`).join(' ')} fill={col} fillOpacity={on ? 0.22 : 0.08} stroke={col} strokeOpacity={on ? 0.7 : 0.3} strokeWidth={stroke * 0.7} /> : null}
             <line x1={centre.x} y1={centre.y} x2={arrow.tip.x} y2={arrow.tip.y} stroke={col} strokeWidth={stroke * (on ? 2.2 : 1.5)} strokeDasharray={arrow.behind ? `${stroke * 4} ${stroke * 3}` : undefined} />
             <circle cx={arrow.tip.x} cy={arrow.tip.y} r={stroke * (on ? 4 : 3)} fill={col} />
-            <text x={arrow.tip.x + stroke * 5} y={arrow.tip.y + stroke * 2} className="lt-arrow-label" style={{ fontSize: Math.max(11, w / 62) }}>
+            <text x={arrow.tip.x + stroke * 5} y={labelY} className="lt-arrow-label" style={{ fontSize: font }}>
               {l.spec.name}
             </text>
           </g>
@@ -865,6 +880,21 @@ export function RigDiagram({ ctl }: { ctl: LightingController }) {
       ctl.actions.setDraft({ id: l.id, fields: { elevationDeg: el, ...(positional ? { distanceM: Math.round(radiusToDistance(r, INNER, OUTER) * 100) / 100 } : {}) } });
     }
   };
+  // Each light's point, and its label stepped clear of the labels before it.
+  const items = lights
+    .map((l) => {
+      const spec = ctl.draft && ctl.draft.id === l.id ? ({ ...l.spec, ...ctl.draft.fields } as LightSpec) : l.spec;
+      const rr = diagramRadius(spec.distanceM, INNER, OUTER);
+      const p = mode === 'top' ? topPoint(spec.azimuthDeg, rr, C) : sidePoint(spec.azimuthDeg, spec.elevationDeg, rr, C);
+      return { l, spec, p, label: { x: p.x + 10, y: p.y + 4 } };
+    })
+    .sort((a, b) => a.label.y - b.label.y);
+  items.forEach((it, i) => {
+    for (let j = 0; j < i; j += 1) {
+      const q = items[j]!.label;
+      if (Math.abs(q.x - it.label.x) < 64 && it.label.y - q.y < 12) it.label.y = q.y + 12;
+    }
+  });
   const onUp = () => {
     if (!drag) return;
     setDrag(null);
@@ -898,12 +928,9 @@ export function RigDiagram({ ctl }: { ctl: LightingController }) {
             </text>
           </>
         )}
-        {lights.map((l) => {
-          const spec = ctl.draft && ctl.draft.id === l.id ? ({ ...l.spec, ...ctl.draft.fields } as LightSpec) : l.spec;
+        {items.map(({ l, spec, p }) => {
           const col = ROLE_COLOURS[l.spec.role];
           const on = l.id === ctl.lightId;
-          const rr = diagramRadius(spec.distanceM, INNER, OUTER);
-          const p = mode === 'top' ? topPoint(spec.azimuthDeg, rr, C) : sidePoint(spec.azimuthDeg, spec.elevationDeg, rr, C);
           const wedge = l.estimate && !l.locked.includes(mode === 'top' ? 'azimuthDeg' : 'elevationDeg') ? (mode === 'top' ? wedgePath(l.estimate.azimuth.low, l.estimate.azimuth.high, INNER, OUTER, C) : wedgePath(l.estimate.elevation.low, l.estimate.elevation.high, INNER, OUTER, C, (el, rad, c) => sidePoint(spec.azimuthDeg, el, rad, c))) : null;
           return (
             <g key={l.id} className={`lt-dlight${on ? ' on' : ''}${l.spec.enabled ? '' : ' off'}`}>
@@ -925,12 +952,14 @@ export function RigDiagram({ ctl }: { ctl: LightingController }) {
                   setDrag(l.id);
                 }}
               />
-              <text x={p.x + 10} y={p.y + 4} className="lt-dlabel">
-                {l.spec.name}
-              </text>
             </g>
           );
         })}
+        {items.map(({ l, p, label }) => (
+          <text key={l.id} x={label.x} y={label.y} className="lt-dlabel">
+            {l.spec.name}
+          </text>
+        ))}
         <circle cx={C.x} cy={C.y} r={7} className="lt-subject" />
       </svg>
     </div>
