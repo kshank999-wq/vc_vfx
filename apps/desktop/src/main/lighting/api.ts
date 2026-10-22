@@ -155,6 +155,8 @@ export async function lightingSession(project: Project, shotId: string, projectK
   const { priors, whiteBalance, record } = await cameraPriors(project, shotId, lightingFrames(doc, src.spec.first, src.spec.last)[0]!, doc, env, projectKey, src.spec.plate);
   const handoff: LightingHandoffReference[] = shot.references
     .filter((r) => KIND_OF[r.kind])
+    // One file named twice (as the panorama and as the HDRI) is one HDRI.
+    .filter((r, i, all) => all.findIndex((o) => o.path === r.path && KIND_OF[o.kind]) === i)
     .map((r) => {
       const file = resolveFromHandoff(project.handoffPath, r.path);
       return { kind: KIND_OF[r.kind]!, path: r.path, name: basename(r.path), from: 'handoff' as const, onDisk: Boolean(file && existsSync(file)) };

@@ -102,7 +102,8 @@ async function drive() {
         camera: { body: 'Test cam', filmBackMm: { width: 36, height: 20.25 }, lens: 'Test 35', focalLengthMm: 35, iris: 'T2.8', whiteBalance: 5600 },
         color: { sourceColorSpace: 'ACEScg' },
         tasks: [{ kind: 'key' }, { kind: 'lighting_analysis' }],
-        references: [{ kind: 'hdri', path: 'VFX/S1/set_hdri.1.exr' }],
+        // The same 360 named as the HDRI and as the panorama is offered once.
+        references: [{ kind: 'hdri', path: 'VFX/S1/set_hdri.1.exr' }, { kind: 'panorama', path: 'VFX/S1/set_hdri.1.exr' }],
         checksums: [],
       },
     ],

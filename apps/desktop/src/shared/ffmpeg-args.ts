@@ -137,6 +137,12 @@ export function outputPixelFormat(format: SequenceFormat, bitDepth: number): str
   }
 }
 
+/** The EXR compression ffmpeg's encoder actually writes for a requested one (it has no PIZ, DWA, B44 or PXR24): ZIP16 otherwise. */
+export function exrCompressionWritten(compression?: string): 'none' | 'rle' | 'zip1' | 'zip16' {
+  const c = (compression ?? '').toLowerCase();
+  return c === 'none' || c === 'rle' || c === 'zip1' || c === 'zip16' ? c : 'zip16';
+}
+
 /** Encoder and pixel format for a delivery format and bit depth. */
 export function encoderArgs(format: SequenceFormat, bitDepth: number, compression?: string): string[] {
   const pix = outputPixelFormat(format, bitDepth);
@@ -147,9 +153,7 @@ export function encoderArgs(format: SequenceFormat, bitDepth: number, compressio
       return ['-c:v', 'tiff', '-pix_fmt', pix, '-compression_algo', 'raw'];
     case 'exr': {
       // ffmpeg's EXR encoder writes float RGB; 16-bit means half float.
-      const exrCompression = ['none', 'rle', 'zip1', 'zip16'].includes((compression ?? '').toLowerCase())
-        ? (compression ?? '').toLowerCase()
-        : 'zip16';
+      const exrCompression = exrCompressionWritten(compression);
       return ['-c:v', 'exr', '-pix_fmt', pix, '-format', bitDepth >= 32 ? 'float' : 'half', '-compression', exrCompression];
     }
     case 'png':

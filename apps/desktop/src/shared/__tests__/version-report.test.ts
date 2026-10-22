@@ -49,3 +49,12 @@ describe('prepReportHtml', () => {
     expect(html).not.toContain('<script>');
   });
 });
+
+describe('prepReportHtml plates', () => {
+  it('names the EXR compression in the files, not one ffmpeg cannot write', () => {
+    // The sample asks for PIZ; the plates are ZIP16.
+    const html = prepReportHtml(sample(), '010_030', { generatedAt: new Date('2026-10-19T11:00:00Z'), appVersion: '0.1.0', operator: 'Tester' });
+    expect(html).toContain('EXR 16-bit (ZIP16; PIZ was asked, which ffmpeg cannot write)');
+    expect(html).not.toContain('16-bit (PIZ)');
+  });
+});

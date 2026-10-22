@@ -153,6 +153,8 @@ export function buildManifest(p: Project, shotId: string, input: ManifestInput) 
       pattern: framePattern(name, 'plate', plateVersion, output.format),
       /** Display looks are never baked into plates (§4). */
       colorBaked: false,
+      /** How the request was honoured when this version was written (e.g. PIZ written as ZIP16, missing head handles). */
+      notes: written?.notes ?? [],
       /**
        * Exactly what was applied to the plates of this version (written: true),
        * or what will be (written: false) when none have been made yet.
