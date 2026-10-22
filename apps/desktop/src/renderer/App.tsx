@@ -498,7 +498,7 @@ export function App({ api, now = () => new Date() }: { api: VcvfxApi; now?: () =
     setSelected(rows[next]!.shot.shotId);
     setMarked([]);
   };
-  // The keys the App owns: ⌘/Ctrl+1…9 and 0 the tabs, ⌘/Ctrl+↑/↓ the shot (anywhere); ↑/↓ the shot on
+  // The keys the App owns: ⌘/Ctrl+1…9 and 0 the tabs (modules.ts MODULE_DIGITS), ⌘/Ctrl+↑/↓ the shot (anywhere); ↑/↓ the shot on
   // the Shots tab; ←/→ the frame and Esc back to Shots in the tabs whose viewer does not do it itself.
   const keys = useRef<(e: KeyboardEvent) => void>(() => undefined);
   keys.current = (e: KeyboardEvent) => {
@@ -806,7 +806,7 @@ export function App({ api, now = () => new Date() }: { api: VcvfxApi; now?: () =
           </div>
         ) : (
           <span className="muted keys-hint">
-            {mod}1–9, {mod}0 tabs · {mod}↑/↓ shots
+            {mod}1–9, {mod}0 tabs (Textures: click) · {mod}↑/↓ shots
           </span>
         )}
       </footer>

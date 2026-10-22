@@ -2027,6 +2027,10 @@ input.tiny {
 .module-tab-label {
   white-space: nowrap;
 }
+/* The short label (addendum 08/13): shown instead of the long one where the toolbar is narrow. */
+.module-tab-label.short {
+  display: none;
+}
 .module-dot {
   position: absolute;
   top: 8px;
@@ -2069,13 +2073,31 @@ input.tiny {
   border-color: rgba(242, 163, 58, 0.5);
   color: var(--accent);
 }
+/* Eleven tabs (addendum 13): tighter from 1600 px, short labels from 1360 px, so no two ever touch. */
+@media (max-width: 1600px) {
+  .topbar {
+    gap: 12px;
+  }
+  .module-tab {
+    min-width: 0;
+    padding: 8px 9px 7px;
+    font-size: 13.5px;
+  }
+}
 @media (max-width: 1360px) {
   .top-icon span {
     display: none;
   }
   .module-tab {
     min-width: 0;
-    padding: 8px 10px 7px;
+    padding: 8px 7px 7px;
+    font-size: 13px;
+  }
+  .module-tab-label:not(.short):has(+ .module-tab-label.short) {
+    display: none;
+  }
+  .module-tab-label.short {
+    display: inline;
   }
   .brand {
     max-width: 170px;

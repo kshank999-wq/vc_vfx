@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useState, type ReactNode } from 'react';
 import { SHOT_STATUS_LABELS, TASK_STATE_LABELS, handoffShot, shotState, shotStatus, type Project, type QueueRow } from '@vcvfx/domain';
-import { MODULES, MODULE_IDS, PREF, moduleStatus, readPref, writePref, type ModuleId, type ModuleStatus } from '../modules';
+import { MODULES, MODULE_IDS, PREF, moduleDigit, moduleStatus, readPref, writePref, type ModuleId, type ModuleStatus } from '../modules';
 import { Icon } from './Icons';
 import { StatusPill } from './Queue';
 
@@ -36,11 +36,12 @@ export function ModuleTabs({ project, shotId, active, onSelect }: { project: Pro
   const mod = modKey();
   return (
     <nav className="module-tabs" role="tablist" aria-label="Modules">
-      {MODULE_IDS.map((id, i) => {
+      {MODULE_IDS.map((id) => {
         const info = MODULES[id];
+        const digit = moduleDigit(id);
         const status = project ? moduleStatus(project, shotId, id) : ({ kind: 'none' } as ModuleStatus);
         const missing = status.kind === 'missing';
-        const title = `${info.label} (${mod}${(i + 1) % 10}) — ${missing ? status.reason : info.blurb}`;
+        const title = `${info.label}${digit ? ` (${mod}${digit})` : ''} — ${missing ? status.reason : info.blurb}`;
         return (
           <button
             key={id}
@@ -57,6 +58,11 @@ export function ModuleTabs({ project, shotId, active, onSelect }: { project: Pro
           >
             <Icon name={id} size={22} />
             <span className="module-tab-label">{info.label}</span>
+            {info.short !== info.label ? (
+              <span className="module-tab-label short" aria-hidden="true">
+                {info.short}
+              </span>
+            ) : null}
             {status.kind === 'task' || status.kind === 'shot' ? <span className={`module-dot ${statusTone(status)}`} aria-hidden="true" /> : null}
           </button>
         );
@@ -400,7 +406,7 @@ export function WhatsHere({ onOpen }: { onOpen(id: ModuleId): void }) {
 const TOUR: { target: string; title: string; body: string }[] = [
   { target: '[data-tour="tab-shots"]', title: 'Shots is home', body: 'Every shot in the DIT’s handoff is listed here, with what each one needs and how far it has got. You can always come back with this tab.' },
   { target: '[data-tour="queue"]', title: 'Pick a shot', body: 'Click a shot to select it; its details show on the right. Double-click to open it straight in its next job.' },
-  { target: '[data-tour="tabs"]', title: 'One tab per job', body: 'Plates, Roto, Key, Clean Plate, Sky & BG, Textures, Camera Track, 2D Track and Deliver each work on the selected shot. A dot shows how that job stands; a greyed tab means the shot doesn’t need it yet — open it to add it.' },
+  { target: '[data-tour="tabs"]', title: 'One tab per job', body: 'Plates, Roto, Key, Clean Plate, Sky & BG, Textures, Comp, Camera Track, 2D Track and Deliver each work on the selected shot. A dot shows how that job stands; a greyed tab means the shot doesn’t need it yet — open it to add it.' },
   { target: '[data-tour="tabs"]', title: 'Follow the steps', body: 'Inside each tab, the numbered steps on the left walk you through the job. The picture is in the middle; the numbers that matter are on the right. Done steps get a tick.' },
 ];
 

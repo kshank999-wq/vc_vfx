@@ -7,12 +7,14 @@ import { shotState, shotStatus, type PrepTaskKind, type Project, type ShotStatus
  * the task) when the shot does not have that task.
  */
 
-export const MODULE_IDS = ['shots', 'plates', 'roto', 'key', 'cleanplate', 'isolate', 'texture', 'camera', 'track2d', 'deliver'] as const;
+export const MODULE_IDS = ['shots', 'plates', 'roto', 'key', 'cleanplate', 'isolate', 'texture', 'comp', 'camera', 'track2d', 'deliver'] as const;
 export type ModuleId = (typeof MODULE_IDS)[number];
 
 export interface ModuleInfo {
   id: ModuleId;
   label: string;
+  /** The tab's label where the toolbar is narrow (≤ 1360 px). */
+  short: string;
   /** The prep task this module works on; null for Shots and Deliver. */
   task: PrepTaskKind | null;
   /** Further tasks it works on (Sky & BG: background removal beside the sky). */
@@ -22,16 +24,17 @@ export interface ModuleInfo {
 }
 
 export const MODULES: Record<ModuleId, ModuleInfo> = {
-  shots: { id: 'shots', label: 'Shots', task: null, blurb: 'Every shot from the handoff, with what each one needs and how far it has got.' },
-  plates: { id: 'plates', label: 'Plates', task: 'sequence_conversion', blurb: 'Turn the camera files into clean, numbered image sequences, and check them frame by frame.' },
-  roto: { id: 'roto', label: 'Roto', task: 'roto', blurb: 'Paint over the subject once; the matte is carried through the shot for you to check.' },
-  key: { id: 'key', label: 'Key', task: 'key', blurb: 'Pull a green- or blue-screen key in one click, repair it with roto, despill it against the background.' },
-  cleanplate: { id: 'cleanplate', label: 'Clean Plate', task: 'clean_plate', blurb: 'Remove a crew member, a rig or a passer-by: the background is rebuilt from the frames that see it.' },
-  isolate: { id: 'isolate', label: 'Sky & BG', task: 'sky_replacement', also: ['background_removal'], blurb: 'Separate the sky, or a subject from its background: matte, foreground and plate, kept consistent through the shot.' },
-  texture: { id: 'texture', label: 'Textures', task: 'texture_extraction', blurb: 'Turn set photos into flat, seamless textures and place them on the LiDAR scan with the 360° panorama.' },
-  camera: { id: 'camera', label: 'Camera Track', task: 'camera_track', blurb: 'Work out how the camera moved, for 3D; align it to a LiDAR scan if you have one.' },
-  track2d: { id: 'track2d', label: '2D Track', task: 'track_2d', blurb: 'Pin a flat surface (a screen, a sign) or a point through the shot for a replacement.' },
-  deliver: { id: 'deliver', label: 'Deliver', task: null, blurb: 'Verify the sources, approve, write the vendor package and print the shot list.' },
+  shots: { id: 'shots', label: 'Shots', short: 'Shots', task: null, blurb: 'Every shot from the handoff, with what each one needs and how far it has got.' },
+  plates: { id: 'plates', label: 'Plates', short: 'Plates', task: 'sequence_conversion', blurb: 'Turn the camera files into clean, numbered image sequences, and check them frame by frame.' },
+  roto: { id: 'roto', label: 'Roto', short: 'Roto', task: 'roto', blurb: 'Paint over the subject once; the matte is carried through the shot for you to check.' },
+  key: { id: 'key', label: 'Key', short: 'Key', task: 'key', blurb: 'Pull a green- or blue-screen key in one click, repair it with roto, despill it against the background.' },
+  cleanplate: { id: 'cleanplate', label: 'Clean Plate', short: 'Clean', task: 'clean_plate', blurb: 'Remove a crew member, a rig or a passer-by: the background is rebuilt from the frames that see it.' },
+  isolate: { id: 'isolate', label: 'Sky & BG', short: 'Sky/BG', task: 'sky_replacement', also: ['background_removal'], blurb: 'Separate the sky, or a subject from its background: matte, foreground and plate, kept consistent through the shot.' },
+  texture: { id: 'texture', label: 'Textures', short: 'Textures', task: 'texture_extraction', blurb: 'Turn set photos into flat, seamless textures and place them on the LiDAR scan with the 360° panorama.' },
+  comp: { id: 'comp', label: 'Comp', short: 'Comp', task: 'composite', blurb: 'Connect the prep in a node graph — plate, key, roto, clean plate — preview it, render it, and hand it to Nuke.' },
+  camera: { id: 'camera', label: 'Camera Track', short: 'Camera', task: 'camera_track', blurb: 'Work out how the camera moved, for 3D; align it to a LiDAR scan if you have one.' },
+  track2d: { id: 'track2d', label: '2D Track', short: '2D Track', task: 'track_2d', blurb: 'Pin a flat surface (a screen, a sign) or a point through the shot for a replacement.' },
+  deliver: { id: 'deliver', label: 'Deliver', short: 'Deliver', task: null, blurb: 'Verify the sources, approve, write the vendor package and print the shot list.' },
 };
 
 /** What a module's tab shows for a shot: its task's state, or the shot's for Deliver. */
@@ -64,20 +67,26 @@ export function moduleTasks(id: ModuleId): PrepTaskKind[] {
 /** The module a double-click opens: the last one used if the shot has its task, else the shot's first task module. */
 export function moduleToOpen(project: Project, shotId: string, last: ModuleId | null): ModuleId {
   if (last && last !== 'shots' && moduleStatus(project, shotId, last).kind !== 'missing') return last;
-  const order: ModuleId[] = ['plates', 'roto', 'track2d', 'camera', 'key', 'cleanplate', 'isolate', 'texture'];
+  const order: ModuleId[] = ['plates', 'roto', 'track2d', 'camera', 'key', 'cleanplate', 'isolate', 'texture', 'comp'];
   return order.find((m) => moduleStatus(project, shotId, m).kind === 'task') ?? 'deliver';
 }
 
-/** The module a ⌘/Ctrl+digit selects (1 = Shots … 9 = 2D Track, 0 = Deliver, the tenth). */
+/**
+ * ⌘/Ctrl+digit per tab. Eleven tabs and ten digits: Textures, the least
+ * used (a set's references, not every shot), has none; it is one click, and
+ * in the View menu.
+ */
+export const MODULE_DIGITS: Partial<Record<ModuleId, string>> = { shots: '1', plates: '2', roto: '3', key: '4', cleanplate: '5', isolate: '6', comp: '7', camera: '8', track2d: '9', deliver: '0' };
+
+/** The module a ⌘/Ctrl+digit selects. */
 export function moduleForDigit(key: string): ModuleId | null {
   if (!/^[0-9]$/.test(key)) return null;
-  const n = key === '0' ? 10 : Number(key);
-  return n >= 1 && n <= MODULE_IDS.length ? MODULE_IDS[n - 1]! : null;
+  return (Object.keys(MODULE_DIGITS) as ModuleId[]).find((id) => MODULE_DIGITS[id] === key) ?? null;
 }
 
-/** The digit of a module's shortcut ("1" … "9", "0" for the tenth). */
-export function moduleDigit(id: ModuleId): string {
-  return String((MODULE_IDS.indexOf(id) + 1) % 10);
+/** The digit of a module's shortcut, or null (Textures). */
+export function moduleDigit(id: ModuleId): string | null {
+  return MODULE_DIGITS[id] ?? null;
 }
 
 /** The menu command that switches to a module (the desktop's View menu). */
