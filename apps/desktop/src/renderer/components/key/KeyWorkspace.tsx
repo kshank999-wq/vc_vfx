@@ -534,6 +534,7 @@ export function keyStepDefs(ctl: KeyController): KeyStepDef[] {
             <Slider label="Gamma" value={p.gamma} min={0.4} max={2.5} step={0.05} disabled={!canChange} onCommit={(v) => actions.params({ gamma: v })} />
             <Slider label={screen?.kind === 'blue' ? 'Balance (red ↔ green)' : 'Balance (red ↔ blue)'} value={p.balance} min={0} max={1} step={0.05} disabled={!canChange} onCommit={(v) => actions.params({ balance: v })} />
             <Check label="Clean plate (uneven screen)" checked={p.cleanPlate} disabled={!canChange} onChange={(v) => actions.params({ cleanPlate: v })} hint="Key against a model of the screen alone, built from several frames" />
+            <Check label="Screen detail (folds, shadows on the screen)" checked={p.screenDetail} disabled={!canChange} onChange={(v) => actions.params({ screenDetail: v })} hint="Follow the screen on each frame from its own screen pixels round the subject. A shadow cast on the screen keys out; turn off to keep it in the matte" />
             <button type="button" disabled={!canChange} onClick={() => actions.resetParams()}>
               Back to the defaults
             </button>

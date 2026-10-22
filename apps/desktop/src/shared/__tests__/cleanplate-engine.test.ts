@@ -162,6 +162,38 @@ describe('temporal reconstruction', () => {
   }, 60_000);
 });
 
+describe('a frame that does not belong (addendum 16)', () => {
+  it('never borrows from a slate in the handles: it does not align, and what only it "sees" stays unresolved', async () => {
+    const scene = cleanPlateScene({ frames: 24, noise: 0.002 });
+    const base = sceneIO(scene);
+    // The last frame of the range is a slate card: dark blue with a white logo, nothing like the wall.
+    const slate: LinearImage = { width: scene.width, height: scene.height, data: new Float32Array(scene.width * scene.height * 3) };
+    for (let i = 0; i < scene.width * scene.height; i += 1) {
+      const x = i % scene.width;
+      const logo = x > 100 && x < 220 && Math.floor(i / scene.width) > 70 && Math.floor(i / scene.width) < 110;
+      slate.data.set(logo ? [0.9, 0.9, 0.9] : [0.01, 0.02, 0.04], 3 * i);
+    }
+    const last = FIRST + 23;
+    const io: CleanPlateIO = { frame: async (f) => (f === last ? slate : base.frame(f)), roto: async (id, f, w, h) => (f === last ? new Float32Array(w * h) : base.roto(id, f, w, h)) };
+    const cleaner = new ShotCleaner(settings({ mode: 'sequence' }), { first: FIRST, last }, { pxScale: 1, luma: LUMA });
+    const outs = new Map<number, Awaited<ReturnType<ShotCleaner['plate']>>>();
+    await runCleanPlate(io, cleaner, { revision: 1 }, (o) => void outs.set(o.frame, o));
+    expect(cleaner.unaligned()).toEqual([last]);
+    expect(cleaner.candidatesFor(FIRST + 20, false).some((c) => c.frame === last)).toBe(false);
+    for (const n of [4, 12, 20]) {
+      const out = outs.get(FIRST + n)!;
+      const { revealed, never } = regionsOf(scene, n);
+      expect(relError(out.plate, scene.clean(n).data, revealed)).toBeLessThan(0.03);
+      const un = unresolvedOf(out);
+      expect(never.filter((i) => un[i]).length / never.length).toBeGreaterThan(0.95);
+      // No slate blue anywhere in what was rebuilt.
+      let blue = 0;
+      for (let i = 0; i < out.hole.length; i += 1) if (out.hole[i] && out.plate[3 * i + 2]! > 2.5 * out.plate[3 * i]! && out.plate[3 * i]! < 0.03) blue += 1;
+      expect(blue).toBe(0);
+    }
+  }, 60_000);
+});
+
 describe('still plates, exposure, guidance', () => {
   it('a locked-off camera makes one still in the reference frame, pixel-exact where it borrows (no resampling)', async () => {
     const scene = cleanPlateScene({ frames: 24, camera: 'static' });

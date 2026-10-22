@@ -186,6 +186,7 @@ export class ShotCleaner {
     for (const f of anchorFrames(first, last, anchors)) set.add(f);
     for (const f of g.prefer) if (f >= first && f <= last) set.add(f);
     for (const f of g.exclude) set.delete(f);
+    for (const f of this.unaligned()) set.delete(f);
     set.delete(t);
     const prefer = new Set(g.prefer);
     const scale = Math.max(3, p.window);
@@ -206,6 +207,20 @@ export class ShotCleaner {
     if (2 * window + 1 + anchors > fit) anchors = Math.max(2, fit - 2 * window - 1);
     window = Math.max(1, window);
     return { window, anchors };
+  }
+
+  /**
+   * Frames whose alignment failed — a residual far beyond the shot's (more
+   * than 8 px and 4 × its median, working pixels): a slate or a flash frame
+   * in the handles, a cut. They show something else, and are never borrowed
+   * from: where only such a frame "saw" the background it would paste the
+   * slate into the plate.
+   */
+  unaligned(): number[] {
+    const a = this.analysis?.alignment;
+    if (!a) return [];
+    const limit = Math.max(8, 4 * a.residual);
+    return [...a.frames.values()].filter((x) => x.residual > limit).map((x) => x.frame);
   }
 
   private quality(f: number): number {
