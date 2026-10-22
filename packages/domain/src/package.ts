@@ -7,6 +7,7 @@ import { keyManifest } from './key.js';
 import { cleanPlateManifest } from './cleanplate.js';
 import { isolateManifest } from './isolate.js';
 import { textureManifest } from './texture.js';
+import { compManifest } from './comp.js';
 
 /**
  * The per-shot output package (master spec §17) and its manifest (§18).
@@ -175,6 +176,7 @@ export function buildManifest(p: Project, shotId: string, input: ManifestInput) 
     cleanPlate: cleanPlateManifest(state),
     isolate: isolateManifest(state),
     texture: textureManifest(state),
+    comp: compManifest(state),
     status: shotStatus(state),
     tasks: state.tasks.map((t) => ({ kind: t.kind, state: t.state, version: versionTag(t.version), notes: t.notes, approval: t.approval })),
     approval: state.approval,
