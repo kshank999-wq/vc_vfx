@@ -535,11 +535,13 @@ function PackageMap({ props }: { props: ShotDetailProps }) {
     const f = PREP_TASKS[t.kind].folder as PackageFolder;
     byFolder.set(f, [...(byFolder.get(f) ?? []), t.kind]);
   }
+  // What packaging really writes there (package-shot.ts): the references and source checksums are listed in manifest.json, not copied.
+  const refs = shot.references.length;
   const fixed: Partial<Record<PackageFolder, string>> = {
-    '00_SOURCE_REFERENCE': `${shot.references.length} reference file${shot.references.length === 1 ? '' : 's'} from the handoff, and the source checksums`,
-    '08_PREVIEWS': 'Contact sheets and previews',
-    '09_PROJECT_DATA': 'The colour transform and LUT, the prep report and the manifest',
-    '10_DELIVERY': 'Hand-off notes for the vendor',
+    '00_SOURCE_REFERENCE': `${refs ? `${refs} reference file${refs === 1 ? '' : 's'} from the handoff and the` : 'The'} source checksums: listed in manifest.json, not copied (the drive keeps them)`,
+    '08_PREVIEWS': 'The comp render and its review encode, when there is one',
+    '09_PROJECT_DATA': 'The colour transform and LUT, and each module’s settings and data; prep_report.html and manifest.json sit beside the folders',
+    '10_DELIVERY': 'Empty: VC VFX writes nothing here',
   };
   return (
     <section className="package-map" aria-label="Package contents">

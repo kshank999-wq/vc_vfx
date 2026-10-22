@@ -354,9 +354,12 @@ export function addTextureRegion(p: Project, shotId: string, input: TextureRegio
     const settings = TextureRegionSettingsSchema.safeParse({ ...DEFAULT_TEXTURE_SETTINGS, ...(input.settings ?? {}), output: { ...DEFAULT_TEXTURE_SETTINGS.output, ...(input.settings?.output ?? {}) } });
     if (!settings.success) return `settings.${issue(settings.error)}`;
     const seq = doc.seq + 1;
+    // Named by the regions there are, not the id sequence (which the references share).
+    let n = doc.regions.length + 1;
+    while (doc.regions.some((r) => r.name === `Region ${n}`)) n += 1;
     const region: TextureRegion = {
       id: `r${seq}`,
-      name: (input.name?.trim() || `Region ${seq}`).slice(0, 120),
+      name: (input.name?.trim() || `Region ${n}`).slice(0, 120),
       photoId: ref.id,
       corners: input.corners.map((c) => [Math.round(c[0] * 100) / 100, Math.round(c[1] * 100) / 100]) as unknown as Corners,
       size,

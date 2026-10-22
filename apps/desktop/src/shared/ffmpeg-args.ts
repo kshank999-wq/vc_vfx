@@ -60,6 +60,12 @@ export interface FfmpegJob {
   /** The shot's own frameIn (editorial in, before handles). */
   frameIn: number;
   timecodeIn?: string | undefined;
+  /**
+   * The frame number of the clip's first frame, when no timecodeIn places it:
+   * an image sequence whose file numbers are the handoff's frame numbers
+   * (`sourceInputFor`). Absent: 0.
+   */
+  clipStart?: number | undefined;
   /** The handoff's compression wish, honoured where the encoder supports it. */
   compression?: string | undefined;
   /** The conversion to apply, and the bare name of its decode LUT in ffmpeg's working directory. Null/absent: as shot. */
@@ -87,15 +93,17 @@ export interface ClipRange {
  * the clip. When the shot carries `timecodeIn`, it is taken as the timecode of
  * the clip file's first frame, so the clip-relative in-point is
  * `frameIn − timecodeToFrames(timecodeIn, fps)`. Without `timecodeIn`,
- * `frameIn` is taken to be clip-relative already. Handles extend that range
+ * `frameIn` is taken to be clip-relative already — unless `clipStart` says
+ * which frame number the clip starts at (an image sequence numbered in the
+ * handoff's frames, e.g. `A001C002_0086400.dpx` for frameIn 86400). Handles extend that range
  * by the plan's own (already clamped) amounts. If the head handle would reach
  * before the clip's first frame, the range starts at frame 0 and the delivered
  * numbering is shifted up by the missing frames, so editorial frames keep the
  * numbers the plan and shot list promised.
  */
-export function clipRange(job: Pick<FfmpegJob, 'plan' | 'frameRate' | 'frameIn' | 'timecodeIn'>): ClipRange {
+export function clipRange(job: Pick<FfmpegJob, 'plan' | 'frameRate' | 'frameIn' | 'timecodeIn' | 'clipStart'>): ClipRange {
   const { plan } = job;
-  const clipStartAbsolute = job.timecodeIn ? timecodeToFrames(job.timecodeIn, job.frameRate) : 0;
+  const clipStartAbsolute = job.timecodeIn ? timecodeToFrames(job.timecodeIn, job.frameRate) : (job.clipStart ?? 0);
   const relativeIn = job.frameIn - clipStartAbsolute;
   const headHandles = job.frameIn - plan.sourceIn;
   const tailFrames = plan.sourceOut - job.frameIn;
@@ -129,6 +137,12 @@ export function outputPixelFormat(format: SequenceFormat, bitDepth: number): str
   }
 }
 
+/** The EXR compression ffmpeg's encoder actually writes for a requested one (it has no PIZ, DWA, B44 or PXR24): ZIP16 otherwise. */
+export function exrCompressionWritten(compression?: string): 'none' | 'rle' | 'zip1' | 'zip16' {
+  const c = (compression ?? '').toLowerCase();
+  return c === 'none' || c === 'rle' || c === 'zip1' || c === 'zip16' ? c : 'zip16';
+}
+
 /** Encoder and pixel format for a delivery format and bit depth. */
 export function encoderArgs(format: SequenceFormat, bitDepth: number, compression?: string): string[] {
   const pix = outputPixelFormat(format, bitDepth);
@@ -139,9 +153,7 @@ export function encoderArgs(format: SequenceFormat, bitDepth: number, compressio
       return ['-c:v', 'tiff', '-pix_fmt', pix, '-compression_algo', 'raw'];
     case 'exr': {
       // ffmpeg's EXR encoder writes float RGB; 16-bit means half float.
-      const exrCompression = ['none', 'rle', 'zip1', 'zip16'].includes((compression ?? '').toLowerCase())
-        ? (compression ?? '').toLowerCase()
-        : 'zip16';
+      const exrCompression = exrCompressionWritten(compression);
       return ['-c:v', 'exr', '-pix_fmt', pix, '-format', bitDepth >= 32 ? 'float' : 'half', '-compression', exrCompression];
     }
     case 'png':

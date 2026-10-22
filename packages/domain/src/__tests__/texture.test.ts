@@ -167,6 +167,9 @@ describe('the texture document', () => {
     const r = doc(p).regions[0]!;
     expect(r).toMatchObject({ id: 'r4', name: 'Brick wall', photoId: 'ph1', size: { width: 2, height: 1, units: 'm' }, settings: { tile: 'none', delight: 1, undistort: true, rectify: true } });
     expect(textureSizeMetres({ width: 200, height: 100, units: 'cm' })).toEqual({ width: 2, height: 1 });
+    // An unnamed region is numbered by the regions, not by the ids the references share (r5 is "Region 2").
+    const unnamed = ok(addTextureRegion(p, SHOT, { photoId: 'ph1', corners: quad }, 'ana', NOW));
+    expect(doc(unnamed).regions.map((x) => [x.id, x.name])).toEqual([['r4', 'Brick wall'], ['r5', 'Region 2']]);
     const crossed: typeof quad = [quad[0], quad[2], quad[1], quad[3]];
     expect(addTextureRegion(p, SHOT, { photoId: 'ph1', corners: crossed }, 'ana', NOW)).toMatchObject({ ok: false, reason: expect.stringContaining('cross') });
     expect(addTextureRegion(p, SHOT, { photoId: 'ph1', corners: [[0, 0], [4, 0], [4, 4], [0, 4]] }, 'ana', NOW)).toMatchObject({ ok: false, reason: expect.stringContaining('too small') });

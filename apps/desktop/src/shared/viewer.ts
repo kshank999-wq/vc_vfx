@@ -21,7 +21,8 @@ export interface ViewerTimeline {
   timecode(delivered: number): string | null;
 }
 
-export function viewerTimeline(project: Project, shotId: string): ViewerTimeline | null {
+/** `clipStart`: as `clipRange`'s — the frame number of an image sequence's first file, from `sourceInputFor` (main only). */
+export function viewerTimeline(project: Project, shotId: string, clipStart?: number): ViewerTimeline | null {
   const shot = handoffShot(project, shotId);
   if (!shot) return null;
   const timing = shotTiming(project, shot);
@@ -29,7 +30,7 @@ export function viewerTimeline(project: Project, shotId: string): ViewerTimeline
   if (!timing || !plan) return null;
   let range;
   try {
-    range = clipRange({ plan, frameRate: timing.frameRate, frameIn: timing.frameIn, timecodeIn: timing.from === 'handoff' ? timing.timecodeIn : undefined });
+    range = clipRange({ plan, frameRate: timing.frameRate, frameIn: timing.frameIn, timecodeIn: timing.from === 'handoff' ? timing.timecodeIn : undefined, clipStart });
   } catch {
     return null;
   }

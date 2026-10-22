@@ -79,7 +79,7 @@ describe('recordPlates', () => {
       firstFrame: 1001,
       lastFrame: 1264,
       color: { policy: d.policy, sourceEncoding: d.sourceEncoding, plateEncoding: d.plateEncoding, summary: d.summary, transform: 'Sony S-Log3 → linear; …', filter: 'zscale…', files: ['09_PROJECT_DATA/x.json'], lookApplied: false as const },
-      notes: [],
+      notes: ['ffmpeg cannot write PIZ EXR compression; ZIP16 was used instead.'],
     };
     p = ok(recordPlates(p, '020_010', record, 'ops', NOW));
     p = ok(recordPlates(p, '020_010', { ...record, frames: 264 }, 'ops', NOW));
@@ -88,6 +88,8 @@ describe('recordPlates', () => {
     expect(p.log.at(-1)?.detail).toMatch(/ffmpeg -vf zscale/);
     const m = buildManifest(p, '020_010', { generatedAt: NOW, appVersion: '0.2.0', operator: 'ops', files: [] });
     expect(m.plates.color).toMatchObject({ written: true, sourceEncoding: 'sony_slog3_sgamut3cine', plateEncoding: 'acescg', lookApplied: false, files: ['09_PROJECT_DATA/x.json'] });
+    // How the request was honoured reaches the vendor too.
+    expect(m.plates.notes).toEqual(['ffmpeg cannot write PIZ EXR compression; ZIP16 was used instead.']);
   });
 
   it('puts the planned decision in the manifest before any plates exist', () => {

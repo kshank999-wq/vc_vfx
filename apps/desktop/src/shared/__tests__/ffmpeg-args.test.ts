@@ -28,6 +28,15 @@ describe('clipRange', () => {
     expect(r.startNumber).toBe(plan.editorialIn);
   });
 
+  it('places an image sequence numbered in the handoff frames by its first file (clipStart)', () => {
+    const plan = sequencePlan({ frameIn: 2000, frameOut: 2031, handles: 4 }, out('exr', 16));
+    expect(clipRange({ plan, frameRate: 24, frameIn: 2000, clipStart: 1996 })).toEqual({ selectIn: 0, selectOut: 39, startNumber: 1001, frameCount: 40, missingHead: 0 });
+    // The first file is 1998: two head frames are missing, as for a clip.
+    expect(clipRange({ plan, frameRate: 24, frameIn: 2000, clipStart: 1998 })).toMatchObject({ selectIn: 0, startNumber: 1003, missingHead: 2 });
+    // A timecode, when given, still decides.
+    expect(clipRange({ plan, frameRate: 24, frameIn: 2000, timecodeIn: '00:00:00:00', clipStart: 1996 }).selectIn).toBe(1996);
+  });
+
   it('refuses a shot that lies before its clip', () => {
     const plan = sequencePlan({ frameIn: 10, frameOut: 20, handles: 0 }, out('exr', 16));
     expect(() => clipRange({ plan, frameRate: 24, frameIn: 10, timecodeIn: '00:00:10:00' })).toThrow(/before the start/);

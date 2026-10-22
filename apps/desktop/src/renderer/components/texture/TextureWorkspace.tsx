@@ -1317,7 +1317,7 @@ export function TextureInfo({ ctl }: { ctl: TextureController }) {
             {task?.approval ? ` · approved by ${task.approval.by}` : ''}
           </dd>
           <dt>Exported</dt>
-          <dd>{ctl.exported ? `${ctl.exported.regions.length} textures, ${ctl.exported.format.toUpperCase()} + PNG` : 'not yet'}</dd>
+          <dd>{ctl.exported ? `${ctl.exported.regions.length} texture${ctl.exported.regions.length === 1 ? '' : 's'}, ${ctl.exported.format.toUpperCase()} + PNG` : 'not yet'}</dd>
           <dt>Settings</dt>
           <dd>
             revision {doc?.revision ?? 0}

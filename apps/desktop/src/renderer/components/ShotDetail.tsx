@@ -27,6 +27,7 @@ import {
 } from '@vcvfx/domain';
 import { canApproveShot, canApproveTask, canDeliver, canPackage, canReopen, canSetTask, READ_ONLY_TITLE, type Allowed } from '../actions';
 import { MODULES, type ModuleId } from '../modules';
+import { exrCompressionWritten } from '../../shared/ffmpeg-args';
 import { Icon } from './Icons';
 import { CircleDot, StatusPill } from './Queue';
 
@@ -280,6 +281,13 @@ export function ApprovalPanel(props: ShotDetailProps) {
   );
 }
 
+/** The compression the plates are written with: EXR in what ffmpeg can write (ZIP16 for PIZ, DWA…), saying what was asked. */
+function compressionLabel(format: string, asked: string | undefined): string {
+  if (format !== 'exr') return asked ? ` · ${asked}` : '';
+  const written = exrCompressionWritten(asked).toUpperCase();
+  return asked && asked.toUpperCase() !== written ? ` · ${written} (${asked} asked)` : ` · ${written}`;
+}
+
 export function OutputRoot(props: Pick<ShotDetailProps, 'project' | 'shotId' | 'outputRoot' | 'busy' | 'onChangeOutputRoot' | 'onRevealOutput'>) {
   const state = shotState(props.project, props.shotId);
   return (
@@ -316,7 +324,7 @@ export function SequencePlan({ project, shotId, busy, onProbe }: Pick<ShotDetail
         ['Delivered in–out', <span className="num">{formatRange(plan.deliveredIn, plan.deliveredOut)}</span>],
         ['Editorial in–out', <span className="num">{formatRange(plan.editorialIn, plan.editorialOut)}</span>],
         ['Handles · frames', <span className="num">{`${plan.handles} · ${plan.frameCount}`}</span>],
-        ['Format', `${plan.format.toUpperCase()} ${plan.bitDepth}-bit${output.compression ? ` · ${output.compression}` : ''}`],
+        ['Format', `${plan.format.toUpperCase()} ${plan.bitDepth}-bit${compressionLabel(plan.format, output.compression)}`],
         ['File pattern', <span className="mono">{framePattern(name, 'plate', plateVersion, plan.format)}</span>],
       ]}
     />

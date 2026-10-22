@@ -15,6 +15,7 @@ import {
   type Project,
 } from '@vcvfx/domain';
 import { escapeHtml } from './html';
+import { exrCompressionWritten } from './ffmpeg-args';
 
 /**
  * The per-shot prep report written into each package beside the manifest
@@ -38,6 +39,10 @@ export function prepReportHtml(p: Project, shotId: string, input: { generatedAt:
   // What was applied to this version's plates when they were written; else what will be.
   const plateVersion = state.tasks.find((t) => t.kind === 'sequence_conversion')?.version ?? 1;
   const written = state.plates.find((r) => r.version === plateVersion);
+  // EXR plates are written with the compression ffmpeg has (ZIP16 for PIZ, DWA…): say what is in the files, and what was asked.
+  const asked = output.compression;
+  const exr = output.format === 'exr' ? exrCompressionWritten(asked).toUpperCase() : null;
+  const compression = exr ? (asked && asked.toUpperCase() !== exr ? `${exr}; ${asked} was asked, which ffmpeg cannot write` : exr) : asked;
   const plateColour = written ? `${written.color.summary}${written.color.transform ? ` ${written.color.transform}` : ''}` : `${plateColorFor(p, shotId).summary} (planned; no plates written yet)`;
   const tasks = state.tasks
     .map(
@@ -96,13 +101,14 @@ ${row('Look reference (not baked)', color.lookReference)}
 </table></div>
 </div>
 <h2>Plates</h2><table class="kv">
-${row('Format', `${output.format.toUpperCase()} ${output.bitDepth}-bit${output.compression ? ` (${output.compression})` : ''}`)}
+${row('Format', `${output.format.toUpperCase()} ${output.bitDepth}-bit${compression ? ` (${compression})` : ''}`)}
 ${row('Source in–out (with handles)', range(plan?.sourceIn, plan?.sourceOut))}
 ${row('Delivered in–out', range(plan?.deliveredIn, plan?.deliveredOut))}
 ${row('Editorial in–out', range(plan?.editorialIn, plan?.editorialOut))}
 ${row('Handles / frame count', `${plan?.handles ?? shot.handles} / ${plan?.frameCount ?? 'unknown'}`)}
 ${row('File pattern', framePattern(name, 'plate', state.tasks.find((t) => t.kind === 'sequence_conversion')?.version ?? 1, output.format))}
 ${row('Plate colour', plateColour)}
+${written?.notes.length ? row('Notes', written.notes.join(' ')) : ''}
 ${row('Display look baked into plates', 'No')}
 </table>
 <h2>Supervisor notes</h2><p>${e(shot.supervisorNotes)}</p>

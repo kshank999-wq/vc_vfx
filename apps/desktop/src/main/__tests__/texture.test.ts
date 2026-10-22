@@ -244,3 +244,37 @@ describe.skipIf(!hasFfmpeg)('texture extraction on real files', () => {
     expect(after).toEqual(before);
   }, 180_000);
 });
+
+describe('the handoff references offered to the Textures tab', () => {
+  it('offers a file the handoff names twice (panorama and HDRI) once', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'vcvfx-texture-refs-'));
+    const handoff = {
+      project: 'Refs',
+      shots: [
+        {
+          shotId: 'R1',
+          scene: '1',
+          sourcePath: 'VFX/R1/R1.mov',
+          frameIn: 0,
+          frameOut: 9,
+          frameRate: 24,
+          tasks: [{ kind: 'texture_extraction' }],
+          references: [
+            { kind: 'panorama', path: 'VFX/REF/set_360.exr' },
+            { kind: 'hdri', path: 'VFX/REF/set_360.exr' },
+            { kind: 'reference_photo', path: 'VFX/REF/wall.jpg' },
+          ],
+        },
+      ],
+    };
+    const parsed = parseHandoff(JSON.stringify(handoff));
+    if (!parsed.ok) throw new Error(JSON.stringify(parsed.issues));
+    const project = createProject(parsed.handoff, join(root, 'handoff.json'), 'Tester', NOW);
+    const env: TextureEnv = { ffmpeg: 'ffmpeg', caps: FULL_CAPS, cacheRoot: join(root, 'cache'), workerFile: 'unused.js', generator: 'VC VFX test' };
+    const session = await textureSession(project, 'R1', env);
+    expect(session.handoff.map((h) => [h.kind, h.path])).toEqual([
+      ['panorama', 'VFX/REF/set_360.exr'],
+      ['photo', 'VFX/REF/wall.jpg'],
+    ]);
+  });
+});

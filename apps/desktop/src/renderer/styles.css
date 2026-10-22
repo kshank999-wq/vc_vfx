@@ -575,6 +575,15 @@ table.queue tbody tr.marked td:first-child {
   min-width: 0;
   color: var(--muted);
 }
+/* A real path is long: its own line, broken anywhere, not squeezed beside the buttons in a narrow column. */
+.output-root .path.mono {
+  flex-basis: 100%;
+  order: 1;
+  word-break: break-all;
+}
+.output-root button {
+  order: 0;
+}
 
 .tasks {
   list-style: none;
