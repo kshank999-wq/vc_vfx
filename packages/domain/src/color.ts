@@ -437,9 +437,21 @@ export function cube1D(fn: (v: number) => number, options: { size?: number; doma
   return `${lines.join('\n')}\n`;
 }
 
-/** The decode curve of a transform as a 1D cube (code value 0–1 → linear). */
+/**
+ * Code values a video encoding carries above 1.0: Rec.709 and sRGB footage
+ * in video range keeps super-whites (10-bit codes 941–1019 read as up to
+ * 1.09) — speculars, a lamp, the sky. ffmpeg's lut1d clamps to its domain.
+ */
+export const VIDEO_CODE_MAX = 1.25;
+
+/**
+ * The decode curve of a transform as a 1D cube (code value → linear): 0–1,
+ * or 0–1.25 for a video encoding so its super-whites are not clipped (the
+ * same step between points).
+ */
 export function decodeCube(t: ColorTransform, size = 4096): string {
-  return cube1D(TRANSFERS[t.decode].toLinear, { size, title: `${TRANSFERS[t.decode].label} to linear (VC VFX)` });
+  const video = t.decode === 'bt709' || t.decode === 'srgb';
+  return cube1D(TRANSFERS[t.decode].toLinear, { size: video ? Math.round(size * VIDEO_CODE_MAX) : size, domainMax: video ? VIDEO_CODE_MAX : 1, title: `${TRANSFERS[t.decode].label} to linear (VC VFX)` });
 }
 
 // ---------------------------------------------------------------------------

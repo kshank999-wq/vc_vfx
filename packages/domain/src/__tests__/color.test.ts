@@ -188,6 +188,14 @@ describe('cube1D', () => {
     }
   });
 
+  it('keeps a video encoding\'s super-whites: Rec.709 and sRGB decode over 0–1.25 (addendum 16)', () => {
+    const lines = decodeCube(colorTransform('rec709', 'acescg')).trim().split('\n');
+    expect(lines[1]).toBe('LUT_1D_SIZE 5120');
+    expect(lines[3]).toBe('DOMAIN_MAX 1.25 1.25 1.25');
+    expect(Number(lines[lines.length - 1]!.split(' ')[0])).toBeCloseTo(TRANSFERS.bt709.toLinear(1.25), 5);
+    expect(decodeCube(colorTransform('srgb', 'acescg'))).toContain('DOMAIN_MAX 1.25 1.25 1.25');
+  });
+
   it('supports a custom domain', () => {
     expect(cube1D((v) => v * 2, { size: 3, domainMin: 0, domainMax: 64, title: 'x' })).toContain('DOMAIN_MAX 64 64 64\n0 0 0\n64 64 64\n128 128 128');
   });

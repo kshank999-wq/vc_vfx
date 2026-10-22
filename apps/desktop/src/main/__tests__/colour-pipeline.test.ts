@@ -124,6 +124,22 @@ describe.each(binaries)('plates with %s', (_label, bin) => {
     for (const c of px(8, 8)) expect(Math.abs(c - 0.18) / 0.18).toBeLessThan(0.02);
   });
 
+  it('keeps the super-whites of a 10-bit Rec.709 ProRes 422 above 1.0 (addendum 16)', async () => {
+    const { project, drive, root } = await makeDrive([
+      { shotId: 'V', sourcePath: 'VFX/V/clip.mov', checksum: 'none', extra: { frameIn: 0, frameOut: 1, handles: 0, color: { sourceColorSpace: 'Rec.709' }, output: { format: 'exr', bitDepth: 32, startFrame: 1001 } } },
+    ]);
+    await mkdir(join(drive, 'VFX/V'), { recursive: true });
+    // Left: video white (Y 940); right: a super-white (Y 1000), neutral.
+    ff(bin, ['-f', 'lavfi', '-i', `color=c=black:s=${W}x${H}:r=24`, '-frames:v', '2', '-vf', `format=yuv422p10le,geq=lum='if(lt(X\\,${W / 2})\\,940\\,1000)':cb=512:cr=512`, '-c:v', 'prores_ks', '-profile:v', '3', '-color_range', 'tv', '-colorspace', 'bt709', '-color_trc', 'bt709', '-color_primaries', 'bt709', join(drive, 'VFX/V/clip.mov')]);
+    const r = await generateSequence({ project, shotId: 'V', outputRoot: join(root, 'OUT'), ffmpeg: bin, ffprobe: probeFor(bin) });
+    if (!r.ok) throw new Error(r.reason);
+    const px = readFloat(bin, join(r.folder, 'V_plate_v001.1001.exr'));
+    for (const c of px(8, 8)) expect(c).toBeCloseTo(1, 2);
+    const superWhite = TRANSFERS.bt709.toLinear((1000 - 64) / 876);
+    for (const c of px(W - 8, 8)) expect(Math.abs(c - superWhite) / superWhite).toBeLessThan(0.01);
+    expect(superWhite).toBeGreaterThan(1.1);
+  });
+
   it('refuses camera raw with the transcode instruction', async () => {
     const { project, root } = await makeDrive([{ shotId: 'R', sourcePath: 'VFX/R/A001_C002.R3D', bytes: Buffer.from('not really'), checksum: 'none' }]);
     const r = await generateSequence({ project, shotId: 'R', outputRoot: join(root, 'OUT'), ffmpeg: bin });
