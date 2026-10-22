@@ -284,7 +284,7 @@ function irradiance(s: SyntheticScene, prep: ReturnType<typeof prepare>, p: V3, 
     if (cosS <= 0) continue;
     if (test && blocked(s, p, P.pr.position)) continue;
     const e = (P.intensity * cosS) / d2;
-    for (let k = 0; k < 3; k += 1) out[k] += e * P.rgb[k]!;
+    for (let k = 0; k < 3; k += 1) out[k] = out[k]! + e * P.rgb[k]!;
   }
   return out;
 }
@@ -451,10 +451,12 @@ export function renderGreyBall(s: SyntheticScene, size = 160): BallShot {
 /**
  * The equirectangular HDRI from the subject: column u → yaw (u/W − ½)·360°
  * (positive to the right of the centre column), row v → pitch (½ − v/H)·180°.
- * `headingDeg` is the panorama yaw the camera looked along.
+ * `headingDeg` is the panorama yaw the camera looked along. Its colours are
+ * the lights' own (not white-balanced like the plate).
  */
 export function renderEquirect(s: SyntheticScene, width = 512, headingDeg = 0): LinearImage {
-  const prep = prepare(s);
+  // An HDRI carries the lights' own colours (it is not balanced like the plate).
+  const prep = prepare({ ...s, whiteBalanceK: null });
   const H = width / 2;
   const data = new Float32Array(width * H * 3);
   const ss = 2;

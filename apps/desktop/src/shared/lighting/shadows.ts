@@ -217,7 +217,7 @@ export function analyseShadows(lum: Float32Array, w: number, h: number, subject:
     if (r < 0.15 * widthM) continue;
     const a = Math.atan2(gx[i]!, gz[i]!) / DEG;
     const b = Math.floor(((a + 360) % 360) / (360 / BINS)) % BINS;
-    hist[b] += (1 - ratio[i]!) * area[i]! * Math.min(1, r / widthM);
+    hist[b] = hist[b]! + (1 - ratio[i]!) * area[i]! * Math.min(1, r / widthM);
   }
   const sm = Array.from(hist, (_, i) => {
     let v = 0;

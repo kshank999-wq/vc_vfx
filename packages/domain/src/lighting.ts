@@ -273,6 +273,7 @@ export interface RigLight {
 
 /** Wrap an azimuth into −180 … 180. */
 export const wrapAzimuth = (a: number) => {
+  if (a >= -180 && a <= 180) return a;
   const w = ((((a + 180) % 360) + 360) % 360) - 180;
   return w === -180 && a > 0 ? 180 : w;
 };

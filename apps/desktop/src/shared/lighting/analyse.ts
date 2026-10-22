@@ -289,7 +289,8 @@ export function analyseLighting(input: AnalysisInput): AnalysisOutput {
 
   // 6. The rig.
   const lights: LightEstimate[] = [];
-  const subjectC: V3 = scale(cameraToLevel(cam, [0, 0, -1]), input.camera.subjectDistanceM);
+  const subjectRay = field ? cameraToLevel(cam, norm([((field.box.x0 + field.box.x1 + 1) / 2 - W / 2) / focalPx, -((field.box.y0 + field.box.y1 + 1) / 2 - H / 2) / focalPx, -1])) : cameraToLevel(cam, [0, 0, -1]);
+  const subjectC: V3 = scale(subjectRay, input.camera.subjectDistanceM);
   const greyFit = grey.find((g) => g.fit?.key)?.fit ?? null;
   const keyE = fit?.key?.E ?? null;
   // The key's direction: from every source of evidence.
@@ -429,61 +430,6 @@ export function analyseLighting(input: AnalysisInput): AnalysisOutput {
       marks.push({ kind: 'rim', x: (cxs + Math.cos(fit.rim.phiDeg * DEG) * rr) / W, y: (cys - Math.sin(fit.rim.phiDeg * DEG) * rr) / H, x2: null, y2: null, r: null, lightId: back ? 'back' : 'rim', label: back ? 'back light' : 'rim' });
     }
   }
-  // Further probe sources (HDRI or chrome): each a light, unless one already stands there.
-  const probe = hdri ?? chrome[0] ?? null;
-  if (probe && probe.sources.length > 1 && probe.sources[0]) {
-    const ref = probe.sources[0].E;
-    probe.sources.slice(1, 5).forEach((src: ProbeSource, i: number) => {
-      const near = lights.find((l) => Math.abs(azDiff(l.azimuth.value, src.az)) < 25 && Math.abs(l.elevation.value - src.el) < 20);
-      const stops = Math.log2(src.E / ref);
-      const col = colourOf(src.rgb, hdri ? null : wb, gamut, hdri ? 12 : 18);
-      const kind = hdri ? 'hdri' : 'chrome_ball';
-      if (near) {
-        // The probe measures it better: take its direction and size, keep the role.
-        near.azimuth = azRange(src.az, src.dirHalf + (hdri && hdri.headingFrom !== 'given' ? 8 : 2));
-        near.elevation = elRange(src.el, src.dirHalf + 1);
-        near.intensity = stopsRange(stops, src.clipped ? 2 : 0.4);
-        near.size = sizeRange(src.sizeDeg, src.sizeDeg / 1.4, src.sizeDeg * 1.4 + 0.5);
-        near.temperature = col.temperature;
-        near.rgb = col.rgb;
-        near.evidence = [...new Set([...near.evidence, kind])];
-        near.confidence = Math.max(near.confidence, 0.7);
-        return;
-      }
-      const behind = Math.abs(src.az) > 110;
-      const role = behind ? (src.el > 45 ? 'back' : 'rim') : !lights.some((l) => l.role === 'fill') ? 'fill' : src.sizeDeg > 15 ? 'fill' : 'practical';
-      const id = !lights.some((l) => l.id === role) && (role === 'fill' || role === 'rim' || role === 'back') ? role : `${hdri ? 'hdri' : 'chrome'}${i + 2}`;
-      lights.push({ id, role, type: src.sizeDeg > 8 ? 'rect' : 'spot', name: id === role ? (role === 'fill' ? 'Fill' : role === 'rim' ? 'Rim' : 'Back light') : `${hdri ? 'HDRI' : 'Ball'} source ${i + 2}`, azimuth: azRange(src.az, src.dirHalf + 2), elevation: elRange(src.el, src.dirHalf + 1), distance: R(3, 1, 30), intensity: stopsRange(stops, src.clipped ? 2 : 0.4), size: sizeRange(src.sizeDeg, src.sizeDeg / 1.4, src.sizeDeg * 1.4 + 0.5), temperature: col.temperature, rgb: col.rgb, practical: null, motivation: `A ${src.sizeDeg > 15 ? 'large' : 'small'} source seen in the ${hdri ? 'HDRI' : 'chrome ball'}${src.clipped ? ' (clipped there: at least this bright)' : ''}.`, evidence: [kind], confidence: 0.75 });
-    });
-  }
-  // The even rest: ambient, or the sky outdoors.
-  {
-    let stops: number | null = null;
-    let half = 1.2;
-    let rgb: [number, number, number] | null = null;
-    let ev: LightEstimate['evidence'][number] = 'shading';
-    if (hdri && hdri.sources[0]) {
-      stops = Math.log2(Math.max(1e-6, hdri.dome.E) / Math.max(1e-9, hdri.sources[0].E));
-      half = 0.6;
-      rgb = hdri.dome.rgb;
-      ev = 'hdri';
-    } else if (chrome[0]?.sources[0]) {
-      stops = Math.log2(Math.max(1e-6, chrome[0].dome.E) / Math.max(1e-9, chrome[0].sources[0].E));
-      half = 1.2;
-      rgb = chrome[0].dome.rgb;
-      ev = 'chrome_ball';
-    } else if (fit) {
-      const a = Math.max(fit.ambient.ratio, 0.004);
-      stops = Math.log2(a);
-      half = fit.ambient.ratio < 0.01 ? 2.5 : 1.2;
-      rgb = fit.colours.ambient;
-    }
-    if (stops !== null && Number.isFinite(stops)) {
-      const sky = Boolean(input.sky);
-      const col = rgb ? colourOf(rgb, ev === 'hdri' ? null : wb, gamut, 60) : null;
-      lights.push({ id: sky ? 'sky' : 'ambient', role: sky ? 'sky' : 'ambient', type: 'dome', name: sky ? 'Sky' : 'Ambient', azimuth: R(0, -180, 180), elevation: R(90, 0, 90), distance: null, intensity: stopsRange(stops, half), size: null, temperature: col?.temperature ?? null, rgb: col?.rgb ?? [1, 1, 1], practical: null, motivation: sky ? 'The sky: even light from above, coloured by it.' : 'Even light from everywhere: bounce from the set.', evidence: [ev, ...(sky ? (['sky'] as const) : [])], confidence: 0.4 });
-    }
-  }
   // Practicals in frame.
   practicals.forEach((p, i) => {
     const D = input.camera.subjectDistanceM;
@@ -529,6 +475,63 @@ export function analyseLighting(input: AnalysisInput): AnalysisOutput {
     });
     marks.push({ kind: 'practical', x: p.x / W, y: p.y / H, x2: null, y2: null, r: p.radius / W, lightId: id, label: `practical ${i + 1}` });
   });
+  // Further probe sources (HDRI or chrome): each a light, unless one already stands there.
+  const probe = hdri ?? chrome[0] ?? null;
+  if (probe && probe.sources.length > 1 && probe.sources[0]) {
+    const ref = probe.sources[0].E;
+    probe.sources.slice(1, 5).forEach((src: ProbeSource, i: number) => {
+      const near = lights.find((l) => Math.abs(azDiff(l.azimuth.value, src.az)) < 25 && Math.abs(l.elevation.value - src.el) < 20);
+      const stops = Math.log2(src.E / ref);
+      const col = colourOf(src.rgb, hdri ? null : wb, gamut, hdri ? 12 : 18);
+      const kind: LightEstimate['evidence'][number] = hdri ? 'hdri' : 'chrome_ball';
+      if (near) {
+        // The probe measures it better: take its direction and size, keep the role.
+        near.azimuth = azRange(src.az, src.dirHalf + (hdri && hdri.headingFrom !== 'given' ? 8 : 2));
+        near.elevation = elRange(src.el, src.dirHalf + 1);
+        near.intensity = stopsRange(stops, src.clipped ? 2 : 0.4);
+        near.size = sizeRange(src.sizeDeg, src.sizeDeg / 1.4, src.sizeDeg * 1.4 + 0.5);
+        near.temperature = col.temperature;
+        near.rgb = col.rgb;
+        near.evidence = [...new Set([...near.evidence, kind])];
+        near.confidence = Math.max(near.confidence, 0.7);
+        if (near.role === 'practical') near.motivation += ` Seen in the ${hdri ? 'HDRI' : 'chrome ball'} too, which places it.`;
+        return;
+      }
+      const behind = Math.abs(src.az) > 110;
+      const role = behind ? (src.el > 45 ? 'back' : 'rim') : !lights.some((l) => l.role === 'fill') ? 'fill' : src.sizeDeg > 15 ? 'fill' : 'practical';
+      const id = !lights.some((l) => l.id === role) && (role === 'fill' || role === 'rim' || role === 'back') ? role : `${hdri ? 'hdri' : 'chrome'}${i + 2}`;
+      lights.push({ id, role, type: src.sizeDeg > 8 ? 'rect' : 'spot', name: id === role ? (role === 'fill' ? 'Fill' : role === 'rim' ? 'Rim' : 'Back light') : `${hdri ? 'HDRI' : 'Ball'} source ${i + 2}`, azimuth: azRange(src.az, src.dirHalf + 2), elevation: elRange(src.el, src.dirHalf + 1), distance: R(3, 1, 30), intensity: stopsRange(stops, src.clipped ? 2 : 0.4), size: sizeRange(src.sizeDeg, src.sizeDeg / 1.4, src.sizeDeg * 1.4 + 0.5), temperature: col.temperature, rgb: col.rgb, practical: null, motivation: `A ${src.sizeDeg > 15 ? 'large' : 'small'} source seen in the ${hdri ? 'HDRI' : 'chrome ball'}${src.clipped ? ' (clipped there: at least this bright)' : ''}.`, evidence: [kind], confidence: 0.75 });
+    });
+  }
+  // The even rest: ambient, or the sky outdoors.
+  {
+    let stops: number | null = null;
+    let half = 1.2;
+    let rgb: [number, number, number] | null = null;
+    let ev: LightEstimate['evidence'][number] = 'shading';
+    if (hdri && hdri.sources[0]) {
+      stops = Math.log2(Math.max(1e-6, hdri.dome.E) / Math.max(1e-9, hdri.sources[0].E));
+      half = 0.6;
+      rgb = hdri.dome.rgb;
+      ev = 'hdri';
+    } else if (chrome[0]?.sources[0]) {
+      stops = Math.log2(Math.max(1e-6, chrome[0].dome.E) / Math.max(1e-9, chrome[0].sources[0].E));
+      half = 1.2;
+      rgb = chrome[0].dome.rgb;
+      ev = 'chrome_ball';
+    } else if (fit) {
+      // The shading separates the ambient from a soft fill only roughly: from the fit, up to the darkest shading.
+      const ceiling = Math.log2(fit.ambient.floorRatio);
+      stops = Math.min(ceiling, Math.log2(Math.max(fit.ambient.ratio, 0.004)));
+      half = Math.max(1.5, ceiling + 0.5 - stops);
+      rgb = fit.colours.ambient;
+    }
+    if (stops !== null && Number.isFinite(stops)) {
+      const sky = Boolean(input.sky);
+      const col = rgb ? colourOf(rgb, ev === 'hdri' ? null : wb, gamut, 60) : null;
+      lights.push({ id: sky ? 'sky' : 'ambient', role: sky ? 'sky' : 'ambient', type: 'dome', name: sky ? 'Sky' : 'Ambient', azimuth: R(0, -180, 180), elevation: R(90, 0, 90), distance: null, intensity: stopsRange(stops, half), size: null, temperature: col?.temperature ?? null, rgb: col?.rgb ?? [1, 1, 1], practical: null, motivation: sky ? 'The sky: even light from above, coloured by it.' : 'Even light from everywhere: bounce from the set.', evidence: [ev, ...(sky ? (['sky'] as const) : [])], confidence: 0.4 });
+    }
+  }
   // A pool of light on the background (not the subject's light): a background light.
   if (field) {
     const lum = new Float32Array(W * H);
@@ -613,7 +616,7 @@ export function analyseLighting(input: AnalysisInput): AnalysisOutput {
       lens: { ...lens, focalMm: lens.focalMm ? roundRange(lens.focalMm, 2) : null, hfovDeg: lens.hfovDeg ? roundRange(lens.hfovDeg, 2) : null, vfovDeg: lens.vfovDeg ? roundRange(lens.vfovDeg, 2) : null, aperture: { ...lens.aperture, fStop: lens.aperture.fStop ? roundRange(lens.aperture.fStop, 2) : null }, checks: lens.checks.map((c) => ({ ...c, focalMm: roundRange(c.focalMm, 2) })) },
       keyConfidence: Math.round(keyConfidence * 1000) / 1000,
       matchScore: match === null ? null : Math.round(match * 1000) / 1000,
-      subject: { source: input.subject && field ? input.subject.source : 'none', coverage: Math.round(subjectCover * 1e4) / 1e4 },
+      subject: { source: input.subject && field ? input.subject.source : 'none', coverage: Math.round(subjectCover * 1e4) / 1e4, centre: field ? { x: Math.round((((field.box.x0 + field.box.x1 + 1) / 2) / W) * 1e4) / 1e4, y: Math.round((((field.box.y0 + field.box.y1 + 1) / 2) / H) * 1e4) / 1e4 } : null },
       sky: { found: Boolean(input.sky), coverage: Math.round(skyCover * 1e4) / 1e4, source: input.sky?.source ?? 'none' },
       ground: input.ground ? { source: input.ground.source, heightM: Math.round(input.ground.heightM * 1000) / 1000, pitchDeg: Math.round(pitch * 100) / 100 } : null,
       whiteBalance: { kelvin: wb ?? 6500, source: input.whiteBalance.source },

@@ -107,7 +107,7 @@ export function chromeBall(img: LinearImage, circle: { cx: number; cy: number; r
       peak = Math.max(peak, L[i]!);
     }
   const med = percentile(vals, 0.5);
-  const thr = Math.max(6 * med, 0.2 * peak);
+  const thr = Math.max(6 * med, 0.008 * peak);
   const on = new Uint8Array(w * h);
   for (let i = 0; i < w * h; i += 1) on[i] = inside[i] && L[i]! > thr ? 1 : 0;
   const dirOfPixel = (x: number, y: number): V3 => {
@@ -149,15 +149,18 @@ export function chromeBall(img: LinearImage, circle: { cx: number; cy: number; r
     sources.push({ az: d.az, el: d.el, dirHalf: 3 + sizeDeg / 2, sizeDeg, E, rgb: nrm(rgb), clipped: clip > Math.max(2, 0.3 * comp.length) && peak > 0, x: sx / sw, y: sy / sw });
   }
   sources.sort((a, b) => b.E - a.E);
+  // The dome: the reflections from above (the ground below is lit by the sources themselves).
   const envRgb = [0, 0, 0];
-  let n = 0;
+  const up: number[] = [];
   for (let i = 0; i < w * h; i += 1)
     if (inside[i] && !on[i]) {
+      const d = dirOfPixel((i % w) + 0.5, (i - (i % w)) / w + 0.5);
+      if (d[1] < 0.2) continue;
+      up.push(L[i]!);
       for (let k = 0; k < 3; k += 1) envRgb[k]! += data[3 * i + k]!;
-      n += 1;
     }
   // A uniform dome of radiance L gives E = π·L (radiance in value units already folds in π: E = L).
-  return { sources, dome: { E: med, rgb: nrm(envRgb.map((v) => v / Math.max(1, n))) } };
+  return { sources, dome: { E: up.length ? percentile(up, 0.5) : med, rgb: nrm(envRgb.map((v) => v / Math.max(1, up.length))) } };
 }
 
 /** A grey ball's exact normals as a field the shading fit reads. */

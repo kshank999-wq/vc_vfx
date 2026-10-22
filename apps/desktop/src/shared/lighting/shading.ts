@@ -1,5 +1,5 @@
 import type { LinearImage } from '../key/linear';
-import { DEG, cameraToLevel, dot, norm, rng, stddev, type PinholeCamera, type V3 } from './geometry';
+import { DEG, cameraToLevel, dot, norm, percentile, rng, stddev, type PinholeCamera, type V3 } from './geometry';
 
 /**
  * Shading-based light directions (addendum 14 §3.1).
@@ -482,7 +482,7 @@ function nnlsClusters(s: Samples, seed: number): { L: V3; weight: number; spread
       if (d === 0) continue;
       x[j] = nx;
       moved += Math.abs(d);
-      for (let i = 0; i < k; i += 1) r[i] += d * G[i * k + j]!;
+      for (let i = 0; i < k; i += 1) r[i] = r[i]! + d * G[i * k + j]!;
     }
     if (moved < 1e-9) break;
   }
@@ -516,7 +516,7 @@ function nnlsClusters(s: Samples, seed: number): { L: V3; weight: number; spread
 export interface ShadingFit {
   key: { L: V3; sinA: number; inv: number; E: number; azRange: number; elRange: number; sizeRange: number; ratioSigma: number; invRange: number } | null;
   fill: { L: V3; sinA: number; F: number; ratio: number; ratioSigma: number; dirSigma: number } | null;
-  ambient: { a: number; ratio: number };
+  ambient: { a: number; ratio: number; /** The darkest shading (5th percentile, relative to the key): the ambient cannot exceed it. */ floorRatio: number };
   rim: { L: V3; Lnear: V3; Lfar: V3; E: number; ratio: number; ratioSigma: number; phiDeg: number; pixels: number; dirSigma: number; fitted: boolean } | null;
   colours: { key: [number, number, number]; fill: [number, number, number] | null; ambient: [number, number, number]; rim: [number, number, number] | null };
   /** R² of the model over the samples. */
@@ -693,7 +693,7 @@ export function fitShading(img: LinearImage, field: NormalField, luma: readonly 
   return {
     key: { L: terms[0]!.L, sinA: terms[0]!.sinA, inv: terms[0]!.inv ?? 0, E, azRange: sdAz, elRange: sdEl, sizeRange: stddev(sizes), ratioSigma: stddev(ratios), invRange: stddev(invs) },
     fill: fillFound ? { L: terms[fillIdx]!.L, sinA: terms[fillIdx]!.sinA, F: fit.e[fillIdx]!, ratio: fit.e[fillIdx]! / E, ratioSigma: stddev(fillRatios), dirSigma: fillAz.length ? Math.sqrt(fillAz.reduce((a, v) => a + v * v, 0) / fillAz.length) : 30 } : null,
-    ambient: { a: fit.a, ratio: fit.a / E },
+    ambient: { a: fit.a, ratio: fit.a / E, floorRatio: Math.max(1e-4, percentile(Array.from(s.I), 0.05) / E) },
     rim,
     colours: { key: keyRgb, fill: fillRgb, ambient: ambRgb, rim: rim?.rgb ?? null },
     r2,
@@ -725,9 +725,9 @@ function findRim(img: LinearImage, field: NormalField, luma: readonly [number, n
     const p = band.idx[i]!;
     const phi = Math.atan2(field.normals[3 * p + 1]!, field.normals[3 * p]!) / DEG;
     const bi = Math.floor((((phi % 360) + 360) % 360) / (360 / bins)) % bins;
-    sum[bi] += r;
-    cnt[bi] += 1;
-    for (let c = 0; c < 3; c += 1) rgb[3 * bi + c] += Math.max(0, band.rgb[3 * i + c]! - (model / Math.max(1e-9, band.I[i]!)) * band.rgb[3 * i + c]!);
+    sum[bi] = sum[bi]! + r;
+    cnt[bi] = cnt[bi]! + 1;
+    for (let c = 0; c < 3; c += 1) rgb[3 * bi + c] = rgb[3 * bi + c]! + Math.max(0, band.rgb[3 * i + c]! - (model / Math.max(1e-9, band.I[i]!)) * band.rgb[3 * i + c]!);
   }
   const mean = Array.from(sum, (v, i) => (cnt[i]! > 3 ? v / cnt[i]! : 0));
   // Smooth over neighbouring bins.

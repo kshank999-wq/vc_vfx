@@ -223,7 +223,12 @@ export const LightingAnalysisSchema = z.object({
   /** How sure the key's direction is (0 … 1), and how well the rig's shading matches the plate's (null without a subject). */
   keyConfidence: z.number().min(0).max(1),
   matchScore: z.number().min(0).max(1).nullable(),
-  subject: z.object({ source: z.enum(['roto', 'bg_matte', 'key_alpha', 'sample', 'none']), coverage: z.number().min(0).max(1) }),
+  subject: z.object({
+    source: z.enum(['roto', 'bg_matte', 'key_alpha', 'sample', 'none']),
+    coverage: z.number().min(0).max(1),
+    /** Where the subject is in the frame (0 … 1 of the width and height): the rig is placed around it. */
+    centre: z.object({ x: z.number(), y: z.number() }).nullable().default(null),
+  }),
   sky: z.object({ found: z.boolean(), coverage: z.number().min(0).max(1), source: z.enum(['sky_matte', 'detected', 'sample', 'none']) }),
   ground: z.object({ source: z.enum(['solve', 'assumed', 'sample']), heightM: z.number(), pitchDeg: z.number() }).nullable(),
   whiteBalance: z.object({ kelvin: z.number(), source: z.enum(['artist', 'metadata', 'assumed']) }),
