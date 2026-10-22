@@ -24,6 +24,24 @@ import type { Distortion, SceneUnit, UpAxis } from '@vcvfx/domain';
  *  | Fusion      | Y  | scene units      | RotOrder XYZ, degrees; aperture inches |
  *
  * The Euler angles are unwrapped frame to frame so curves never jump 360°.
+ *
+ * Non-square pixels (addendum 17): the plate keeps its stored pixels and each
+ * application is told its pixel aspect in its own terms. `filmBackMm.width`
+ * is the aperture of the DE-SQUEEZED picture (sensor area × squeeze for an
+ * anamorphic lens) and the vertical aperture is width × H / (W × PAR):
+ *
+ *  | Writer   | Pixel aspect declared as                                      |
+ *  | Nuke     | Root and Read formats with pixel_aspect; Camera haperture de-squeezed |
+ *  | Maya     | cameraAperture = sensor (squeezed) + lensSqueezeRatio; defaultResolution pixelAspect |
+ *  | Blender  | render pixel_aspect_x; sensor_width de-squeezed, fit HORIZONTAL |
+ *  | AE       | comp pixelAspect; zoom = the vertical focal in comp pixels    |
+ *  | 3ds Max  | renderPixelAspect; fov across the de-squeezed width           |
+ *  | FBX      | FilmWidth (squeezed) + FilmSqueezeRatio, PixelAspectRatio     |
+ *  | Houdini  | cam aspect; aperture de-squeezed                              |
+ *  | Fusion   | frame format AspectX; aperture de-squeezed                    |
+ *  | Unreal / Unity | filmback / sensor of the de-squeezed picture (engines render square pixels) |
+ *  | USD      | horizontalAperture de-squeezed (aperture aspect = W·PAR / H); customData pixelAspect; a RenderSettings pixelAspectRatio |
+ *  | .chan    | vertical FOV (unaffected by the squeeze)                      |
  */
 
 export interface CameraExportData {
@@ -35,11 +53,19 @@ export interface CameraExportData {
   /** Plate pixels. */
   width: number;
   height: number;
-  /** Horizontal film back (mm); the vertical follows the plate's aspect (square pixels). */
+  /**
+   * Horizontal aperture (mm) of the de-squeezed picture; the vertical follows
+   * the plate's shape: width × H / (W × pixelAspect).
+   */
   filmBackMm: { width: number; height: number };
+  /** The film back as chosen (an anamorphic sensor area before the squeeze), when known. */
+  sensorFilmBackMm?: { width: number; height: number };
+  /** Plate pixel aspect (stored pixel width / height); absent = 1. */
+  pixelAspect?: number;
   /** True when the film back was not known and a nominal 36 mm one is used. */
   nominalFilmBack: boolean;
   focalMm: number;
+  /** Vertical focal in plate pixels (= focal in de-squeezed pixels); the horizontal is focalPx / pixelAspect. */
   focalPx: number;
   /** Principal point offset from the centre, in plate pixels. */
   principalOffsetPx: { x: number; y: number };
@@ -73,10 +99,16 @@ export function eulerTrack(rotations: readonly number[][], order: EulerOrder): {
   });
 }
 
-/** The vertical film back for the plate's aspect. */
+/** The plate's pixel aspect (1 when not given). */
+export const pixelAspectOfData = (d: Pick<CameraExportData, 'pixelAspect'>): number => d.pixelAspect ?? 1;
+
+/** The vertical film back for the plate's de-squeezed shape. */
 export function verticalAperture(d: CameraExportData): number {
-  return d.filmBackMm.width * (d.height / d.width);
+  return d.filmBackMm.width * (d.height / (d.width * pixelAspectOfData(d)));
 }
+
+/** The de-squeezed picture width in square pixels. */
+const shownWidth = (d: CameraExportData): number => d.width * pixelAspectOfData(d);
 
 /** Runs of consecutive frames (for curves with gaps). */
 function runs(frames: readonly number[]): [number, number][] {
@@ -101,6 +133,8 @@ function nukeCurve(frames: readonly number[], values: readonly number[]): string
 }
 
 export function writeNuke(d: CameraExportData): string {
+  const par = pixelAspectOfData(d);
+  const fmt = `"${d.width} ${d.height} 0 0 ${d.width} ${d.height} ${num(par, 6)} ${safeId(d.shot)}_plate"`;
   const frames = d.cameras.map((c) => c.frame);
   const eu = eulerTrack(d.cameras.map((c) => c.rotation), 'ZXY');
   const name = `Camera_${safeId(d.shot)}_v${String(d.version).padStart(3, '0')}`;
@@ -115,6 +149,7 @@ export function writeNuke(d: CameraExportData): string {
     `This camera is the UNDISTORTED pinhole. Undistort the plate with the STMap ${d.files.undistort ?? '(not written)'},`,
     `render CG through this camera, then redistort with ${d.files.redistort ?? '(not written)'} (STMap node, UV channels rgb).`,
     `NukeX LensDistortion uses a different model: enter these as a note, not as its values.`,
+    ...(par !== 1 ? [`Pixel aspect ${num(par, 4)}: the format declares it; haperture is the de-squeezed picture's; the STMaps are in squeezed plate pixels.`] : []),
   ].join('\\n');
   const lines = [
     `#! nuke file written by ${d.generator}`,
@@ -124,7 +159,7 @@ export function writeNuke(d: CameraExportData): string {
     ` first_frame ${first}`,
     ` last_frame ${last}`,
     ` fps ${num(d.fps, 3)}`,
-    ` format "${d.width} ${d.height} 0 0 ${d.width} ${d.height} 1 ${safeId(d.shot)}_plate"`,
+    ` format ${fmt}`,
     '}',
     'Camera2 {',
     ' inputs 0',
@@ -134,7 +169,7 @@ export function writeNuke(d: CameraExportData): string {
     ` focal ${num(d.focalMm, 4)}`,
     ` haperture ${num(d.filmBackMm.width, 4)}`,
     ` vaperture ${num(verticalAperture(d), 4)}`,
-    ` win_translate {${num((2 * d.principalOffsetPx.x) / d.width, 6)} ${num((-2 * d.principalOffsetPx.y) / d.width, 6)}}`,
+    ` win_translate {${num((2 * d.principalOffsetPx.x) / d.width, 6)} ${num((-2 * d.principalOffsetPx.y) / shownWidth(d), 6)}}`,
     ' near 0.01',
     ' far 100000',
     ` name ${name}`,
@@ -164,10 +199,10 @@ export function writeNuke(d: CameraExportData): string {
     '}',
   ];
   if (d.files.redistort) {
-    lines.push('Read {', ' inputs 0', ` file "[file dirname [value root.name]]/${d.files.redistort}"`, ` format "${d.width} ${d.height} 0 0 ${d.width} ${d.height} 1 ${safeId(d.shot)}_plate"`, ' raw true', ' name Read_redistort_STMap', ' xpos 300', ' ypos 0', '}');
+    lines.push('Read {', ' inputs 0', ` file "[file dirname [value root.name]]/${d.files.redistort}"`, ` format ${fmt}`, ' raw true', ' name Read_redistort_STMap', ' xpos 300', ' ypos 0', '}');
   }
   if (d.files.undistort) {
-    lines.push('Read {', ' inputs 0', ` file "[file dirname [value root.name]]/${d.files.undistort}"`, ` format "${d.width} ${d.height} 0 0 ${d.width} ${d.height} 1 ${safeId(d.shot)}_plate"`, ' raw true', ' name Read_undistort_STMap', ' xpos 450', ' ypos 0', '}');
+    lines.push('Read {', ' inputs 0', ` file "[file dirname [value root.name]]/${d.files.undistort}"`, ` format ${fmt}`, ' raw true', ' name Read_undistort_STMap', ' xpos 450', ' ypos 0', '}');
   }
   return `${lines.join('\n')}\n`;
 }
@@ -202,6 +237,9 @@ export function mayaTimeUnit(fps: number): string {
 }
 
 export function writeMaya(d: CameraExportData): string {
+  const par = pixelAspectOfData(d);
+  // Maya: the camera aperture is the film as exposed (squeezed); lensSqueezeRatio widens it to the picture.
+  const capW = d.filmBackMm.width / par;
   const frames = d.cameras.map((c) => c.frame);
   const eu = eulerTrack(d.cameras.map((c) => c.rotation), 'XYZ');
   const cam = `cam_${safeId(d.shot)}_v${String(d.version).padStart(3, '0')}`;
@@ -217,11 +255,12 @@ export function writeMaya(d: CameraExportData): string {
     `createNode camera -n "${cam}Shape" -p "${cam}";`,
     '\tsetAttr -k off ".v";',
     '\tsetAttr ".rnd" yes;',
-    `\tsetAttr ".cap" -type "double2" ${num(d.filmBackMm.width / MM_PER_INCH, 6)} ${num(verticalAperture(d) / MM_PER_INCH, 6)} ;`,
+    `\tsetAttr ".cap" -type "double2" ${num(capW / MM_PER_INCH, 6)} ${num(verticalAperture(d) / MM_PER_INCH, 6)} ;`,
+    ...(par !== 1 ? [`\tsetAttr ".lsr" ${num(par, 6)};`] : []),
     `\tsetAttr ".fl" ${num(d.focalMm, 5)};`,
     '\tsetAttr ".ff" 1;',
-    `\tsetAttr ".hfo" ${num(d.principalOffsetPx.x / d.width * (d.filmBackMm.width / MM_PER_INCH), 6)};`,
-    `\tsetAttr ".vfo" ${num(-d.principalOffsetPx.y / d.width * (d.filmBackMm.width / MM_PER_INCH), 6)};`,
+    `\tsetAttr ".hfo" ${num((d.principalOffsetPx.x / d.width) * (capW / MM_PER_INCH), 6)};`,
+    `\tsetAttr ".vfo" ${num((-d.principalOffsetPx.y / d.height) * (verticalAperture(d) / MM_PER_INCH), 6)};`,
     '\tsetAttr ".ncp" 0.01;',
     '\tsetAttr ".fcp" 100000;',
     `\tsetAttr ".imn" -type "string" "${cam}";`,
@@ -249,6 +288,10 @@ export function writeMaya(d: CameraExportData): string {
     out.push(`createNode transform -n "${n}" -p "${group}";`, `\tsetAttr ".t" -type "double3" ${num(p.position[0])} ${num(p.position[1])} ${num(p.position[2])} ;`, `createNode locator -n "${n}Shape" -p "${n}";`, '\tsetAttr -k off ".v";');
   }
   for (const [node, attr] of conn) out.push(`connectAttr "${node}.o" "${cam}.${attr}";`);
+  if (par !== 1) {
+    // Render the plate's own raster with its pixel aspect (device aspect = the de-squeezed picture).
+    out.push('select -ne :defaultResolution;', `\tsetAttr ".w" ${d.width};`, `\tsetAttr ".h" ${d.height};`, `\tsetAttr ".pa" ${num(par, 6)};`, '\tsetAttr ".al" yes;', `\tsetAttr ".dar" ${num(shownWidth(d) / d.height, 6)};`);
+  }
   out.push(`// End of ${d.shot}_camtrack_v${String(d.version).padStart(3, '0')}.ma`);
   return `${out.join('\n')}\n`;
 }
@@ -273,7 +316,9 @@ export function writeBlender(d: CameraExportData): string {
 # Run in Blender (Scripting workspace, or blender --python this.py). Builds the camera,
 # its animation and an empty per solved track point. Blender is Z-up, metres.
 # Lens (OpenCV Brown-Conrady, normalised by focal ${num(d.focalPx, 2)} px): k1 ${num(d.distortion.k1)} k2 ${num(d.distortion.k2)} k3 ${num(d.distortion.k3)} p1 ${num(d.distortion.p1)} p2 ${num(d.distortion.p2)}.
-# This camera is the undistorted pinhole; use the STMaps beside this file for the plate.
+# This camera is the undistorted pinhole; use the STMaps beside this file for the plate.${pixelAspectOfData(d) !== 1 ? `
+# Pixel aspect ${num(pixelAspectOfData(d), 4)}: the render is the plate's ${d.width} x ${d.height} raster with pixel_aspect_x set;
+# sensor_width is the de-squeezed picture's (${num(d.filmBackMm.width, 3)} mm), fit HORIZONTAL.` : ''}
 import bpy
 
 FRAMES = [${d.cameras.map((c) => c.frame).join(',')}]
@@ -284,7 +329,7 @@ POINTS = [${pts.map((p) => `(${p[0]},${num(p[1]!, 7)},${num(p[2]!, 7)},${num(p[3
 scene = bpy.context.scene
 scene.render.resolution_x = ${d.width}
 scene.render.resolution_y = ${d.height}
-scene.render.pixel_aspect_x = 1.0
+scene.render.pixel_aspect_x = ${num(pixelAspectOfData(d), 6)}
 scene.render.pixel_aspect_y = 1.0
 scene.render.fps = ${fpsInt}
 scene.render.fps_base = ${num(fpsBase, 9)}
@@ -297,7 +342,7 @@ data.sensor_fit = 'HORIZONTAL'
 data.sensor_width = ${num(d.filmBackMm.width, 5)}
 data.sensor_height = ${num(verticalAperture(d), 5)}
 data.shift_x = ${num(d.principalOffsetPx.x / d.width, 7)}
-data.shift_y = ${num(-d.principalOffsetPx.y / d.width, 7)}
+data.shift_y = ${num(-d.principalOffsetPx.y / shownWidth(d), 7)}
 data.clip_start = 0.01
 data.clip_end = 10000.0
 cam = bpy.data.objects.new("${name}", data)
@@ -354,13 +399,15 @@ export function writeAfterEffects(d: CameraExportData): string {
   const eu = eulerTrack(ae.map((a) => a.rotation), 'ZYX');
   const first = d.cameras[0]?.frame ?? 0;
   const last = d.cameras[d.cameras.length - 1]?.frame ?? first;
-  const zoom = (d.focalMm * d.width) / d.filmBackMm.width;
+  // Zoom: distance to the image plane in comp pixels, measured vertically for a non-square comp — the vertical focal.
+  const par = pixelAspectOfData(d);
+  const zoom = (d.focalMm * shownWidth(d)) / d.filmBackMm.width;
   const times = d.cameras.map((c) => num((c.frame - first) / d.fps, 6));
   const nulls = d.points.slice(0, 400).map((p) => `[${p.id},${num(p.position[0] * AE_SCALE + d.width / 2, 3)},${num(-p.position[1] * AE_SCALE + d.height / 2, 3)},${num(-p.position[2] * AE_SCALE, 3)}]`);
   return `// ${name}: camera track for After Effects, written by ${d.generator} at ${d.writtenAt}
 // File > Scripts > Run Script File… With a composition open it adds the camera to it;
 // otherwise it makes a ${d.width}×${d.height} composition at ${num(d.fps, 3)} fps starting at frame ${first}.
-// Zoom ${num(zoom, 3)} px = focal ${num(d.focalMm, 3)} mm on a ${num(d.filmBackMm.width, 3)} mm film back across ${d.width} px.
+// Zoom ${num(zoom, 3)} px = focal ${num(d.focalMm, 3)} mm on a ${num(d.filmBackMm.width, 3)} mm film back across ${par !== 1 ? `${num(shownWidth(d), 2)} de-squeezed px (${d.width} px at pixel aspect ${num(par, 4)}; the new comp declares it)` : `${d.width} px`}.
 // Scene units are ${AE_SCALE} px each; Y is down in After Effects. Undistorted pinhole camera:
 // lens distortion is not applied (use the STMaps).
 (function () {
@@ -368,7 +415,7 @@ export function writeAfterEffects(d: CameraExportData): string {
   var W = ${d.width}, H = ${d.height}, FPS = ${num(d.fps, 6)};
   var comp = app.project.activeItem;
   if (!(comp && comp instanceof CompItem)) {
-    comp = app.project.items.addComp("${name}", W, H, 1, ${num((last - first + 1) / d.fps, 6)}, FPS);
+    comp = app.project.items.addComp("${name}", W, H, ${num(par, 6)}, ${num((last - first + 1) / d.fps, 6)}, FPS);
     comp.displayStartTime = ${num(first / d.fps, 6)};
     comp.openInViewer();
   }
@@ -407,6 +454,7 @@ export function writeMax(d: CameraExportData): string {
   const first = cams[0]?.frame ?? 0;
   const last = cams[cams.length - 1]?.frame ?? first;
   const hfov = fovDegrees(d.focalMm, d.filmBackMm.width);
+  const par = pixelAspectOfData(d);
   const m3 = (c: SceneCamera) => {
     const R = c.rotation; // columns = camera axes in world
     const col = (j: number) => `[${num(R[j]!, 7)},${num(R[3 + j]!, 7)},${num(R[6 + j]!, 7)}]`;
@@ -418,12 +466,13 @@ export function writeMax(d: CameraExportData): string {
   });
   return `-- ${name}: camera track written by ${d.generator} at ${d.writtenAt}
 -- Run with Scripting > Run Script. 3ds Max is Z-up; positions are in scene units (${d.units}) taken as system units.
--- Horizontal FOV ${num(hfov, 4)}° = focal ${num(d.focalMm, 3)} mm on a ${num(d.filmBackMm.width, 3)} mm film back. Undistorted pinhole camera.
+-- Horizontal FOV ${num(hfov, 4)}° = focal ${num(d.focalMm, 3)} mm on a ${num(d.filmBackMm.width, 3)} mm film back${par !== 1 ? ` (the de-squeezed picture; pixel aspect ${num(par, 4)})` : ''}. Undistorted pinhole camera.
 (
   frameRate = ${Math.round(d.fps)}
   animationRange = interval ${first} ${last}
   renderWidth = ${d.width}
   renderHeight = ${d.height}
+  renderPixelAspect = ${num(par, 6)}
   local cam = Freecamera name:"${name}"
   cam.fovType = 1
   cam.fov = ${num(hfov, 6)}
@@ -603,15 +652,16 @@ Definitions:  {
 Objects:  {
 \tNodeAttribute: ${ID.attr}, "NodeAttribute::${name}", "Camera" {
 \t\tProperties70:  {
-\t\t\tP: "FilmWidth", "double", "Number", "",${num(d.filmBackMm.width / MM_PER_INCH, 6)}
+\t\t\tP: "FilmWidth", "double", "Number", "",${num(d.filmBackMm.width / pixelAspectOfData(d) / MM_PER_INCH, 6)}
 \t\t\tP: "FilmHeight", "double", "Number", "",${num(verticalAperture(d) / MM_PER_INCH, 6)}
 \t\t\tP: "FilmAspectRatio", "double", "Number", "",${num(d.width / d.height, 6)}
+\t\t\tP: "FilmSqueezeRatio", "double", "Number", "",${num(pixelAspectOfData(d), 6)}
 \t\t\tP: "ApertureMode", "enum", "", "",3
 \t\t\tP: "GateFit", "enum", "", "",2
 \t\t\tP: "FocalLength", "Number", "", "A",${num(d.focalMm, 6)}
 \t\t\tP: "AspectWidth", "double", "Number", "",${d.width}
 \t\t\tP: "AspectHeight", "double", "Number", "",${d.height}
-\t\t\tP: "PixelAspectRatio", "double", "Number", "",1
+\t\t\tP: "PixelAspectRatio", "double", "Number", "",${num(pixelAspectOfData(d), 6)}
 \t\t\tP: "NearPlane", "double", "Number", "",1
 \t\t\tP: "FarPlane", "double", "Number", "",1000000
 \t\t}
@@ -699,13 +749,16 @@ export function writeCameraJson(d: CameraExportData, extra: Record<string, unkno
     version: `v${String(d.version).padStart(3, '0')}`,
     coordinateSystem: { up: d.upAxis, handedness: 'right', units: d.units, camera: 'looks down its local −Z with +Y up (graphics convention)' },
     frameRange: { first: d.cameras[0]?.frame ?? null, last: d.cameras[d.cameras.length - 1]?.frame ?? null, solved: d.cameras.length, fps: d.fps },
-    plate: { width: d.width, height: d.height, pixelAspect: 1 },
-    filmBackMm: { width: d.filmBackMm.width, height: verticalAperture(d), nominal: d.nominalFilmBack },
+    plate: { width: d.width, height: d.height, pixelAspect: pixelAspectOfData(d), displayWidth: shownWidth(d) },
+    filmBackMm: { width: d.filmBackMm.width, height: verticalAperture(d), nominal: d.nominalFilmBack, desqueezed: pixelAspectOfData(d) !== 1, sensor: d.sensorFilmBackMm ?? null },
     lens: {
       focalMm: d.focalMm,
       focalPx: d.focalPx,
+      /** Plate pixels: fx across the stored (squeezed) width, fy vertical. */
+      fxPx: d.focalPx / pixelAspectOfData(d),
+      fyPx: d.focalPx,
       principalOffsetPx: d.principalOffsetPx,
-      distortion: { model: 'brown-conrady (OpenCV)', normalisedBy: 'focal length in pixels, about the principal point', ...d.distortion },
+      distortion: { model: 'brown-conrady (OpenCV)', normalisedBy: 'focal length in pixels, about the principal point, on de-squeezed coordinates: x = (u − cx) · pixelAspect / focalPx, y = (v − cy) / focalPx', ...d.distortion },
       undistortStmap: d.files.undistort ?? null,
       redistortStmap: d.files.redistort ?? null,
     },
@@ -798,7 +851,9 @@ export function writeUnreal(d: CameraExportData): string {
   return `# ${name}: camera track for Unreal Engine 5.x, written by ${d.generator} at ${d.writtenAt}
 # Run inside the Unreal Editor: Tools > Execute Python Script... (the Python Editor Script Plugin must be on).
 # Creates /Game/VCVFX/${name} (a Level Sequence at ${num(d.fps, 3)} fps, frames ${first}-${last}) with a
-# CineCameraActor bound to it: transform keyed per frame, filmback ${num(d.filmBackMm.width, 3)} x ${num(verticalAperture(d), 3)} mm,
+# CineCameraActor bound to it: transform keyed per frame, filmback ${num(d.filmBackMm.width, 3)} x ${num(verticalAperture(d), 3)} mm${pixelAspectOfData(d) !== 1 ? ` (the de-squeezed picture:
+# the plate is ${d.width} x ${d.height} at pixel aspect ${num(pixelAspectOfData(d), 4)}; Unreal renders square pixels, so render ${Math.round(shownWidth(d))} x ${d.height}
+# and squeeze in comp, or compare with the plate desqueezed)` : ''},
 # focal length ${num(d.focalMm, 3)} mm keyed per frame, a camera cut, and (SPAWN_MARKERS) a small sphere per solved track.
 #
 # Coordinates: the scene is Y-up, right-handed, in ${d.units}. Unreal is Z-up, left-handed, centimetres:
@@ -972,7 +1027,7 @@ export function writeUnity(d: CameraExportData): string {
   const shift = { x: d.principalOffsetPx.x / d.width, y: -d.principalOffsetPx.y / d.height };
   return `// ${name}: camera track for Unity 2022 LTS / Unity 6, written by ${d.generator} at ${d.writtenAt}
 // Put this file in Assets/Editor, then use the menu VC VFX > Import Camera Track > ${name}.
-// Creates a GameObject with a Physical Camera (sensor ${num(d.filmBackMm.width, 3)} x ${num(vAp, 3)} mm, focal ${num(d.focalMm, 3)} mm,
+// Creates a GameObject with a Physical Camera (sensor ${num(d.filmBackMm.width, 3)} x ${num(vAp, 3)} mm${pixelAspectOfData(d) !== 1 ? ` = the de-squeezed picture of the ${d.width} x ${d.height} plate at pixel aspect ${num(pixelAspectOfData(d), 4)}; Unity renders square pixels` : ''}, focal ${num(d.focalMm, 3)} mm,
 // gate fit Horizontal), an AnimationClip (position, rotation, focal length; ${num(d.fps, 3)} fps; one key per frame),
 // and a Timeline (Assets/VCVFX/${name}.playable) whose clip starts at frame ${first}, so Timeline frames match the plate.
 // Needs the Timeline package (com.unity.timeline; installed with the default templates).
@@ -1123,7 +1178,7 @@ def Xform "${id}" (
     def Camera "camera" (
         customData = {
             string generator = "${d.generator}"
-            string lensModel = "brown-conrady (OpenCV), normalised by the focal length in pixels"
+            string lensModel = "brown-conrady (OpenCV), normalised by the focal length in pixels, on de-squeezed coordinates"
             double k1 = ${num(d.distortion.k1, 8)}
             double k2 = ${num(d.distortion.k2, 8)}
             double k3 = ${num(d.distortion.k3, 8)}
@@ -1131,6 +1186,7 @@ def Xform "${id}" (
             double p2 = ${num(d.distortion.p2, 8)}
             int plateWidth = ${d.width}
             int plateHeight = ${d.height}
+            double pixelAspect = ${num(pixelAspectOfData(d), 8)}
             double focalPx = ${num(d.focalPx, 6)}
         }
     )
@@ -1164,7 +1220,24 @@ ${cams.map((c) => `            ${c.frame}: ${matrix(c)},`).join('\n')}
         color3f[] primvars:displayColor = [(0.3, 0.9, 0.4)]
     }
 }
-`;
+${
+  pixelAspectOfData(d) !== 1
+    ? `
+def Scope "Render"
+{
+    def RenderSettings "PlateSettings" (
+        doc = "The plate's raster: ${d.width} x ${d.height} stored pixels at pixel aspect ${num(pixelAspectOfData(d), 6)}. The camera's apertures describe the de-squeezed picture (aspect ${num(shownWidth(d) / d.height, 6)})."
+    )
+    {
+        rel camera = </${id}/camera>
+        uniform int2 resolution = (${d.width}, ${d.height})
+        uniform float pixelAspectRatio = ${num(pixelAspectOfData(d), 6)}
+        uniform token aspectRatioConformPolicy = "expandAperture"
+    }
+}
+`
+    : ''
+}`;
 }
 
 /** The folder's README: what each file is and how to bring it into each application. */
@@ -1196,7 +1269,16 @@ export function writeExportReadme(d: CameraExportData, files: readonly string[])
   return `${name}
 Camera track written by ${d.generator} at ${d.writtenAt}.
 Solve ${d.solve.number}: RMS ${num(d.solve.rms, 3)} px over ${d.solve.frames} frames, confidence ${Math.round(d.solve.confidence * 100)} %.
-Plate ${d.width} x ${d.height}, ${num(d.fps, 3)} fps, frames ${first}-${last}. Focal ${num(d.focalMm, 3)} mm on a ${num(d.filmBackMm.width, 3)} mm film back${d.nominalFilmBack ? ' (nominal: the camera was not known)' : ''}.
+Plate ${d.width} x ${d.height}, ${num(d.fps, 3)} fps, frames ${first}-${last}. Focal ${num(d.focalMm, 3)} mm on a ${num(d.filmBackMm.width, 3)} mm film back${d.nominalFilmBack ? ' (nominal: the camera was not known)' : ''}.${
+    pixelAspectOfData(d) !== 1
+      ? `
+PIXEL ASPECT ${num(pixelAspectOfData(d), 4)}: the plate is kept squeezed (${d.width} x ${d.height} stored, ${Math.round(shownWidth(d))} x ${d.height} shown). The film back above is the
+de-squeezed picture's${d.sensorFilmBackMm && Math.abs(d.sensorFilmBackMm.width - d.filmBackMm.width) > 1e-6 ? ` (the ${d.sensorFilmBackMm.width} mm sensor area x the squeeze)` : ''}; each file declares the pixel aspect in its application's terms:
+Nuke format pixel_aspect, Maya lensSqueezeRatio + render pixel aspect, Blender pixel_aspect_x, After Effects comp pixel aspect, 3ds Max
+renderPixelAspect, FBX FilmSqueezeRatio / PixelAspectRatio, Houdini aspect, Fusion AspectX, USD RenderSettings pixelAspectRatio.
+Unreal and Unity render square pixels: their filmback is the de-squeezed picture. The STMaps are in squeezed plate pixels.`
+      : ''
+  }
 Every camera here is the UNDISTORTED pinhole. Scene units: ${d.units}.
 
 ${[...new Set(sections)].join('\n\n')}
@@ -1247,6 +1329,7 @@ RZ = ${ch((k) => k.r.z)}
 FOCAL_MM = ${pyList(keys.map(() => d.focalMm))}
 APERTURE_MM = ${num(d.filmBackMm.width, 6)}
 RES = (${d.width}, ${d.height})
+PIXEL_ASPECT = ${num(pixelAspectOfData(d), 6)}
 WINDOW = (${num(d.principalOffsetPx.x / d.width, 7)}, ${num(-d.principalOffsetPx.y / d.height, 7)})
 TRACKS = [${d.points.map((p, i) => `(${p.id}, ${pyList(pts[i]!, 6)}, ${num(p.error, 4)})`).join(', ')}]
 
@@ -1278,7 +1361,7 @@ def main():
     cam.parm('aperture').set(APERTURE_MM)
     cam.parm('resx').set(RES[0])
     cam.parm('resy').set(RES[1])
-    cam.parm('aspect').set(1)
+    cam.parm('aspect').set(PIXEL_ASPECT)
     cam.parm('winx').set(WINDOW[0])
     cam.parm('winy').set(WINDOW[1])
     cam.parm('near').set(0.01)
@@ -1391,7 +1474,7 @@ ${fusionTools(d)}
 \t\t\t\tName = "${name}",
 \t\t\t\tWidth = ${d.width},
 \t\t\t\tHeight = ${d.height},
-\t\t\t\tAspectX = 1,
+\t\t\t\tAspectX = ${num(pixelAspectOfData(d), 6)},
 \t\t\t\tAspectY = 1,
 \t\t\t\tRate = ${num(d.fps, 6)},
 \t\t\t},

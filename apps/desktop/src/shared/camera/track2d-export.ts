@@ -16,6 +16,11 @@ import type { Track2d } from '@vcvfx/domain';
  *  - "Adobe After Effects 6.0 Keyframe Data" text — the clipboard format
  *    Mocha writes for a corner pin — paste onto a layer in AE.
  *  - JSON with every frame, its points, confidence and status.
+ *
+ * Every position is in the plate's stored pixels, squeezed or not: a corner
+ * pin is a homography, which carries across a pixel-aspect scaling exactly.
+ * Where the format can say so the pixel aspect is declared (Mocha/AE keyframe
+ * text, JSON); the Nuke and AE scripts name it in their header (addendum 17).
  */
 
 export interface Track2dExportInfo {
@@ -25,9 +30,14 @@ export interface Track2dExportInfo {
   fps: number;
   width: number;
   height: number;
+  /** The plate's pixel aspect (stored pixel width / height); absent = 1. */
+  pixelAspect?: number;
   first: number;
   writtenAt: string;
 }
+
+const parOf = (info: Track2dExportInfo) => info.pixelAspect ?? 1;
+const parNote = (info: Track2dExportInfo) => (parOf(info) !== 1 ? `; plate pixel aspect ${num(parOf(info), 4)} (values in stored, squeezed pixels)` : '');
 
 const num = (v: number, d = 4) => {
   const s = v.toFixed(d);
@@ -49,7 +59,7 @@ export function writeNukeCornerPin(t: Track2d, info: Track2dExportInfo): string 
   const frames = fr.map((f) => f.frame);
   const yUp = (y: number) => info.height - y - 0.5; // pixel-index centre → Nuke's y-up pixel coordinates
   const xN = (x: number) => x + 0.5;
-  const head = [`#! nuke file written by ${info.generator}`, 'version 13.0 v1', `# ${info.shot} 2D track ${t.name} v${String(info.version).padStart(3, '0')} (${t.kind}), ${fr.length} frames`];
+  const head = [`#! nuke file written by ${info.generator}`, 'version 13.0 v1', `# ${info.shot} 2D track ${t.name} v${String(info.version).padStart(3, '0')} (${t.kind}), ${fr.length} frames`, `# plate format "${info.width} ${info.height} 0 0 ${info.width} ${info.height} ${num(parOf(info), 6)}"${parNote(info)}`];
   if (t.kind === 'point') {
     const xs = fr.map((f) => xN(f.points[0]![0]));
     const ys = fr.map((f) => yUp(f.points[0]![1]));
@@ -88,7 +98,7 @@ export function writeCornerPinJsx(t: Track2d, info: Track2dExportInfo): string {
   const pts = (ci: number) => `[${fr.map((f) => `[${num(f.points[ci]![0] + 0.5)},${num(f.points[ci]![1] + 0.5)}]`).join(',')}]`;
   if (t.kind === 'point') {
     return `// ${info.shot} point track ${t.name} for After Effects, written by ${info.generator}
-// Select the layer to move, then File > Scripts > Run Script File. Keys its Position (plate pixels scaled to the comp).
+// Select the layer to move, then File > Scripts > Run Script File. Keys its Position (plate pixels scaled to the comp${parNote(info)}).
 (function () {
   var comp = app.project.activeItem;
   if (!(comp && comp instanceof CompItem) || comp.selectedLayers.length !== 1) { alert("Select one layer in a composition first."); return; }
@@ -105,7 +115,7 @@ export function writeCornerPinJsx(t: Track2d, info: Track2dExportInfo): string {
   }
   return `// ${info.shot} corner pin ${t.name} v${String(info.version).padStart(3, '0')} for After Effects, written by ${info.generator}
 // Select the insert layer, then File > Scripts > Run Script File. Adds a Corner Pin effect keyed to the
-// tracked surface. Corners are plate pixels (${info.width}×${info.height}) scaled to the selected layer's size.
+// tracked surface. Corners are plate pixels (${info.width}×${info.height}${parNote(info)}) scaled to the selected layer's size.
 (function () {
   var comp = app.project.activeItem;
   if (!(comp && comp instanceof CompItem) || comp.selectedLayers.length !== 1) { alert("Select one layer in a composition first."); return; }
@@ -129,7 +139,7 @@ export function writeCornerPinJsx(t: Track2d, info: Track2dExportInfo): string {
 
 export function writeMochaText(t: Track2d, info: Track2dExportInfo): string {
   const fr = usable(t);
-  const header = ['Adobe After Effects 6.0 Keyframe Data', '', `\tUnits Per Second\t${num(info.fps, 3)}`, `\tSource Width\t${info.width}`, `\tSource Height\t${info.height}`, '\tSource Pixel Aspect Ratio\t1', '\tComp Pixel Aspect Ratio\t1', ''];
+  const header = ['Adobe After Effects 6.0 Keyframe Data', '', `\tUnits Per Second\t${num(info.fps, 3)}`, `\tSource Width\t${info.width}`, `\tSource Height\t${info.height}`, `\tSource Pixel Aspect Ratio\t${num(parOf(info), 4)}`, `\tComp Pixel Aspect Ratio\t${num(parOf(info), 4)}`, ''];
   const block = (label: string, ci: number) => [`Effects\tCorner Pin #1\t${label}`, '\tFrame\tX pixels\tY pixels\t', ...fr.map((f) => `\t${f.frame - info.first}\t${num(f.points[ci]![0] + 0.5, 3)}\t${num(f.points[ci]![1] + 0.5, 3)}\t`), ''];
   if (t.kind === 'point') {
     return `${[...header, 'Transform\tPosition', '\tFrame\tX pixels\tY pixels\tZ pixels\t', ...fr.map((f) => `\t${f.frame - info.first}\t${num(f.points[0]![0] + 0.5, 3)}\t${num(f.points[0]![1] + 0.5, 3)}\t0\t`), '', 'End of Keyframe Data'].join('\r\n')}\r\n`;
@@ -146,8 +156,8 @@ export function writeTrack2dJson(t: Track2d, info: Track2dExportInfo): string {
       shot: info.shot,
       version: `v${String(info.version).padStart(3, '0')}`,
       track: { id: t.id, name: t.name, kind: t.kind, engine: t.engine, occluders: t.occluders },
-      plate: { width: info.width, height: info.height, fps: info.fps },
-      coordinates: 'plate pixels, origin top-left, pixel centres at integer + 0.5 (as AE); corners top-left, top-right, bottom-right, bottom-left',
+      plate: { width: info.width, height: info.height, fps: info.fps, pixelAspect: parOf(info) },
+      coordinates: 'plate pixels (stored, squeezed when the pixel aspect is not 1), origin top-left, pixel centres at integer + 0.5 (as AE); corners top-left, top-right, bottom-right, bottom-left',
       keys: t.keys.map((k) => ({ frame: k.frame, points: k.points.map(([x, y]) => [x + 0.5, y + 0.5]), by: k.by, at: k.at })),
       frames: t.frames.map((f) => ({ frame: f.frame, points: f.points.map(([x, y]) => [x + 0.5, y + 0.5]), confidence: f.confidence, status: f.status })),
     },

@@ -9,6 +9,7 @@ import {
   createTrack2d,
   CameraBodySchema,
   defaultMode,
+  effectiveFilmBack,
   findCamera,
   focalMillimetres,
   focalPixels,
@@ -45,7 +46,7 @@ import {
 import { applySim, composeSim, estimateNormals, icpPointToPlane, invertSim, PointGrid, umeyama, type Similarity } from './align';
 import { decodeCloud, decodeSolve, decodeTracks, encodeCloud, encodeSolve, encodeTracks } from './codec';
 import { sceneCameras, sceneTransform, unitScale } from './coords';
-import { writeAfterEffects, writeBlender, writeCameraJson, writeChan, writeExportReadme, writeFbx, writeFusionComp, writeFusionSetting, writeHoudini, writeMax, writeMaya, writeNuke, writePointsObj, writeUnity, writeUnreal, writeUsda, type CameraExportData } from './export-formats';
+import { verticalAperture, writeAfterEffects, writeBlender, writeCameraJson, writeChan, writeExportReadme, writeFbx, writeFusionComp, writeFusionSetting, writeHoudini, writeMax, writeMaya, writeNuke, writePointsObj, writeUnity, writeUnreal, writeUsda, type CameraExportData } from './export-formats';
 import { project as projectPoint, type Intrinsics } from './geometry';
 import { KLT_VERSION, trackFrames, type GrayFrame, type KltOptions } from './klt';
 import { downsampleTo, formatFromName, parsePointFile } from './lidar';
@@ -188,6 +189,8 @@ export interface CameraSession {
   last: number;
   fps: number;
   plate: { width: number; height: number };
+  /** The shot's pixel aspect (stored pixel width / height; addendum 17). */
+  pixelAspect: number;
   working: { width: number; height: number };
   camtrack: CamTrackDocument;
   track2d: Track2dDocument;
@@ -237,10 +240,20 @@ function change(s: CameraSession, command: string, summary: string, doc: CamTrac
   return { op: 'camtrack', change: { command, summary, doc, task } };
 }
 
-/** Film back width (mm) the plate spans, and whether it was known. */
-export function filmBackOf(doc: CamTrackDocument): { width: number; height: number; nominal: boolean } {
-  return doc.camera ? { ...doc.camera.filmBackMm, nominal: false } : { width: 36, height: 24, nominal: true };
+/**
+ * The film back the plate spans and whether it was known. `width` × `height`
+ * is the de-squeezed picture's aperture (an anamorphic sensor area × the
+ * squeeze; addendum 17) — what focal lengths in millimetres and every export
+ * use; `sensor` is the back as chosen. Unknown: a nominal 36 mm wide picture.
+ */
+export function filmBackOf(doc: CamTrackDocument, plate?: { width: number; height: number }, pixelAspect = 1): { width: number; height: number; nominal: boolean; sensor: { width: number; height: number }; desqueezed: boolean } {
+  if (!doc.camera) return { width: 36, height: 24, nominal: true, sensor: { width: 36, height: 24 }, desqueezed: false };
+  const eff = plate ? effectiveFilmBack(doc.camera.filmBackMm, plate, pixelAspect) : { ...doc.camera.filmBackMm, desqueezed: false };
+  return { width: eff.width, height: eff.height, nominal: false, sensor: { ...doc.camera.filmBackMm }, desqueezed: eff.desqueezed };
 }
+
+/** The plate's width in de-squeezed (square) pixels: focal lengths in pixels are in these. */
+const shownWidth = (s: Pick<CameraSession, 'plate' | 'pixelAspect'>, a = s.pixelAspect) => s.plate.width * a;
 
 function rectsMask(s: CameraSession): ((f: number) => Promise<Uint8Array | null>) | undefined {
   const { masks } = s.camtrack;
@@ -299,8 +312,8 @@ async function storeTracks(s: CameraSession, doc: CamTrackDocument, td: TrackDat
 /** Intrinsics for the solve from the lens settings and the film back. */
 function solveSettingsFor(s: CameraSession, cmd: Extract<CameraCommand, { verb: 'solve' }>): SolveSettings {
   const { lens } = s.camtrack;
-  const fb = filmBackOf(s.camtrack);
-  const focalPx = lens.focalMm && !fb.nominal ? focalPixels(lens.focalMm, fb.width, s.plate.width) : null;
+  const fb = filmBackOf(s.camtrack, s.plate, s.pixelAspect);
+  const focalPx = lens.focalMm && !fb.nominal ? focalPixels(lens.focalMm, fb.width, shownWidth(s)) : null;
   const mode = focalPx ? lens.focalMode : 'unknown';
   const refine = { ...lens.refine, ...(cmd.refine ?? {}) };
   return {
@@ -309,12 +322,14 @@ function solveSettingsFor(s: CameraSession, cmd: Extract<CameraCommand, { verb: 
     refine,
     loss: cmd.loss ?? 'huber',
     ...(cmd.nodal !== undefined ? { nodal: cmd.nodal } : {}),
+    ...(s.pixelAspect !== 1 ? { pixelAspect: s.pixelAspect } : {}),
   };
 }
 
 function recordOf(s: CameraSession, number: number, file: string, tracksFile: string, solve: SolveResult, settings: SolveSettings, constraint: SolveRecord['constraint']): SolveRecord {
-  const fb = filmBackOf(s.camtrack);
   const k = solve.intrinsics;
+  const a = k.a ?? 1;
+  const fb = filmBackOf(s.camtrack, s.plate, a);
   return {
     number,
     taskVersion: s.camtrackVersion,
@@ -322,7 +337,7 @@ function recordOf(s: CameraSession, number: number, file: string, tracksFile: st
     tracks: tracksFile,
     engine: solve.engine,
     settings: { focal: settings.focal.mode, focalPx: settings.focal.px ?? null, refineFocal: Boolean(settings.refine?.focal), k1k2: Boolean(settings.refine?.k1k2), k3: Boolean(settings.refine?.k3), p1p2: Boolean(settings.refine?.p1p2), loss: settings.loss ?? 'huber', priors: settings.pointPriors?.length ?? 0, controlPoints: settings.controlPoints?.length ?? 0 },
-    intrinsics: { focalPx: k.f, focalMm: fb.nominal ? null : focalMillimetres(k.f, fb.width, s.plate.width), cx: k.cx, cy: k.cy, k1: k.k1, k2: k.k2, k3: k.k3, p1: k.p1, p2: k.p2 },
+    intrinsics: { focalPx: k.f, focalMm: fb.nominal ? null : focalMillimetres(k.f, fb.width, shownWidth(s, a)), cx: k.cx, cy: k.cy, k1: k.k1, k2: k.k2, k3: k.k3, p1: k.p1, p2: k.p2, pixelAspect: a },
     stats: {
       rms: solve.stats.rms,
       medianError: solve.stats.medianError,
@@ -819,7 +834,7 @@ async function run(s: CameraSession, cmd: CameraCommand): Promise<CommandOutcome
       const v = s.camtrackVersion;
       const file = (ext: string) => camtrackNames.file(s.name, v, ext);
       const stmaps = cmd.stmaps ?? true;
-      const k: Intrinsics = { f: solved.solve.intrinsics.f, cx: solved.solve.intrinsics.cx, cy: solved.solve.intrinsics.cy, k1: solved.solve.intrinsics.k1, k2: solved.solve.intrinsics.k2, k3: solved.solve.intrinsics.k3, p1: solved.solve.intrinsics.p1, p2: solved.solve.intrinsics.p2 };
+      const k: Intrinsics = { f: solved.solve.intrinsics.f, cx: solved.solve.intrinsics.cx, cy: solved.solve.intrinsics.cy, k1: solved.solve.intrinsics.k1, k2: solved.solve.intrinsics.k2, k3: solved.solve.intrinsics.k3, p1: solved.solve.intrinsics.p1, p2: solved.solve.intrinsics.p2, ...(solved.solve.intrinsics.a && solved.solve.intrinsics.a !== 1 ? { a: solved.solve.intrinsics.a } : {}) };
       const hasLens = k.k1 !== 0 || k.k2 !== 0 || k.k3 !== 0 || k.p1 !== 0 || k.p2 !== 0;
       data.files = { obj: file('_points.obj'), ...(stmaps && hasLens ? { undistort: file('_undistort.exr'), redistort: file('_redistort.exr') } : {}) };
       const files: { name: string; data: Uint8Array | string }[] = [];
@@ -965,8 +980,10 @@ function joinAtFrame(fwd: TrackData, bwd: TrackData, f: number): TrackData {
 export function exportData(s: CameraSession, solved: { record: SolveRecord; solve: SolveResult }): CameraExportData {
   const doc = s.camtrack;
   const T = simOf(doc.coords.transform);
-  const fb = filmBackOf(doc);
   const k = solved.solve.intrinsics;
+  // The solve's own pixel aspect: its focal and principal point were found at it.
+  const a = k.a ?? 1;
+  const fb = filmBackOf(doc, s.plate, a);
   const cameras = sceneCameras(solved.solve, T);
   const points = solved.solve.tracks.filter((t) => t.X && t.inliers >= 2).map((t) => ({ id: t.id, position: applySim(T, t.X!) as [number, number, number], error: t.rms }));
   return {
@@ -978,8 +995,10 @@ export function exportData(s: CameraSession, solved: { record: SolveRecord; solv
     width: s.plate.width,
     height: s.plate.height,
     filmBackMm: { width: fb.width, height: fb.height },
+    sensorFilmBackMm: fb.sensor,
+    pixelAspect: a,
     nominalFilmBack: fb.nominal,
-    focalMm: focalMillimetres(k.f, fb.width, s.plate.width),
+    focalMm: focalMillimetres(k.f, fb.width, shownWidth(s, a)),
     focalPx: k.f,
     principalOffsetPx: { x: k.cx - (s.plate.width - 1) / 2, y: k.cy - (s.plate.height - 1) / 2 },
     distortion: { k1: k.k1, k2: k.k2, k3: k.k3, p1: k.p1, p2: k.p2 },
@@ -1008,7 +1027,8 @@ function reportHtml(s: CameraSession, solved: { record: SolveRecord; solve: Solv
 <p>Written by ${esc(s.generator)} at ${esc(d.writtenAt)} by ${esc(s.actor)}. ${r.engine.id}@${r.engine.version}.</p>
 <p><b>RMS reprojection error ${r.stats.rms.toFixed(3)} px</b> (median ${r.stats.medianError.toFixed(3)} px) over ${r.stats.framesSolved} of ${r.stats.framesTotal} frames, ${r.stats.tracksUsed} of ${r.stats.tracksTotal} tracks, ${r.stats.keyframes} keyframes${r.stats.nodal ? ', <b>nodal</b>' : ''}. Confidence ${(r.stats.confidence * 100).toFixed(0)} %.</p>
 ${r.stats.warnings.map((w) => `<p class="warn">⚠ ${esc(w)}</p>`).join('')}
-<p>Camera: ${esc(doc.camera?.label ?? 'not set (nominal 36 mm film back)')}${doc.camera && !doc.camera.verified ? ' — film back not verified against the manufacturer' : ''}. Film back ${d.filmBackMm.width} × ${(d.filmBackMm.width * d.height / d.width).toFixed(3)} mm over ${d.width} × ${d.height} px.</p>
+<p>Camera: ${esc(doc.camera?.label ?? 'not set (nominal 36 mm film back)')}${doc.camera && !doc.camera.verified ? ' — film back not verified against the manufacturer' : ''}. Film back ${+d.filmBackMm.width.toFixed(3)} × ${verticalAperture(d).toFixed(3)} mm over ${d.width} × ${d.height} px${(d.pixelAspect ?? 1) !== 1 ? `, <b>pixel aspect ${+(d.pixelAspect ?? 1).toFixed(4)}</b> (shown ${Math.round(d.width * (d.pixelAspect ?? 1))} × ${d.height}; the plate is kept squeezed${d.sensorFilmBackMm && Math.abs(d.sensorFilmBackMm.width - d.filmBackMm.width) > 1e-6 ? `; sensor area ${d.sensorFilmBackMm.width} × ${d.sensorFilmBackMm.height} mm × the squeeze` : ''}; horizontal focal ${(d.focalPx / (d.pixelAspect ?? 1)).toFixed(2)} px, vertical ${d.focalPx.toFixed(2)} px in plate pixels)` : ''}.</p>
+${(d.pixelAspect ?? 1) !== s.pixelAspect ? `<p class="warn">⚠ This solve was made at pixel aspect ${d.pixelAspect ?? 1}; the shot is now ${+s.pixelAspect.toFixed(4)}. Solve again.</p>` : ''}
 <p>Lens: ${esc(doc.lens.name || '—')}; focal ${d.focalMm.toFixed(3)} mm (${d.focalPx.toFixed(2)} px; ${doc.lens.focalMode}). Distortion (OpenCV Brown–Conrady, normalised by the focal length): k1 ${d.distortion.k1.toFixed(6)}, k2 ${d.distortion.k2.toFixed(6)}, k3 ${d.distortion.k3.toFixed(6)}, p1 ${d.distortion.p1.toFixed(6)}, p2 ${d.distortion.p2.toFixed(6)}.</p>
 <p>Scene: ${d.units}, exports ${d.upAxis.toUpperCase()}-up where generic. ${doc.alignment ? `Aligned to ${esc(doc.lidar.find((l) => l.id === doc.alignment!.lidarId)?.name ?? 'LiDAR')} by ${doc.alignment.method}: RMS ${doc.alignment.rmsMm?.toFixed(1) ?? '—'} mm / ${doc.alignment.rmsPx?.toFixed(2) ?? '—'} px, confidence ${(doc.alignment.confidence * 100).toFixed(0)} %.` : 'Not aligned to LiDAR.'}</p>
 <svg width="${solved.solve.frames.length * 4}" height="100" style="background:#f6f6f6">${bars}</svg>
@@ -1080,7 +1100,7 @@ async function track2dExport(s: CameraSession, cmd: Extract<CameraCommand, { ver
   const v = s.track2dVersion;
   const files: { name: string; data: string }[] = [];
   for (const t of tracks) {
-    const info = { shot: s.name, version: v, generator: s.generator, fps: s.fps, width: s.plate.width, height: s.plate.height, first: s.first, writtenAt: s.now().toISOString() };
+    const info = { shot: s.name, version: v, generator: s.generator, fps: s.fps, width: s.plate.width, height: s.plate.height, pixelAspect: s.pixelAspect, first: s.first, writtenAt: s.now().toISOString() };
     if (formats.includes('nuke')) files.push({ name: track2dNames.file(s.name, v, t.id, '.nk'), data: writeNukeCornerPin(t, info) });
     if (formats.includes('ae')) files.push({ name: track2dNames.file(s.name, v, t.id, '.jsx'), data: writeCornerPinJsx(t, info) });
     if (formats.includes('mocha')) files.push({ name: track2dNames.file(s.name, v, t.id, '_ae_keyframes.txt'), data: writeMochaText(t, info) });
