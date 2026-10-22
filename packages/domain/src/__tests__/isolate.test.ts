@@ -86,7 +86,7 @@ const exportRecord = (p: Project, t: IsolateTarget = 'sky'): IsolateExportInput 
     height: 2160,
     encoding: 'ACEScg (linear AP1)',
     summary: { mean: 0.9, min: 0.8, low: [], flicker: 0.005, unresolved: 0 },
-    algorithm: 'vcvfx-isolate@1.0.0',
+    algorithm: 'vcvfx-isolate@1.1.0',
     engine: 'sky-cues',
     revision: doc(p, t).revision,
     metadata: `02_MATTES_ROTO/${n.folder(SHOT, v)}/${n.metadata(SHOT, v)}`,

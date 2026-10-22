@@ -36,7 +36,7 @@ import { HARD_BG, HARD_FG, binaryCut, cleanSky, cutSize, separationOf, skyFeatur
  *     what to remove — and what no frame saw filled spatially and flagged.
  */
 
-export const ISOLATE_ENGINE_VERSION = '1.0.0';
+export const ISOLATE_ENGINE_VERSION = '1.1.0';
 /** The roto-part id the plate builder is given for the foreground (never a real part). */
 const FOREGROUND_PART = '__isolate_fg';
 
@@ -554,7 +554,7 @@ export class ShotIsolator {
     };
     const first = await io.frame(this.range.first);
     const k = first.width / a.working.width;
-    const scaled = k === 1 ? a.alignment : { ...a.alignment, frames: new Map([...a.alignment.frames].map(([f, x]) => [f, { ...x, H: a.alignment.static ? x.H : scaleHomography(x.H, k), residual: x.residual * k, motion: x.motion * k }])) };
+    const scaled = k === 1 ? a.alignment : { ...a.alignment, motion: a.alignment.motion * k, residual: a.alignment.residual * k, frames: new Map([...a.alignment.frames].map(([f, x]) => [f, { ...x, H: a.alignment.static ? x.H : scaleHomography(x.H, k), residual: x.residual * k, motion: x.motion * k }])) };
     const analysis: CleanPlateAnalysis = { alignment: scaled, suggestion: { mode: 'sequence', static: a.alignment.static, motionPx: 0, residualPx: 0, exposureStops: 0, reason: '' }, mode: 'sequence', reference: a.reference };
     const cleaner = new ShotCleaner(settings, this.range, { pxScale, luma: this.o.space.luma, ...(this.o.maxResidentBytes ? { maxResidentBytes: this.o.maxResidentBytes } : {}) }).useAnalysis(analysis);
     const plateIO = {
@@ -593,7 +593,10 @@ export class ShotIsolator {
           need += 1;
           if (conf[i]! < 0.5) low += 1;
         }
-        return { frame: f, width: W, height: H, plate: out.plate, confidence: conf, unresolved, share: need ? round4(low / need) : 0 };
+        // A sky without detail along the edge (overcast, a clear gradient) is filled from the sky beside it as
+        // well as any frame could show it: only the share of a sky with detail there counts as unresolved.
+        const flat = sky && low ? skyFlatness(out.plate, out.hole, W, H) : 0;
+        return { frame: f, width: W, height: H, plate: out.plate, confidence: conf, unresolved, share: need ? round4((low * (1 - flat)) / need) : 0 };
       },
     };
   }
@@ -661,6 +664,32 @@ export class ShotIsolator {
 }
 
 /** Is a foreground pixel next to the sky (a pixel of the edge, where the sky shows through)? */
+/**
+ * How featureless the seen sky beside the foreground is, 0 … 1: the median
+ * relative luminance step between neighbouring sky pixels in a ring w/256 …
+ * w/128 from the foreground (clear of its soft edge) — 1 at 0.4 % or less (an
+ * overcast sky, a clear gradient, grain), 0 at 2 % or more (clouds, texture).
+ */
+export function skyFlatness(plate: Float32Array, hole: Uint8Array, w: number, h: number): number {
+  const lum = (i: number) => 0.2722 * plate[3 * i]! + 0.6741 * plate[3 * i + 1]! + 0.0537 * plate[3 * i + 2]!;
+  const d2 = squaredDistance(hole, w, h);
+  const r0 = (w / 256) ** 2;
+  const r1 = (w / 128) ** 2;
+  const step = Math.max(1, Math.round(w / 512));
+  const steps: number[] = [];
+  for (let y = 0; y < h - step; y += step)
+    for (let x = 0; x < w - step; x += step) {
+      const i = y * w + x;
+      if (d2[i]! < r0 || d2[i]! > r1 || hole[i + step] || hole[i + step * w]) continue;
+      const l = lum(i);
+      if (l > 1e-4) steps.push((Math.abs(lum(i + step) - l) + Math.abs(lum(i + step * w) - l)) / (2 * l));
+    }
+  if (steps.length < 50) return 0;
+  steps.sort((p, q) => p - q);
+  const g = steps[steps.length >> 1]!;
+  return Math.max(0, Math.min(1, (0.02 - g) / 0.016));
+}
+
 function hasSkyNear(hole: Uint8Array, w: number, h: number, i: number): boolean {
   const x = i % w;
   const y = (i - x) / w;

@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { keyProblemReasons, type KeyLink } from '@vcvfx/domain';
 import { CancelledError } from '../roto/engine';
-import { buildScreenModel, evalScreenModel, flatScreenModel, pullPush } from '../key/cleanplate';
+import { buildScreenModel, evalScreenModel, flatScreenModel, localScreen, modelSeen, pullPush, screenGain } from '../key/cleanplate';
 import { despill, hueSat, type DespillOptions } from '../key/despill';
-import { analysisFrames, detectShotScreen, runKey, shotScreenModel, ShotKeyer } from '../key/engine';
+import { analysisFrames, detectShotScreen, runKey, shotScreenModel, ShotKeyer, type KeyIO } from '../key/engine';
 import { keyFrame, keyerSettings } from '../key/keyer';
-import { decodeInterleaved, toDisplay, workingSpace } from '../key/linear';
+import { decodeInterleaved, toDisplay, workingSpace, type LinearImage } from '../key/linear';
 import { applyMatch, backgroundNear, estimateMatch, lightWrap, matchSamples } from '../key/look';
 import { combineMattes, rectMatte, resolveLinks, type ResolvedLink } from '../key/mattes';
 import { detectScreen, sampleColour } from '../key/screen';
@@ -85,9 +85,11 @@ describe('key accuracy against ground truth', () => {
   it('the clean plate is what keeps an unevenly lit screen clean', async () => {
     const scene = greenScreenScene({ frames: 12 });
     const io = sceneIO(scene);
+    // The screen's own detail on each frame would mend the flat key too: this is about the model.
     const flat = settingsFor('green', [0.063, 0.457, 0.097]);
-    flat.params = { ...flat.params, cleanPlate: false };
+    flat.params = { ...flat.params, cleanPlate: false, screenDetail: false };
     const plate = settingsFor('green', [0.063, 0.457, 0.097]);
+    plate.params = { ...plate.params, screenDetail: false };
     const a = await new ShotKeyer(flat, await shotScreenModel(io, flat, 0, 11)).keyAt(io, 4, await io.frame(4), { pxScale: 1, luma: LUMA_AP1, foreground: false });
     const b = await new ShotKeyer(plate, await shotScreenModel(io, plate, 0, 11)).keyAt(io, 4, await io.frame(4), { pxScale: 1, luma: LUMA_AP1, foreground: false });
     const accA = accuracy(a.alpha, scene.alpha(4), scene.width, scene.height);
@@ -120,6 +122,80 @@ describe('key accuracy against ground truth', () => {
     expect(Buffer.from(a.alpha.buffer).equals(Buffer.from(b.alpha.buffer))).toBe(true);
     expect(Buffer.from(a.fg!.buffer).equals(Buffer.from(b.fg!.buffer))).toBe(true);
     expect(a.metrics).toEqual(b.metrics);
+  });
+});
+
+describe('the screen in detail on each frame (addendum 16)', () => {
+  // A real screen: cloth folds finer than the clean-plate grid (a 16 px period at 640 px, 25 % deep),
+  // a subject crossing it — a red disc, or a costume the screen's bounce has made screen-coloured
+  // (35 % of the screen's brightness, the screen's chromaticity).
+  const W = 640;
+  const H = 360;
+  const S = [0.063, 0.457, 0.097] as const;
+  const fold = (x: number) => 1 - 0.25 * Math.max(0, Math.sin((2 * Math.PI * x) / 16)) ** 3;
+  const scene = (subject: readonly [number, number, number]) => {
+    const alpha = (n: number) => {
+      const a = new Float32Array(W * H);
+      const cx = 120 + 40 * n;
+      for (let y = 0; y < H; y += 1) for (let x = 0; x < W; x += 1) a[y * W + x] = Math.max(0, Math.min(1, 70.5 - Math.hypot(x - cx, y - 180)));
+      return a;
+    };
+    const render = (n: number): LinearImage => {
+      const a = alpha(n);
+      const data = new Float32Array(W * H * 3);
+      for (let i = 0; i < W * H; i += 1) {
+        const f = fold(i % W);
+        for (let c = 0; c < 3; c += 1) data[3 * i + c] = a[i]! * subject[c]! + (1 - a[i]!) * S[c]! * f;
+      }
+      return { width: W, height: H, data };
+    };
+    const io: KeyIO = { frame: async (n) => render(n), roto: async () => null, background: async () => null };
+    return { alpha, io };
+  };
+  const key = async (subject: readonly [number, number, number], screenDetail: boolean) => {
+    const { alpha, io } = scene(subject);
+    const s = settingsFor('green', [...S]);
+    s.params = { ...s.params, screenDetail };
+    const out = await new ShotKeyer(s, await shotScreenModel(io, s, 0, 10)).keyAt(io, 5, await io.frame(5), { pxScale: 1, luma: LUMA_AP1, foreground: false });
+    return { out, acc: accuracy(out.alpha, alpha(5), W, H) };
+  };
+
+  it('keys the folds of the cloth out, which the clean-plate model is too coarse to hold', async () => {
+    const without = await key([0.4, 0.06, 0.05], false);
+    const detail = await key([0.4, 0.06, 0.05], true);
+    expect(without.acc.bg).toBeGreaterThan(0.03);
+    expect(detail.acc.bg).toBeLessThan(0.01);
+    expect(detail.acc.bg).toBeLessThan(without.acc.bg / 4);
+    expect(detail.acc.core).toBeGreaterThan(0.99);
+    // A light going out is still told from the shot's screen, not from the frame's own detail.
+    expect(detail.out.metrics.residual).toBeGreaterThan(0.02);
+  }, 30_000);
+
+  it('never takes a costume the bounce has made screen-coloured for the screen', async () => {
+    const dim: [number, number, number] = [S[0] * 0.35, S[1] * 0.35, S[2] * 0.35];
+    const without = await key(dim, false);
+    const detail = await key(dim, true);
+    expect(detail.acc.core).toBeGreaterThanOrEqual(without.acc.core - 0.01);
+    expect(detail.acc.core).toBeGreaterThan(0.95);
+    // Unguarded, the same pixels would have been the screen: the key there falls to nothing.
+    const img = await scene(dim).io.frame(5);
+    const loose = localScreen(img, evalScreenModel(flatScreenModel([...S]), W, H), 'green', { maxKey: 1 });
+    const c = 3 * (180 * W + 320);
+    expect(loose[c + 1]! / img.data[c + 1]!).toBeCloseTo(1, 1);
+  }, 30_000);
+
+  it('measures the gain only where the model saw the screen', () => {
+    // A green card in the middle of the frame; outside it, grass of the same chromaticity, twice as bright.
+    const card = (x: number, y: number) => x > 240 && x < 400 && y > 100 && y < 260;
+    const img: LinearImage = { width: W, height: H, data: new Float32Array(W * H * 3) };
+    for (let y = 0; y < H; y += 1)
+      for (let x = 0; x < W; x += 1) for (let c = 0; c < 3; c += 1) img.data[3 * (y * W + x) + c] = S[c]! * (card(x, y) ? 1 : 2);
+    const model = buildScreenModel([img], { kind: 'green', rgb: [...S] }, 64);
+    // The model saw the card (and the grass, which it was told is not screen by brightness only after the first pass).
+    const seen = modelSeen({ ...model, support: model.support!.map((v, i) => (card(((i % 64) + 0.5) * 10, (Math.floor(i / 64) + 0.5) * (H / model.gh)) ? v : 0)) }, W, H);
+    const flatModel = evalScreenModel(flatScreenModel([...S]), W, H);
+    expect(screenGain(img, flatModel, { kind: 'green', rgb: [...S] })[1]).toBeGreaterThan(1.5);
+    expect(screenGain(img, flatModel, { kind: 'green', rgb: [...S] }, seen)[1]).toBeCloseTo(1, 2);
   });
 });
 

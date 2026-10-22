@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_ISOLATE_PARAMS, isolateProblemReasons, type IsolateKeyFrame, type IsolateSeed, type IsolateTarget } from '@vcvfx/domain';
 import { cleanPlateScene } from '../cleanplate/synthetic';
-import { ShotIsolator, boxStrokes, runIsolate, type IsolateIO, type MatteOutput, type PlateOutput } from '../isolate/engine';
+import { ShotIsolator, boxStrokes, runIsolate, skyFlatness, type IsolateIO, type MatteOutput, type PlateOutput } from '../isolate/engine';
 import { skyScene, type SkyScene } from '../isolate/synthetic';
 import { lumaWeights, workingSpace, type LinearImage } from '../key/linear';
 import { TrackEngine } from '../roto/track';
@@ -247,6 +247,29 @@ describe('sky isolation', () => {
       expect(fixed.mattes.get(f)!.alpha).toEqual(base.mattes.get(f)!.alpha);
     }
   }, 120_000);
+});
+
+describe('a sky without detail behind the edge (addendum 16)', () => {
+  // Soldiers on a roof against an overcast sky: the sky behind their edge is never seen, but
+  // filled from the sky beside it it is as good as any frame could show. Clouds are not.
+  const W = 320;
+  const H = 180;
+  const hole = new Uint8Array(W * H);
+  for (let i = 0; i < W * H; i += 1) if (Math.hypot((i % W) - 160, Math.floor(i / W) - 140) < 70) hole[i] = 1;
+  const sky = (detail: number) => {
+    const p = new Float32Array(W * H * 3);
+    for (let i = 0; i < W * H; i += 1) {
+      const x = i % W;
+      const y = Math.floor(i / W);
+      const l = (0.7 - 0.001 * y) * (1 + detail * Math.sin(x * 0.9) * Math.sin(y * 1.3)) * (1 + 0.001 * Math.sin(x * 7.1 + y * 3.7));
+      p.set([l * 0.95, l, l * 1.05], 3 * i);
+    }
+    return p;
+  };
+  it('an overcast sky (gradient, grain) is flat; one with clouds is not', () => {
+    expect(skyFlatness(sky(0), hole, W, H)).toBe(1);
+    expect(skyFlatness(sky(0.08), hole, W, H)).toBe(0);
+  });
 });
 
 describe('background removal', () => {

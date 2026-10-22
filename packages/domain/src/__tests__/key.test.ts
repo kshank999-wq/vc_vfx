@@ -87,7 +87,7 @@ const exportRecord = (p: Project, despill = true): KeyExportInput => ({
   encoding: 'ACEScg (linear AP1)',
   despill,
   confidence: { mean: 0.9, min: 0.8, low: [] },
-  algorithm: 'vcvfx-cdk@1.0.0',
+  algorithm: 'vcvfx-cdk@1.1.0',
   revision: key(p).revision,
   metadata: `03_KEYS/${keyNames.folder(SHOT, task(p).version)}/${keyNames.metadata(SHOT, task(p).version)}`,
   files: 22,
@@ -283,7 +283,7 @@ describe('outputs, manifest and project format', () => {
     expect(meta.perFrame).toHaveLength(2);
     expect(meta.lightWrap).toBeNull();
     const m = buildManifest(p, SHOT, { generatedAt: NOW, appVersion: '0.1.0', operator: 'ana', files: [] });
-    expect(m.key).toMatchObject({ version: 'v001', state: 'needs_review', exported: true, alpha: '010_020_key_alpha_v001.%04d.png', encoding: 'ACEScg (linear AP1)', algorithm: 'vcvfx-cdk@1.0.0', confidence: { frames: 2 } });
+    expect(m.key).toMatchObject({ version: 'v001', state: 'needs_review', exported: true, alpha: '010_020_key_alpha_v001.%04d.png', encoding: 'ACEScg (linear AP1)', algorithm: 'vcvfx-cdk@1.1.0', confidence: { frames: 2 } });
     expect(buildManifest(sample(), SHOT, { generatedAt: NOW, appVersion: '0.1.0', operator: 'ana', files: [] }).key).toBeNull();
     // A shot can still be approved and packaged as before.
     p = ok(approveTask(p, SHOT, 'key', 'Sup', NOW));

@@ -599,7 +599,13 @@ export function PlateColorPanel(props: Pick<ShotDetailProps, 'project' | 'shotId
         <label>
           <span className="muted">Source encoding</span>
           <select aria-label="Source encoding" value={state.sourceEncoding ?? ''} disabled={disabled} title={title} onChange={(e) => props.onPlateColor({ encoding: (e.target.value || null) as ColorEncodingId | null })}>
-            <option value="">{parsed.encoding ? `From handoff: ${ENCODINGS[parsed.encoding].label}` : `From handoff: unknown${shot.color.sourceColorSpace ? ` (“${shot.color.sourceColorSpace}”)` : ''}`}</option>
+            <option value="">
+              {parsed.encoding
+                ? `From handoff: ${ENCODINGS[parsed.encoding].label}`
+                : decision.sourceEncodingFrom === 'probe' && decision.sourceEncoding
+                  ? `From the clip’s tags: ${ENCODINGS[decision.sourceEncoding].label}`
+                  : `From handoff: unknown${shot.color.sourceColorSpace ? ` (“${shot.color.sourceColorSpace}”)` : ''}`}
+            </option>
             {COLOR_ENCODINGS.map((id) => (
               <option key={id} value={id}>
                 {ENCODINGS[id].label}

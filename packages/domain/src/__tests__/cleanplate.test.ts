@@ -86,7 +86,7 @@ const exportRecord = (p: Project, mode: 'still' | 'sequence' = 'sequence'): Clea
     height: 2160,
     encoding: 'ACEScg (linear AP1)',
     summary: { mean: 0.9, min: 0.8, low: [], coverage: 0.98, unresolved: 0.01 },
-    algorithm: 'vcvfx-cleanplate@1.0.0',
+    algorithm: 'vcvfx-cleanplate@1.1.0',
     revision: doc(p).revision,
     metadata: `04_CLEAN_PLATES/${cleanPlateNames.folder(SHOT, v)}/${cleanPlateNames.metadata(SHOT, v)}`,
     files: 32,
@@ -266,7 +266,7 @@ describe('approval, versions and outputs', () => {
     expect(meta).toMatchObject({ format: 'vcvfx.cleanplate/1', version: 'v001', mode: 'sequence', frames: { count: 2 }, colour: { linear: true }, settings: { revision: 1, remove: [expect.objectContaining({ id: 'r1' })] }, alignment: { model: 'homography' } });
     expect(meta.perFrame).toHaveLength(2);
     const m = buildManifest(p, SHOT, { generatedAt: NOW, appVersion: '0.1.0', operator: 'ana', files: [] });
-    expect(m.cleanPlate).toMatchObject({ version: 'v001', state: 'needs_review', exported: true, mode: 'sequence', plate: '020_010_cleanplate_v001.%04d.exr', format: 'exr', encoding: 'ACEScg (linear AP1)', algorithm: 'vcvfx-cleanplate@1.0.0', dilatePx: 6, confidence: { frames: 2 } });
+    expect(m.cleanPlate).toMatchObject({ version: 'v001', state: 'needs_review', exported: true, mode: 'sequence', plate: '020_010_cleanplate_v001.%04d.exr', format: 'exr', encoding: 'ACEScg (linear AP1)', algorithm: 'vcvfx-cleanplate@1.1.0', dilatePx: 6, confidence: { frames: 2 } });
     expect(m.cleanPlate!.remove).toEqual([{ id: 'r1', source: { type: 'rect', rect: box }, frames: null, enabled: true }]);
     expect(buildManifest(sample(), SHOT, { generatedAt: NOW, appVersion: '0.1.0', operator: 'ana', files: [] }).cleanPlate).toBeNull();
     expect(cleanPlateManifest(shotState(sample(), SHOT)!)).toBeNull();

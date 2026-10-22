@@ -71,8 +71,14 @@ export function keyerSettings(kind: ScreenKind, p: KeyParams, pxScale: number): 
 
 export interface KeyFrameInput {
   image: LinearImage;
-  /** The screen at every pixel (interleaved RGB): the clean-plate model, with this frame's gain. */
+  /** The screen at every pixel (interleaved RGB): the clean-plate model, with this frame's gain (and detail). */
   screen: Float32Array;
+  /**
+   * The model with this frame's gain only, without the frame's own detail,
+   * for measuring how far the frame's screen is from the shot's (a light
+   * going out). Absent: `screen`.
+   */
+  model?: Float32Array;
   settings: KeyerSettings;
   links?: readonly ResolvedLink[];
   /** Despill the foreground (null: the foreground is the screen-subtracted pixels as they are). */
@@ -368,7 +374,7 @@ export function keyFrame(input: KeyFrameInput): KeyFrameOutput {
   }
   const wrap = !input.matteOnly && input.background && input.lightWrap && input.lightWrap.intensity > 0 ? lightWrap(alpha, input.background, input.lightWrap) : null;
 
-  const metrics = keyMetrics(img, screen, raw, edge, core, alpha, k.kind);
+  const metrics = keyMetrics(img, screen, raw, edge, core, alpha, k.kind, input.model);
   return { width: w, height: h, alpha, raw, edge: refined, core, fg, spill, wrap, metrics, confidence: keyConfidence(metrics) };
 }
 
@@ -379,7 +385,7 @@ export function keyFrame(input: KeyFrameInput): KeyFrameOutput {
  * (the keyer made something transparent that does not look like screen), and
  * how far the clean screen is from its model (a lighting change).
  */
-export function keyMetrics(img: LinearImage, screen: Float32Array, raw: Float32Array, edge: Float32Array, core: Uint8Array, alpha: Float32Array, kind: ScreenKind): KeyMetrics {
+export function keyMetrics(img: LinearImage, screen: Float32Array, raw: Float32Array, edge: Float32Array, core: Uint8Array, alpha: Float32Array, kind: ScreenKind, model: Float32Array = screen): KeyMetrics {
   const { width: w, height: h } = img;
   const n = w * h;
   const P = img.data;
@@ -396,9 +402,9 @@ export function keyMetrics(img: LinearImage, screen: Float32Array, raw: Float32A
       clean += 1;
       if ((i & 3) === 0) {
         const q = 3 * i;
-        const ss = screen[q]! + screen[q + 1]! + screen[q + 2]!;
+        const ss = model[q]! + model[q + 1]! + model[q + 2]!;
         if (ss > 1e-5) {
-          resid += (Math.abs(P[q]! - screen[q]!) + Math.abs(P[q + 1]! - screen[q + 1]!) + Math.abs(P[q + 2]! - screen[q + 2]!)) / ss;
+          resid += (Math.abs(P[q]! - model[q]!) + Math.abs(P[q + 1]! - model[q + 1]!) + Math.abs(P[q + 2]! - model[q + 2]!)) / ss;
           residN += 1;
         }
       }

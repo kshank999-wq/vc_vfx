@@ -139,7 +139,7 @@ describe.skipIf(!hasFfmpeg)('sky isolation and background removal on real media'
     // The sky needs nothing to start: build straight away, in the worker.
     const progress: number[] = [];
     const result = await isolateBuild(p, { shotId: 'S1', projectKey: 'k', target: 'sky' }, out, env, { onProgress: (d) => progress.push(d) });
-    expect(result).toMatchObject({ first: 1001, last: 1000 + FRAMES, alignment: 'homography', engine: 'sky-cues@1.0.0', revision: 0 });
+    expect(result).toMatchObject({ first: 1001, last: 1000 + FRAMES, alignment: 'homography', engine: 'sky-cues@1.1.0', revision: 0 });
     expect(result.frames).toHaveLength(FRAMES);
     expect(progress.at(-1)).toBe(6 * FRAMES);
     p = ok(recordIsolateRun(p, 'S1', 'sky', result, 'Ana', NOW));
@@ -203,7 +203,7 @@ describe.skipIf(!hasFfmpeg)('sky isolation and background removal on real media'
     expect(alphaDiff).toBeLessThan(0.002);
     expect(err / cnt).toBeLessThan(0.03);
     const meta = JSON.parse(await readFile(join(exported.folder, 'S1_sky_v001.json'), 'utf8'));
-    expect(meta).toMatchObject({ format: 'vcvfx.isolate/1', target: 'sky', task: 'sky_replacement', shot: 'S1', version: 'v001', engine: 'sky-cues@1.0.0', frames: { first: 1001, count: FRAMES }, resolution: { width: W, height: H }, colour: { linear: true }, alignment: { model: 'homography' }, settings: { seed: { mode: 'auto' } } });
+    expect(meta).toMatchObject({ format: 'vcvfx.isolate/1', target: 'sky', task: 'sky_replacement', shot: 'S1', version: 'v001', engine: 'sky-cues@1.1.0', frames: { first: 1001, count: FRAMES }, resolution: { width: W, height: H }, colour: { linear: true }, alignment: { model: 'homography' }, settings: { seed: { mode: 'auto' } } });
     expect(meta.perFrame).toHaveLength(FRAMES);
     expect(meta.alignment.frames).toHaveLength(FRAMES);
     expect(exported.record).toMatchObject({ version: 1, target: 'sky', folder: '02_MATTES_ROTO/S1_sky_v001', matte: 'S1_sky_matte_v001.%04d.png', matteExr: 'S1_sky_matte_v001.%04d.exr', foreground: 'S1_sky_fg_v001.%04d.exr', plate: 'S1_sky_plate_v001.%04d.exr', format: 'exr', frames: FRAMES });

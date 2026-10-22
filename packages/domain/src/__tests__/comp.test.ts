@@ -333,7 +333,7 @@ describe('module outputs by reference', () => {
     const reparsed = parseProject(serializeProject(p));
     if (!reparsed.ok) throw new Error(reparsed.reason);
     p = reparsed.project;
-    const rec = { version: 1, folder: '03_KEYS/010_020_key_v001', alpha: '010_020_key_alpha_v001.%04d.png', foreground: '010_020_key_fg_v001.%04d.exr', alphaExr: false, first: 1001, last: 1128, frames: 128, width: 4096, height: 2160, encoding: 'ACEScg (linear AP1)', despill: true, confidence: { mean: 0.9, min: 0.8, low: [] }, algorithm: 'vcvfx-cdk@1.0.0', revision: 0, metadata: '03_KEYS/010_020_key_v001/010_020_key_v001.json', files: 258 };
+    const rec = { version: 1, folder: '03_KEYS/010_020_key_v001', alpha: '010_020_key_alpha_v001.%04d.png', foreground: '010_020_key_fg_v001.%04d.exr', alphaExr: false, first: 1001, last: 1128, frames: 128, width: 4096, height: 2160, encoding: 'ACEScg (linear AP1)', despill: true, confidence: { mean: 0.9, min: 0.8, low: [] }, algorithm: 'vcvfx-cdk@1.1.0', revision: 0, metadata: '03_KEYS/010_020_key_v001/010_020_key_v001.json', files: 258 };
     const exported = recordKeyExport(p, SHOT, rec, 'ana', NOW);
     if (exported.ok) p = exported.project;
     else p = { ...p, shots: p.shots.map((s) => (s.shotId === SHOT ? { ...s, key: { ...s.key!, exports: [{ ...rec, core: null, edge: null, lightWrap: null, writtenAt: NOW.toISOString(), by: 'ana' }] } } : s)) };

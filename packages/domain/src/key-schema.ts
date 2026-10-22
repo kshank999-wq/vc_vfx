@@ -15,7 +15,7 @@ import { z } from 'zod';
 
 export const KEY_FORMAT_VERSION = 1;
 /** The keyer: colour difference against a clean-plate screen model, unmixing edge refinement (addendum 09 §3). */
-export const KEY_ALGORITHM = { id: 'vcvfx-cdk', version: '1.0.0' } as const;
+export const KEY_ALGORITHM = { id: 'vcvfx-cdk', version: '1.1.0' } as const;
 
 export const SCREEN_KINDS = ['green', 'blue'] as const;
 export type ScreenKind = (typeof SCREEN_KINDS)[number];
@@ -79,6 +79,13 @@ export const KeyParamsSchema = z.object({
   cleanPlateFrames: z.number().int().min(1).max(16).default(5),
   /** Cells across the clean-plate grid (its smoothness). */
   cleanPlateGrid: z.number().int().min(4).max(128).default(64),
+  /**
+   * Follow the screen in detail on each frame — the folds of the cloth, its
+   * fall-off, shadows on it — from the frame's own screen pixels round the
+   * subject (a per-frame clean plate). Light shadows on the screen key out; one
+   * darker than about half the screen stays in the matte.
+   */
+  screenDetail: z.boolean().default(true),
 });
 export type KeyParams = z.infer<typeof KeyParamsSchema>;
 export const DEFAULT_KEY_PARAMS: KeyParams = KeyParamsSchema.parse({});

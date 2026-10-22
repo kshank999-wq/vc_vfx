@@ -437,9 +437,21 @@ export function cube1D(fn: (v: number) => number, options: { size?: number; doma
   return `${lines.join('\n')}\n`;
 }
 
-/** The decode curve of a transform as a 1D cube (code value 0–1 → linear). */
+/**
+ * Code values a video encoding carries above 1.0: Rec.709 and sRGB footage
+ * in video range keeps super-whites (10-bit codes 941–1019 read as up to
+ * 1.09) — speculars, a lamp, the sky. ffmpeg's lut1d clamps to its domain.
+ */
+export const VIDEO_CODE_MAX = 1.25;
+
+/**
+ * The decode curve of a transform as a 1D cube (code value → linear): 0–1,
+ * or 0–1.25 for a video encoding so its super-whites are not clipped (the
+ * same step between points).
+ */
 export function decodeCube(t: ColorTransform, size = 4096): string {
-  return cube1D(TRANSFERS[t.decode].toLinear, { size, title: `${TRANSFERS[t.decode].label} to linear (VC VFX)` });
+  const video = t.decode === 'bt709' || t.decode === 'srgb';
+  return cube1D(TRANSFERS[t.decode].toLinear, { size: video ? Math.round(size * VIDEO_CODE_MAX) : size, domainMax: video ? VIDEO_CODE_MAX : 1, title: `${TRANSFERS[t.decode].label} to linear (VC VFX)` });
 }
 
 // ---------------------------------------------------------------------------
@@ -469,7 +481,7 @@ export interface PlateColorDecision {
   policy: PlateColorPolicy;
   /** The source encoding the decision used, and where it came from. */
   sourceEncoding: ColorEncodingId | null;
-  sourceEncodingFrom: 'operator' | 'handoff' | 'unknown';
+  sourceEncodingFrom: 'operator' | 'handoff' | 'probe' | 'unknown';
   /** The transform, for `convert`; null for `as_shot`. */
   transform: ColorTransform | null;
   /** The encoding the plate's pixels are in once written. */
@@ -490,6 +502,26 @@ export interface PlateColorInput {
   /** Operator's pick, overriding the handoff's text. */
   operatorEncoding: ColorEncodingId | null;
   handoffText: (string | null | undefined)[];
+  /** The clip's own colour tags as ffprobe read them, used when the handoff names no encoding. */
+  probeTags?: { transfer?: string | undefined; primaries?: string | undefined } | null;
+}
+
+/**
+ * A video file's colour tags as an encoding, when they say it unambiguously:
+ * Rec.709 primaries with the BT.709 (or BT.601) curve, the sRGB curve, or
+ * linear. A real ProRes or H.264 from a camera or an online is tagged; a
+ * VCDIT handoff (which carries no colour) otherwise leaves such a clip
+ * "unknown" and its EXR plates would keep the video curve. Null when untagged
+ * or anything else (HLG, PQ, wide gamuts): the operator says.
+ */
+export function encodingFromTags(tags: PlateColorInput['probeTags']): ColorEncodingId | null {
+  const t = tags?.transfer?.toLowerCase();
+  const p = tags?.primaries?.toLowerCase();
+  if (!t || !p || p !== 'bt709') return null;
+  if (t === 'bt709' || t === 'smpte170m' || t === 'bt470bg' || t === 'bt2020-10' || t === 'bt2020-12') return t.startsWith('bt2020') ? null : 'rec709';
+  if (t === 'iec61966-2-1') return 'srgb';
+  if (t === 'linear') return 'linear_rec709';
+  return null;
 }
 
 const formatLabel = (format: PlateColorInput['format'], bitDepth: number) =>
@@ -505,10 +537,12 @@ const formatLabel = (format: PlateColorInput['format'], bitDepth: number) =>
  */
 export function decidePlateColor(input: PlateColorInput): PlateColorDecision {
   const parsed = parseColorEncoding(...input.handoffText);
-  const sourceEncoding = input.operatorEncoding ?? parsed.encoding;
-  const sourceEncodingFrom = input.operatorEncoding ? 'operator' : parsed.encoding ? 'handoff' : 'unknown';
+  const tagged = parsed.encoding ? null : encodingFromTags(input.probeTags);
+  const sourceEncoding = input.operatorEncoding ?? parsed.encoding ?? tagged;
+  const sourceEncodingFrom = input.operatorEncoding ? 'operator' : parsed.encoding ? 'handoff' : tagged ? 'probe' : 'unknown';
   const warnings: string[] = [];
   if (!input.operatorEncoding && parsed.note) warnings.push(parsed.note);
+  if (sourceEncodingFrom === 'probe') warnings.push(`The handoff names no source encoding; the clip is tagged ${input.probeTags!.transfer}/${input.probeTags!.primaries}, read as ${ENCODINGS[tagged!].label}. Choose another if the tags are wrong.`);
   const isFloat = input.format === 'exr';
   const fmt = formatLabel(input.format, input.bitDepth);
   const srcLabel = sourceEncoding ? ENCODINGS[sourceEncoding].label : 'an unknown encoding';

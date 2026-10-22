@@ -16,7 +16,7 @@ import { z } from 'zod';
 
 export const CLEANPLATE_FORMAT_VERSION = 1;
 /** Temporal reconstruction from aligned frames, robust vote, spatial fill for what is never seen (addendum 10 §3). */
-export const CLEANPLATE_ALGORITHM = { id: 'vcvfx-cleanplate', version: '1.0.0' } as const;
+export const CLEANPLATE_ALGORITHM = { id: 'vcvfx-cleanplate', version: '1.1.0' } as const;
 
 /** auto: the build picks still or sequence from the camera's motion. */
 export const CLEANPLATE_MODES = ['auto', 'still', 'sequence'] as const;
