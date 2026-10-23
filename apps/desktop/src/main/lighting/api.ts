@@ -4,6 +4,7 @@ import { basename, extname, join, relative, sep } from 'node:path';
 import {
   LIGHTING_TASK,
   estimateSpec,
+  effectiveFilmBack,
   findLensProfile,
   handoffShot,
   lightingDoc,
@@ -12,6 +13,7 @@ import {
   lightingNames,
   lightingTaskVersion,
   newCamTrackDocument,
+  pixelAspectOf,
   shotState,
   versionTag,
   type LightingAiReviewInput,
@@ -85,9 +87,11 @@ export function lightingReferenceFiles(project: Project): string[] {
   return project.shots.flatMap((s) => (s.lighting?.references ?? []).map((r) => lightingReferenceFile(project, s.shotId, r)).filter((p): p is string => p !== null));
 }
 
-const sizeFor = (plate: { width: number; height: number }) => {
-  const width = Math.min(plate.width, ANALYSIS_WIDTH);
-  return { width, height: Math.max(16, Math.round((plate.height * width) / plate.width)) };
+/** The analysis size: the frame de-squeezed (addendum 17) so every direction is measured on square pixels, at most ANALYSIS_WIDTH wide. */
+const sizeFor = (plate: { width: number; height: number }, pixelAspect = 1) => {
+  const shown = plate.width * pixelAspect;
+  const width = Math.round(Math.min(shown, ANALYSIS_WIDTH));
+  return { width, height: Math.max(16, Math.round((plate.height * width) / shown)) };
 };
 
 const kelvinFrom = (v: unknown): number | null => {
@@ -122,7 +126,11 @@ export async function cameraPriors(project: Project, shotId: string, frame: numb
   const priors: CameraPriors = {
     focalMm: record?.intrinsics.focalMm ?? focalMeta ?? null,
     focalSource: record?.intrinsics.focalMm ? 'solve' : focalMeta ? 'metadata' : null,
-    filmBackMm: selection?.filmBackMm ?? null,
+    // The de-squeezed picture's film back: the analysis works on the frame de-squeezed (addendum 17).
+    filmBackMm: selection ? (() => {
+      const e = effectiveFilmBack(selection.filmBackMm, plate, pixelAspectOf(project, shotId));
+      return { width: e.width, height: e.height };
+    })() : null,
     filmBackSource: state.camtrack?.camera ? 'camera_track' : selection?.source === 'handoff' && shot.camera.filmBackMm ? 'handoff' : selection ? 'database' : 'nominal',
     pitchDeg: pitch,
     rollDeg: roll,
@@ -292,7 +300,8 @@ export async function lightingFrameView(project: Project, req: { shotId: string;
   if (!src.ok) throw new Error(src.reason);
   const doc = docOf(project, req.shotId);
   const frame = Math.max(src.spec.first, Math.min(src.spec.last, Math.round(req.request.frame)));
-  const size = sizeFor(src.spec.plate);
+  // At the analysis' de-squeezed shape: the relight's normals are the analysis' (the viewer knows the picture is de-squeezed).
+  const size = sizeFor(src.spec.plate, pixelAspectOf(project, req.shotId));
   const job = await lightingIOJob(project, req.shotId, outputRoot, { ffmpeg: env.ffmpeg!, caps: env.caps }, src);
   const io = createLightingIO(job);
   const a = doc?.analysis ?? null;
@@ -369,13 +378,15 @@ export async function analyseJob(project: Project, shotId: string, projectKey: s
         return { id: r.id, circle: r.circle, frame: r.from === 'plate' ? r.frame : null, spec: r.from === 'plate' ? null : pictureSpec(project, shotId, r) };
       });
   const h = refs.find((r) => r.kind === 'hdri');
-  const size = sizeFor(src.spec.plate);
+  const pixelAspect = pixelAspectOf(project, shotId);
+  const size = sizeFor(src.spec.plate, pixelAspect);
   return {
     io,
     job: {
       io,
       frames,
       plate: src.spec.plate,
+      pixelAspect,
       ...size,
       subject: doc?.settings.subject ?? 'auto',
       useSky: doc?.settings.useSky ?? true,

@@ -236,3 +236,14 @@ export function solve(A: number[][], b: number[]): number[] | null {
   }
   return M.map((row, i) => row[n]! / row[i]!);
 }
+
+/**
+ * A ball's circle marked on the plate (stored pixels; r measured vertically)
+ * → the analysis frame, which is the plate de-squeezed to `size` (addendum
+ * 17): x and y scale apart, and the ball is round there.
+ */
+export function plateCircleToAnalysis(circle: { cx: number; cy: number; r: number }, plate: { width: number; height: number }, size: { width: number; height: number }): { cx: number; cy: number; r: number } {
+  const kx = size.width / plate.width;
+  const ky = size.height / plate.height;
+  return { cx: circle.cx * kx, cy: circle.cy * ky, r: circle.r * ky };
+}
