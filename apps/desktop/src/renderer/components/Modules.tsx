@@ -14,11 +14,17 @@ import {
   shotTiming,
   statusCounts,
   versionTag,
+  buildFilmStudioStatus,
+  lastStatusSend,
+  readiness,
+  statusCountsOf,
+  statusSays,
   SHOT_STATUS_LABELS,
   type PackageFolder,
   type PrepTaskKind,
 } from '@vcvfx/domain';
-import type { VcvfxApi } from '../../shared/bridge';
+import { useMemo } from 'react';
+import type { FilmStudioInfo, VcvfxApi } from '../../shared/bridge';
 import { canApproveShot, canDeliver, canPackage, canReopen } from '../actions';
 import { MODULES, moduleTasks, type ModuleId } from '../modules';
 import { Icon } from './Icons';
@@ -597,10 +603,35 @@ function PackageMap({ props }: { props: ShotDetailProps }) {
   );
 }
 
-export function DeliverModule(props: ModuleScreenProps & { onVerify(): void; onPrint(mode: 'print' | 'pdf'): void; shownShots: number }) {
+/** The last send in a line: the counts when it went, else the start of why not (the whole answer is in the log). */
+function lastSendWords(l: { action: string; detail: string }): string {
+  const words = l.detail.replace(/^\S+: /, '');
+  const short = l.action === 'filmstudio.sent' ? words.split(' Film Studio: ')[0]! : words;
+  return short.length > 160 ? `${short.slice(0, 159).trimEnd()}…` : short;
+}
+
+/** The VFX status report and VC Film Studio (addendum 19), as the Deliver tab offers them. */
+export interface DeliverStatusActions {
+  filmStudio: FilmStudioInfo | null;
+  onPrint(mode: 'print' | 'pdf'): void;
+  onExport(format: 'json' | 'csv'): void;
+  onSend(): void;
+  onSettings(): void;
+}
+
+export function DeliverModule(props: ModuleScreenProps & { onVerify(): void; onPrint(mode: 'print' | 'pdf'): void; shownShots: number; status?: DeliverStatusActions }) {
   const { project, shotId, now, canEdit, busy } = props;
+  // The status as VC Film Studio will read it: the same document the report prints and Send sends.
+  const doc = useMemo(() => buildFilmStudioStatus(project, { generatedAt: new Date(0), appVersion: '', operator: '' }), [project]);
   const state = shotState(project, shotId);
   if (!state) return null;
+  const statusShotDoc = doc.shots.find((s) => s.handoffShotId === shotId);
+  const handoff = statusShotDoc ? readiness(statusShotDoc) : null;
+  const tally = statusCountsOf(doc);
+  const says = statusSays(tally);
+  const sent = lastStatusSend(project);
+  const fs = props.status?.filmStudio ?? null;
+  const canSend = Boolean(fs?.available);
   const approved = state.tasks.filter((t) => t.state === 'approved').length;
   const verified = project.shots.filter((s) => s.sourceVerified === 'verified').length;
   const counts = statusCounts(project);
@@ -712,19 +743,97 @@ export function DeliverModule(props: ModuleScreenProps & { onVerify(): void; onP
         </>
       ),
     },
+    ...(props.status
+      ? [
+          {
+            id: 'status',
+            title: 'VFX status & VC Film Studio',
+            hint: 'Every shot: what is ready to hand off, what is held and why.',
+            optional: true,
+            done: sent?.action === 'filmstudio.sent',
+            content: (
+              <>
+                <p className={`step-text says-${says.tone}`}>{says.text}</p>
+                <div className="row">
+                  <button type="button" className="primary" onClick={() => props.status!.onPrint('print')}>
+                    Print status report…
+                  </button>
+                  <button type="button" onClick={() => props.status!.onPrint('pdf')}>
+                    Save as PDF…
+                  </button>
+                </div>
+                <div className="row">
+                  <button
+                    type="button"
+                    className={canSend && fs?.hasKey ? 'primary' : ''}
+                    disabled={busy || !canSend}
+                    title={!canSend ? (fs?.reason ?? 'Sending needs the desktop app') : !fs?.hasKey ? 'Add the upload key in Settings → VC Film Studio first' : `POST to ${fs?.url}`}
+                    onClick={() => props.status!.onSend()}
+                  >
+                    Send status to VC Film Studio
+                  </button>
+                  <button type="button" onClick={() => props.status!.onExport('json')}>
+                    Export for VC Film Studio…
+                  </button>
+                  <button type="button" onClick={() => props.status!.onExport('csv')}>
+                    CSV…
+                  </button>
+                </div>
+                {!canSend ? (
+                  <p className="muted small hint">{fs?.reason ?? 'Sending needs the desktop app.'} Export the file and import it on Film Studio’s data desk.</p>
+                ) : !fs?.hasKey ? (
+                  <p className="muted small hint">
+                    No upload key yet.{' '}
+                    <button type="button" className="link" onClick={props.status.onSettings}>
+                      Settings → VC Film Studio
+                    </button>{' '}
+                    takes the key made on Film Studio’s data desk.
+                  </p>
+                ) : (
+                  <p className="muted small hint">
+                    To {fs.url.replace(/^https?:\/\//, '')}
+                    {project.filmStudioProduction ? ` · production “${project.filmStudioProduction}”` : ''}
+                    {fs.autoSend ? ' · sent after each package' : ''}.
+                  </p>
+                )}
+                {sent ? (
+                  <p className={`small last-send ${sent.action === 'filmstudio.sent' ? 'ok-text' : 'warn-text'}`}>
+                    Last {sent.action === 'filmstudio.sent' ? 'sent' : 'attempt'} {sent.at.replace('T', ' ').slice(0, 16)} by {sent.actor}: {lastSendWords(sent)}
+                  </p>
+                ) : null}
+              </>
+            ),
+          } satisfies StepDef,
+        ]
+      : []),
   ];
 
   const info = (
     <>
       <Stats>
         <Stat label="Shot status" value={SHOT_STATUS_LABELS[status]} />
+        {handoff ? (
+          <Stat label="Hand off" value={handoff.ready ? 'Ready' : handoff.delivered ? 'Delivered' : 'Held'} tone={handoff.ready || handoff.delivered ? 'ok' : undefined} />
+        ) : null}
         <Stat label="Tasks approved" value={approved} unit={` / ${state.tasks.length}`} tone={state.tasks.length && approved === state.tasks.length ? 'ok' : undefined} />
         <Stat label="Source check" value={VERIFY_WORDS[state.sourceVerified] ?? state.sourceVerified} tone={state.sourceVerified === 'verified' ? 'ok' : state.sourceVerified === 'unchecked' ? undefined : 'bad'} />
         <Stat label="Package" value={state.packageVersion > 0 ? versionTag(state.packageVersion) : 'not yet'} tone={state.packageVersion > 0 ? 'ok' : undefined} />
       </Stats>
+      {handoff && handoff.why.length ? (
+        <InfoSection title="What is holding it">
+          <ul className="holding-list">
+            {handoff.why.map((w) => (
+              <li key={w}>{w}</li>
+            ))}
+          </ul>
+        </InfoSection>
+      ) : null}
       <InfoSection title="All shots">
         <p className="info-line">
           {counts.prep_approved} approved · {counts.packaged} packaged · {counts.delivered} delivered of {project.shots.length}
+        </p>
+        <p className="info-line">
+          {tally.ready} ready to hand off · {tally.review} in review · {tally.correction} need correction · {tally.progress} in progress · {tally.notStarted} not started
         </p>
       </InfoSection>
       <InfoSection title="History" collapsible defaultOpen={false}>

@@ -1,5 +1,5 @@
-import { PROJECT_EXTENSION, parseProject, plateColorFor, shotListHtml, shotState, viewTransform, type QueueFilter } from '@vcvfx/domain';
-import type { ApiResult, ExternalLink, JobProgress, LicenceStanding, MenuCommand, OpenedFile, Settings, VcvfxApi, ViewerFrame, ViewerFrameRequest, ViewerSources } from '../shared/bridge';
+import { FILM_STUDIO_DEFAULT_URL, PROJECT_EXTENSION, buildFilmStudioStatus, parseProject, plateColorFor, shotListHtml, shotState, vfxStatusCsv, vfxStatusReportHtml, viewTransform, type QueueFilter } from '@vcvfx/domain';
+import type { ApiResult, ExternalLink, FilmStudioInfo, JobProgress, LicenceStanding, MenuCommand, OpenedFile, Settings, VcvfxApi, ViewerFrame, ViewerFrameRequest, ViewerSources } from '../shared/bridge';
 import { viewerTimeline } from '../shared/viewer';
 import { createCameraPreview } from './camera-preview';
 import { createKeyPreview } from './key-preview';
@@ -110,8 +110,8 @@ const pickFile = (accept: string): Promise<File | null> =>
     input.click();
   });
 
-const download = (fileName: string, text: string): void => {
-  const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+const download = (fileName: string, text: string, type = 'application/json'): void => {
+  const url = URL.createObjectURL(new Blob([text], { type }));
   const a = document.createElement('a');
   a.href = url;
   a.download = fileName;
@@ -237,6 +237,37 @@ export function createBrowserBridge(): BrowserBridge {
       // Export PDF is the same window: the browser's dialog saves as PDF.
       return printHtml(shotListHtml(parsed.project, new Date(), filter));
     },
+
+    // The VFX status (addendum 19): printed and exported here as on the desktop; sending needs the desktop's keychain.
+    printVfxStatus: async ({ text, operator }) => {
+      const parsed = parseProject(text);
+      if (!parsed.ok) return fail(parsed.reason);
+      const p = parsed.project;
+      const doc = buildFilmStudioStatus(p, { generatedAt: new Date(), appVersion: 'preview', operator });
+      return printHtml(vfxStatusReportHtml(doc, p.handoff.vfxSupervisor ? { supervisor: p.handoff.vfxSupervisor } : {}));
+    },
+    exportVfxStatus: async ({ text, operator, format }) => {
+      const parsed = parseProject(text);
+      if (!parsed.ok) return fail(parsed.reason);
+      const p = parsed.project;
+      const doc = buildFilmStudioStatus(p, { generatedAt: new Date(), appVersion: 'preview', operator });
+      const name = `${safeName(p.handoff.project)} - VFX status ${doc.generatedAt.slice(0, 10)}`;
+      if (format === 'json') download(`${name}.json`, `${JSON.stringify(doc, null, 2)}\n`);
+      else download(`${name}.csv`, vfxStatusCsv(doc), 'text/csv;charset=utf-8');
+      return ok({ path: null });
+    },
+    filmStudioInfo: async (): Promise<FilmStudioInfo> => ({
+      url: FILM_STUDIO_DEFAULT_URL,
+      defaultUrl: FILM_STUDIO_DEFAULT_URL,
+      hasKey: false,
+      keyHint: null,
+      encrypted: false,
+      autoSend: false,
+      available: false,
+      reason: `${DESKTOP_ONLY}: sending to VC Film Studio uses an upload key kept in the computer’s keychain.`,
+    }),
+    configureFilmStudio: async () => fail(desktopOnly('the upload key is kept in the computer’s keychain.')),
+    sendVfxStatus: async () => fail(desktopOnly('sending to VC Film Studio uses an upload key kept in the computer’s keychain. Export for VC Film Studio instead, and import the file on Film Studio’s data desk.')),
 
     verifySources: async () => fail(desktopOnly('verifying sources reads the camera media on the drive and checks its sha256.')),
     packageShot: async () => fail(desktopOnly('packaging writes and checksums a vendor package on disk.')),

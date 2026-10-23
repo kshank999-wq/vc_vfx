@@ -2995,3 +2995,53 @@ table.queue td.col-progress {
   margin: 6px 0 0;
   padding-left: 18px;
 }
+
+/* The VFX status and VC Film Studio (addendum 19). */
+.settings-group {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px 12px;
+  margin: 14px 0 0;
+}
+.settings-group legend {
+  padding: 0 6px;
+  font-weight: 600;
+}
+.settings-group .row {
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: baseline;
+}
+.send-answer {
+  font-size: 16px;
+  line-height: 1.45;
+  margin: 0 0 10px;
+}
+.send-summary {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  padding: 0;
+  margin: 8px 0;
+}
+.send-warnings {
+  margin: 4px 0 8px;
+  padding-left: 18px;
+}
+.says-ok {
+  color: var(--ok);
+}
+.says-warn {
+  color: var(--s-needs_review);
+}
+.says-bad {
+  color: var(--danger);
+}
+.last-send {
+  margin-top: 8px;
+}
+.holding-list {
+  margin: 0;
+  padding-left: 18px;
+}

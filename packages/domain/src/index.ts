@@ -19,3 +19,5 @@ export * from './texture.js';
 export * from './comp.js';
 export * from './lighting.js';
 export * from './ai-usage.js';
+export * from './film-studio.js';
+export * from './film-studio-report.js';

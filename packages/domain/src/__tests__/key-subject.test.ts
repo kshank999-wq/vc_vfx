@@ -194,7 +194,7 @@ describe('the subject prior in the key document', () => {
 
 describe('project format 11', () => {
   it('opens a format-10 project: keys get no subject and the shadow pass off; a subject survives a round trip', () => {
-    expect(PROJECT_VERSION).toBe(11);
+    expect(PROJECT_VERSION).toBe(12);
     const p = keyed();
     const v10 = JSON.parse(serializeProject(p));
     v10.version = 10;
@@ -204,7 +204,7 @@ describe('project format 11', () => {
     }
     const opened = parseProject(JSON.stringify(v10));
     if (!opened.ok) throw new Error(opened.reason);
-    expect(opened.project.version).toBe(11);
+    expect(opened.project.version).toBe(12);
     expect(key(opened.project).subject.source).toBe('none');
     expect(key(opened.project).params.shadowPass).toBe(false);
     let q = ok(setKeySubject(opened.project, SHOT, { source: 'auto', seed: { frame: 1003, points: [{ x: 5, y: 6, label: 1 }] } }, 'ana', NOW));
@@ -213,8 +213,8 @@ describe('project format 11', () => {
     if (!again.ok) throw new Error(again.reason);
     expect(key(again.project).subject).toEqual(key(q).subject);
     // A newer project is refused by this version.
-    const v12 = JSON.parse(serializeProject(q));
-    v12.version = 12;
-    expect(parseProject(JSON.stringify(v12)).ok).toBe(false);
+    const newer = JSON.parse(serializeProject(q));
+    newer.version = PROJECT_VERSION + 1;
+    expect(parseProject(JSON.stringify(newer)).ok).toBe(false);
   });
 });

@@ -1,0 +1,1764 @@
+{
+  "format": "vc-film-studio.vfx-status/1",
+  "generatedAt": "2026-09-17T19:40:00Z",
+  "generator": {
+    "app": "VC VFX",
+    "version": "0.4.0"
+  },
+  "operator": "Ruth Okafor",
+  "project": {
+    "name": "DEMO — THE COPPER LINE",
+    "productionCompany": "DEMO PRODUCTIONS",
+    "origin": {
+      "format": "vcdit.vfx-handoff/1",
+      "tool": "VC DIT 1.3.0",
+      "productionCode": "CPL",
+      "day": {
+        "number": 3,
+        "date": "2026-09-16"
+      }
+    }
+  },
+  "filmStudio": {
+    "production": "DEMO — THE COPPER LINE"
+  },
+  "shots": [
+    {
+      "handoffShotId": "1A-03",
+      "vfxShotId": "CL_010_010",
+      "scene": "1",
+      "setup": "A",
+      "take": "3",
+      "circled": true,
+      "cameraRoll": "A001",
+      "clip": "A001C001",
+      "unit": "Main",
+      "shootDay": "Day 001 · 2026-09-14",
+      "shootDate": "2026-09-14",
+      "frames": {
+        "in": 1001,
+        "out": 1096,
+        "handles": 8,
+        "count": 112,
+        "rangeFrom": "handoff"
+      },
+      "frameRate": 24,
+      "timecodeIn": "11:01:12:00",
+      "timecodeOut": "11:01:16:00",
+      "camera": {
+        "body": "ARRI ALEXA 35",
+        "lens": "Signature Prime 35mm",
+        "focalLengthMm": 35
+      },
+      "pixelAspect": 1,
+      "status": {
+        "key": "delivered",
+        "label": "Delivered"
+      },
+      "source": {
+        "verified": "verified",
+        "at": "2026-09-15T20:02:00Z"
+      },
+      "plates": {
+        "version": 1,
+        "frames": 112,
+        "format": "exr",
+        "bitDepth": 16,
+        "colour": "ARRI LogC4 / AWG4 → ACEScg (linear), no look baked",
+        "writtenAt": "2026-09-15T22:10:00Z"
+      },
+      "tasks": [
+        {
+          "kind": "sequence_conversion",
+          "label": "Image-sequence conversion",
+          "state": "approved",
+          "version": 1,
+          "approval": {
+            "by": "Ruth Okafor",
+            "at": "2026-09-16T18:20:00Z"
+          },
+          "notes": "",
+          "confidence": null,
+          "problems": 0,
+          "exported": true,
+          "exportVersion": 1
+        },
+        {
+          "kind": "roto",
+          "label": "Paint-to-roto",
+          "state": "approved",
+          "version": 1,
+          "approval": {
+            "by": "Ruth Okafor",
+            "at": "2026-09-16T18:20:00Z"
+          },
+          "notes": "",
+          "confidence": {
+            "frames": 96,
+            "mean": 0.94,
+            "min": 0.81,
+            "low": 0,
+            "flagged": 0,
+            "reviewed": 96
+          },
+          "problems": 0,
+          "exported": true,
+          "exportVersion": 1
+        },
+        {
+          "kind": "clean_plate",
+          "label": "Clean plate",
+          "state": "approved",
+          "version": 1,
+          "approval": {
+            "by": "Ruth Okafor",
+            "at": "2026-09-16T18:20:00Z"
+          },
+          "notes": "",
+          "confidence": {
+            "frames": 96,
+            "mean": 0.9,
+            "min": 0.72,
+            "low": 2,
+            "flagged": 1,
+            "reviewed": 94
+          },
+          "problems": 0,
+          "exported": true,
+          "exportVersion": 1
+        },
+        {
+          "kind": "track_2d",
+          "label": "2D / planar track",
+          "state": "approved",
+          "version": 1,
+          "approval": {
+            "by": "Ruth Okafor",
+            "at": "2026-09-16T18:20:00Z"
+          },
+          "notes": "",
+          "confidence": null,
+          "problems": 0,
+          "exported": true,
+          "exportVersion": 1
+        }
+      ],
+      "approval": {
+        "by": "Ada Renke",
+        "at": "2026-09-16T17:00:00Z"
+      },
+      "packaged": {
+        "version": 1,
+        "at": "2026-09-16T17:40:00Z",
+        "folder": "DEMO_THE_COPPER_LINE_VFX/SCENE_1/SHOT_CL_010_010",
+        "taskVersions": {
+          "sequence_conversion": 1,
+          "roto": 1,
+          "clean_plate": 1,
+          "track_2d": 1
+        }
+      },
+      "delivered": {
+        "at": "2026-09-17T15:05:00Z",
+        "to": "Northlight VFX"
+      },
+      "problems": [],
+      "supervisorNotes": "Remove the modern fence posts camera left; track for the survey-chain insert.",
+      "notes": null
+    },
+    {
+      "handoffShotId": "1B-02",
+      "vfxShotId": "CL_010_020",
+      "scene": "1",
+      "setup": "B",
+      "take": "2",
+      "circled": true,
+      "cameraRoll": "B001",
+      "clip": "B001C002",
+      "unit": "Main",
+      "shootDay": "Day 001 · 2026-09-14",
+      "shootDate": "2026-09-14",
+      "frames": {
+        "in": 1001,
+        "out": 1096,
+        "handles": 8,
+        "count": 112,
+        "rangeFrom": "handoff"
+      },
+      "frameRate": 24,
+      "timecodeIn": "11:02:12:00",
+      "timecodeOut": "11:02:16:00",
+      "camera": {
+        "body": "ARRI ALEXA 35",
+        "lens": "Signature Prime 75mm",
+        "focalLengthMm": 75
+      },
+      "pixelAspect": 1,
+      "status": {
+        "key": "packaged",
+        "label": "Packaged"
+      },
+      "source": {
+        "verified": "verified",
+        "at": "2026-09-15T20:02:00Z"
+      },
+      "plates": {
+        "version": 1,
+        "frames": 112,
+        "format": "exr",
+        "bitDepth": 16,
+        "colour": "ARRI LogC4 / AWG4 → ACEScg (linear), no look baked",
+        "writtenAt": "2026-09-15T22:10:00Z"
+      },
+      "tasks": [
+        {
+          "kind": "sequence_conversion",
+          "label": "Image-sequence conversion",
+          "state": "approved",
+          "version": 1,
+          "approval": {
+            "by": "Ruth Okafor",
+            "at": "2026-09-16T18:20:00Z"
+          },
+          "notes": "",
+          "confidence": null,
+          "problems": 0,
+          "exported": true,
+          "exportVersion": 1
+        },
+        {
+          "kind": "roto",
+          "label": "Paint-to-roto",
+          "state": "approved",
+          "version": 1,
+          "approval": {
+            "by": "Ruth Okafor",
+            "at": "2026-09-16T18:20:00Z"
+          },
+          "notes": "",
+          "confidence": {
+            "frames": 96,
+            "mean": 0.92,
+            "min": 0.77,
+            "low": 1,
+            "flagged": 1,
+            "reviewed": 95
+          },
+          "problems": 0,
+          "exported": true,
+          "exportVersion": 1
+        },
+        {
+          "kind": "track_2d",
+          "label": "2D / planar track",
+          "state": "approved",
+          "version": 1,
+          "approval": {
+            "by": "Ruth Okafor",
+            "at": "2026-09-16T18:20:00Z"
+          },
+          "notes": "",
+          "confidence": null,
+          "problems": 0,
+          "exported": true,
+          "exportVersion": 1
+        }
+      ],
+      "approval": {
+        "by": "Ada Renke",
+        "at": "2026-09-16T19:00:00Z"
+      },
+      "packaged": {
+        "version": 1,
+        "at": "2026-09-16T21:30:00Z",
+        "folder": "DEMO_THE_COPPER_LINE_VFX/SCENE_1/SHOT_CL_010_020",
+        "taskVersions": {
+          "sequence_conversion": 1,
+          "roto": 1,
+          "track_2d": 1
+        }
+      },
+      "delivered": null,
+      "problems": [],
+      "supervisorNotes": null,
+      "notes": null
+    },
+    {
+      "handoffShotId": "1A-05",
+      "vfxShotId": "CL_010_030",
+      "scene": "1",
+      "setup": "A",
+      "take": "5",
+      "circled": true,
+      "cameraRoll": "A001",
+      "clip": "A001C003",
+      "unit": "Main",
+      "shootDay": "Day 001 · 2026-09-14",
+      "shootDate": "2026-09-14",
+      "frames": {
+        "in": 1001,
+        "out": 1096,
+        "handles": 8,
+        "count": 112,
+        "rangeFrom": "handoff"
+      },
+      "frameRate": 24,
+      "timecodeIn": "11:03:12:00",
+      "timecodeOut": "11:03:16:00",
+      "camera": {
+        "body": "ARRI ALEXA 35",
+        "lens": "Signature Prime 35mm",
+        "focalLengthMm": 35
+      },
+      "pixelAspect": 1,
+      "status": {
+        "key": "packaged",
+        "label": "Packaged"
+      },
+      "source": {
+        "verified": "verified",
+        "at": "2026-09-15T20:02:00Z"
+      },
+      "plates": {
+        "version": 1,
+        "frames": 112,
+        "format": "exr",
+        "bitDepth": 16,
+        "colour": "ARRI LogC4 / AWG4 → ACEScg (linear), no look baked",
+        "writtenAt": "2026-09-15T22:10:00Z"
+      },
+      "tasks": [
+        {
+          "kind": "sequence_conversion",
+          "label": "Image-sequence conversion",
+          "state": "approved",
+          "version": 1,
+          "approval": {
+            "by": "Ruth Okafor",
+            "at": "2026-09-16T18:20:00Z"
+          },
+          "notes": "",
+          "confidence": null,
+          "problems": 0,
+          "exported": true,
+          "exportVersion": 1
+        },
+        {
+          "kind": "clean_plate",
+          "label": "Clean plate",
+          "state": "approved",
+          "version": 2,
+          "approval": {
+            "by": "Ruth Okafor",
+            "at": "2026-09-16T18:20:00Z"
+          },
+          "notes": "",
+          "confidence": {
+            "frames": 96,
+            "mean": 0.88,
+            "min": 0.69,
+            "low": 3,
+            "flagged": 1,
+            "reviewed": 93
+          },
+          "problems": 1,
+          "exported": true,
+          "exportVersion": 2
+        }
+      ],
+      "approval": {
+        "by": "Ada Renke",
+        "at": "2026-09-16T20:10:00Z"
+      },
+      "packaged": {
+        "version": 2,
+        "at": "2026-09-16T21:30:00Z",
+        "folder": "DEMO_THE_COPPER_LINE_VFX/SCENE_1/SHOT_CL_010_030",
+        "taskVersions": {
+          "sequence_conversion": 1,
+          "clean_plate": 2
+        }
+      },
+      "delivered": null,
+      "problems": [
+        {
+          "task": "clean_plate",
+          "severity": "info",
+          "text": "Frames 1041–1043: tyre track only partly filled — reads as ground texture at full res, vendor to confirm.",
+          "frames": [
+            1041,
+            1042,
+            1043
+          ]
+        }
+      ],
+      "supervisorNotes": null,
+      "notes": null
+    },
+    {
+      "handoffShotId": "3A-01",
+      "vfxShotId": "CL_030_010",
+      "scene": "3",
+      "setup": "A",
+      "take": "1",
+      "circled": true,
+      "cameraRoll": "A001",
+      "clip": "A001C004",
+      "unit": "Main",
+      "shootDay": "Day 001 · 2026-09-14",
+      "shootDate": "2026-09-14",
+      "frames": {
+        "in": 1001,
+        "out": 1096,
+        "handles": 8,
+        "count": 112,
+        "rangeFrom": "handoff"
+      },
+      "frameRate": 24,
+      "timecodeIn": "11:04:12:00",
+      "timecodeOut": "11:04:16:00",
+      "camera": {
+        "body": "ARRI ALEXA 35",
+        "lens": "Signature Prime 35mm",
+        "focalLengthMm": 35
+      },
+      "pixelAspect": 1,
+      "status": {
+        "key": "packaged",
+        "label": "Packaged"
+      },
+      "source": {
+        "verified": "verified",
+        "at": "2026-09-15T20:02:00Z"
+      },
+      "plates": {
+        "version": 1,
+        "frames": 112,
+        "format": "exr",
+        "bitDepth": 16,
+        "colour": "ARRI LogC4 / AWG4 → ACEScg (linear), no look baked",
+        "writtenAt": "2026-09-15T22:10:00Z"
+      },
+      "tasks": [
+        {
+          "kind": "sequence_conversion",
+          "label": "Image-sequence conversion",
+          "state": "approved",
+          "version": 1,
+          "approval": {
+            "by": "Ruth Okafor",
+            "at": "2026-09-16T18:20:00Z"
+          },
+          "notes": "",
+          "confidence": null,
+          "problems": 0,
+          "exported": true,
+          "exportVersion": 1
+        },
+        {
+          "kind": "clean_plate",
+          "label": "Clean plate",
+          "state": "approved",
+          "version": 1,
+          "approval": {
+            "by": "Ruth Okafor",
+            "at": "2026-09-16T18:20:00Z"
+          },
+          "notes": "",
+          "confidence": {
+            "frames": 96,
+            "mean": 0.91,
+            "min": 0.74,
+            "low": 1,
+            "flagged": 1,
+            "reviewed": 95
+          },
+          "problems": 0,
+          "exported": true,
+          "exportVersion": 1
+        },
+        {
+          "kind": "camera_track",
+          "label": "Camera track / matchmove",
+          "state": "approved",
+          "version": 1,
+          "approval": {
+            "by": "Ruth Okafor",
+            "at": "2026-09-16T18:20:00Z"
+          },
+          "notes": "Solve 0.38 px RMS, survey points 3000–3006 used as constraints.",
+          "confidence": {
+            "frames": 120,
+            "mean": 0.97,
+            "min": 0.93,
+            "low": 0,
+            "flagged": 0,
+            "reviewed": 120
+          },
+          "problems": 0,
+          "exported": true,
+          "exportVersion": 1
+        }
+      ],
+      "approval": {
+        "by": "Ada Renke",
+        "at": "2026-09-17T11:00:00Z"
+      },
+      "packaged": {
+        "version": 1,
+        "at": "2026-09-17T11:30:00Z",
+        "folder": "DEMO_THE_COPPER_LINE_VFX/SCENE_3/SHOT_CL_030_010",
+        "taskVersions": {
+          "sequence_conversion": 1,
+          "clean_plate": 1,
+          "camera_track": 1
+        }
+      },
+      "delivered": null,
+      "problems": [],
+      "supervisorNotes": "The boy walks the rail line: remove the sleepers replaced in 2019, match-move for the CG signal box.",
+      "notes": null
+    },
+    {
+      "handoffShotId": "3B-04",
+      "vfxShotId": "CL_030_020",
+      "scene": "3",
+      "setup": "B",
+      "take": "4",
+      "circled": true,
+      "cameraRoll": "B001",
+      "clip": "B001C005",
+      "unit": "Main",
+      "shootDay": "Day 001 · 2026-09-14",
+      "shootDate": "2026-09-14",
+      "frames": {
+        "in": 1001,
+        "out": 1096,
+        "handles": 8,
+        "count": 112,
+        "rangeFrom": "handoff"
+      },
+      "frameRate": 24,
+      "timecodeIn": "11:05:12:00",
+      "timecodeOut": "11:05:16:00",
+      "camera": {
+        "body": "ARRI ALEXA 35",
+        "lens": "Signature Prime 75mm",
+        "focalLengthMm": 75
+      },
+      "pixelAspect": 1,
+      "status": {
+        "key": "prep_approved",
+        "label": "Prep Approved"
+      },
+      "source": {
+        "verified": "verified",
+        "at": "2026-09-15T20:02:00Z"
+      },
+      "plates": {
+        "version": 1,
+        "frames": 112,
+        "format": "exr",
+        "bitDepth": 16,
+        "colour": "ARRI LogC4 / AWG4 → ACEScg (linear), no look baked",
+        "writtenAt": "2026-09-15T22:10:00Z"
+      },
+      "tasks": [
+        {
+          "kind": "sequence_conversion",
+          "label": "Image-sequence conversion",
+          "state": "approved",
+          "version": 1,
+          "approval": {
+            "by": "Ruth Okafor",
+            "at": "2026-09-16T18:20:00Z"
+          },
+          "notes": "",
+          "confidence": null,
+          "problems": 0,
+          "exported": true,
+          "exportVersion": 1
+        },
+        {
+          "kind": "roto",
+          "label": "Paint-to-roto",
+          "state": "approved",
+          "version": 1,
+          "approval": {
+            "by": "Ruth Okafor",
+            "at": "2026-09-16T18:20:00Z"
+          },
+          "notes": "",
+          "confidence": {
+            "frames": 96,
+            "mean": 0.95,
+            "min": 0.86,
+            "low": 0,
+            "flagged": 0,
+            "reviewed": 96
+          },
+          "problems": 0,
+          "exported": true,
+          "exportVersion": 1
+        }
+      ],
+      "approval": {
+        "by": "Ada Renke",
+        "at": "2026-09-17T12:20:00Z"
+      },
+      "packaged": null,
+      "delivered": null,
+      "problems": [],
+      "supervisorNotes": null,
+      "notes": "Approved; package goes with the scene 3 batch."
+    },
+    {
+      "handoffShotId": "4A-02",
+      "vfxShotId": "CL_040_010",
+      "scene": "4",
+      "setup": "A",
+      "take": "2",
+      "circled": true,
+      "cameraRoll": "A002",
+      "clip": "A002C006",
+      "unit": "Main",
+      "shootDay": "Day 002 · 2026-09-15",
+      "shootDate": "2026-09-15",
+      "frames": {
+        "in": 1001,
+        "out": 1096,
+        "handles": 8,
+        "count": 112,
+        "rangeFrom": "handoff"
+      },
+      "frameRate": 24,
+      "timecodeIn": "12:00:12:00",
+      "timecodeOut": "12:00:16:00",
+      "camera": {
+        "body": "ARRI ALEXA 35",
+        "lens": "Signature Prime 35mm",
+        "focalLengthMm": 35
+      },
+      "pixelAspect": 1,
+      "status": {
+        "key": "needs_review",
+        "label": "Needs Review"
+      },
+      "source": {
+        "verified": "verified",
+        "at": "2026-09-15T20:02:00Z"
+      },
+      "plates": {
+        "version": 1,
+        "frames": 112,
+        "format": "exr",
+        "bitDepth": 16,
+        "colour": "ARRI LogC4 / AWG4 → ACEScg (linear), no look baked",
+        "writtenAt": "2026-09-15T22:10:00Z"
+      },
+      "tasks": [
+        {
+          "kind": "sequence_conversion",
+          "label": "Image-sequence conversion",
+          "state": "approved",
+          "version": 1,
+          "approval": {
+            "by": "Ruth Okafor",
+            "at": "2026-09-16T18:20:00Z"
+          },
+          "notes": "",
+          "confidence": null,
+          "problems": 0,
+          "exported": true,
+          "exportVersion": 1
+        },
+        {
+          "kind": "roto",
+          "label": "Paint-to-roto",
+          "state": "approved",
+          "version": 1,
+          "approval": {
+            "by": "Ruth Okafor",
+            "at": "2026-09-16T18:20:00Z"
+          },
+          "notes": "",
+          "confidence": {
+            "frames": 96,
+            "mean": 0.93,
+            "min": 0.8,
+            "low": 0,
+            "flagged": 0,
+            "reviewed": 96
+          },
+          "problems": 0,
+          "exported": true,
+          "exportVersion": 1
+        },
+        {
+          "kind": "key",
+          "label": "Green/blue-screen key",
+          "state": "needs_review",
+          "version": 1,
+          "approval": null,
+          "notes": "",
+          "confidence": {
+            "frames": 96,
+            "mean": 0.89,
+            "min": 0.71,
+            "low": 2,
+            "flagged": 1,
+            "reviewed": 94
+          },
+          "problems": 0,
+          "exported": true,
+          "exportVersion": 1
+        },
+        {
+          "kind": "despill",
+          "label": "Despill and background match",
+          "state": "needs_review",
+          "version": 1,
+          "approval": null,
+          "notes": "",
+          "confidence": null,
+          "problems": 0,
+          "exported": true,
+          "exportVersion": 1
+        }
+      ],
+      "approval": null,
+      "packaged": null,
+      "delivered": null,
+      "problems": [],
+      "supervisorNotes": "Kitchen window is a green screen — the farm at dusk goes in. Keep the practical bounce on Mara.",
+      "notes": null
+    },
+    {
+      "handoffShotId": "4B-06",
+      "vfxShotId": "CL_040_020",
+      "scene": "4",
+      "setup": "B",
+      "take": "6",
+      "circled": true,
+      "cameraRoll": "B002",
+      "clip": "B002C007",
+      "unit": "Main",
+      "shootDay": "Day 002 · 2026-09-15",
+      "shootDate": "2026-09-15",
+      "frames": {
+        "in": 1001,
+        "out": 1096,
+        "handles": 8,
+        "count": 112,
+        "rangeFrom": "handoff"
+      },
+      "frameRate": 24,
+      "timecodeIn": "12:01:12:00",
+      "timecodeOut": "12:01:16:00",
+      "camera": {
+        "body": "ARRI ALEXA 35",
+        "lens": "Signature Prime 75mm",
+        "focalLengthMm": 75
+      },
+      "pixelAspect": 1,
+      "status": {
+        "key": "needs_correction",
+        "label": "Needs Correction"
+      },
+      "source": {
+        "verified": "verified",
+        "at": "2026-09-15T20:02:00Z"
+      },
+      "plates": {
+        "version": 1,
+        "frames": 112,
+        "format": "exr",
+        "bitDepth": 16,
+        "colour": "ARRI LogC4 / AWG4 → ACEScg (linear), no look baked",
+        "writtenAt": "2026-09-15T22:10:00Z"
+      },
+      "tasks": [
+        {
+          "kind": "sequence_conversion",
+          "label": "Image-sequence conversion",
+          "state": "approved",
+          "version": 1,
+          "approval": {
+            "by": "Ruth Okafor",
+            "at": "2026-09-16T18:20:00Z"
+          },
+          "notes": "",
+          "confidence": null,
+          "problems": 0,
+          "exported": true,
+          "exportVersion": 1
+        },
+        {
+          "kind": "key",
+          "label": "Green/blue-screen key",
+          "state": "needs_correction",
+          "version": 2,
+          "approval": null,
+          "notes": "Hair edge chatters against the window bars.",
+          "confidence": {
+            "frames": 96,
+            "mean": 0.78,
+            "min": 0.41,
+            "low": 14,
+            "flagged": 1,
+            "reviewed": 82
+          },
+          "problems": 2,
+          "exported": false,
+          "exportVersion": null
+        },
+        {
+          "kind": "despill",
+          "label": "Despill and background match",
+          "state": "pending",
+          "version": 1,
+          "approval": null,
+          "notes": "",
+          "confidence": null,
+          "problems": 0,
+          "exported": false,
+          "exportVersion": null
+        }
+      ],
+      "approval": null,
+      "packaged": null,
+      "delivered": null,
+      "problems": [
+        {
+          "task": "key",
+          "severity": "error",
+          "text": "Matte chatters on Hull’s hair for 14 frames (1061–1074); the shadow pass reads the window bars as subject.",
+          "frames": [
+            1061,
+            1062,
+            1063,
+            1064,
+            1065,
+            1066,
+            1067,
+            1068,
+            1069,
+            1070,
+            1071,
+            1072,
+            1073,
+            1074
+          ]
+        },
+        {
+          "task": "key",
+          "severity": "warn",
+          "text": "Green spill on the stove hood is outside the garbage matte — despill will need it.",
+          "frames": []
+        }
+      ],
+      "supervisorNotes": null,
+      "notes": null
+    },
+    {
+      "handoffShotId": "4A-07",
+      "vfxShotId": "CL_040_030",
+      "scene": "4",
+      "setup": "A",
+      "take": "7",
+      "circled": true,
+      "cameraRoll": "A002",
+      "clip": "A002C008",
+      "unit": "Main",
+      "shootDay": "Day 002 · 2026-09-15",
+      "shootDate": "2026-09-15",
+      "frames": {
+        "in": 1001,
+        "out": 1096,
+        "handles": 8,
+        "count": 112,
+        "rangeFrom": "handoff"
+      },
+      "frameRate": 24,
+      "timecodeIn": "12:02:12:00",
+      "timecodeOut": "12:02:16:00",
+      "camera": {
+        "body": "ARRI ALEXA 35",
+        "lens": "Signature Prime 35mm",
+        "focalLengthMm": 35
+      },
+      "pixelAspect": 1,
+      "status": {
+        "key": "processing",
+        "label": "Processing"
+      },
+      "source": {
+        "verified": "verified",
+        "at": "2026-09-15T20:02:00Z"
+      },
+      "plates": {
+        "version": 1,
+        "frames": 112,
+        "format": "exr",
+        "bitDepth": 16,
+        "colour": "ARRI LogC4 / AWG4 → ACEScg (linear), no look baked",
+        "writtenAt": "2026-09-15T22:10:00Z"
+      },
+      "tasks": [
+        {
+          "kind": "sequence_conversion",
+          "label": "Image-sequence conversion",
+          "state": "approved",
+          "version": 1,
+          "approval": {
+            "by": "Ruth Okafor",
+            "at": "2026-09-16T18:20:00Z"
+          },
+          "notes": "",
+          "confidence": null,
+          "problems": 0,
+          "exported": true,
+          "exportVersion": 1
+        },
+        {
+          "kind": "roto",
+          "label": "Paint-to-roto",
+          "state": "processing",
+          "version": 1,
+          "approval": null,
+          "notes": "",
+          "confidence": {
+            "frames": 40,
+            "mean": 0.86,
+            "min": 0.6,
+            "low": 6,
+            "flagged": 1,
+            "reviewed": 34
+          },
+          "problems": 0,
+          "exported": false,
+          "exportVersion": null
+        }
+      ],
+      "approval": null,
+      "packaged": null,
+      "delivered": null,
+      "problems": [],
+      "supervisorNotes": null,
+      "notes": null
+    },
+    {
+      "handoffShotId": "5A-01",
+      "vfxShotId": "CL_050_010",
+      "scene": "5",
+      "setup": "A",
+      "take": "1",
+      "circled": true,
+      "cameraRoll": "A003",
+      "clip": "A003C009",
+      "unit": "Main",
+      "shootDay": "Day 003 · 2026-09-16",
+      "shootDate": "2026-09-16",
+      "frames": {
+        "in": 1001,
+        "out": 1096,
+        "handles": 8,
+        "count": 112,
+        "rangeFrom": "handoff"
+      },
+      "frameRate": 24,
+      "timecodeIn": "13:03:12:00",
+      "timecodeOut": "13:03:16:00",
+      "camera": {
+        "body": "ARRI ALEXA 35",
+        "lens": "Signature Prime 35mm",
+        "focalLengthMm": 35
+      },
+      "pixelAspect": 1,
+      "status": {
+        "key": "needs_review",
+        "label": "Needs Review"
+      },
+      "source": {
+        "verified": "verified",
+        "at": "2026-09-15T20:02:00Z"
+      },
+      "plates": {
+        "version": 1,
+        "frames": 112,
+        "format": "exr",
+        "bitDepth": 16,
+        "colour": "ARRI LogC4 / AWG4 → ACEScg (linear), no look baked",
+        "writtenAt": "2026-09-15T22:10:00Z"
+      },
+      "tasks": [
+        {
+          "kind": "sequence_conversion",
+          "label": "Image-sequence conversion",
+          "state": "approved",
+          "version": 1,
+          "approval": {
+            "by": "Ruth Okafor",
+            "at": "2026-09-16T18:20:00Z"
+          },
+          "notes": "",
+          "confidence": null,
+          "problems": 0,
+          "exported": true,
+          "exportVersion": 1
+        },
+        {
+          "kind": "sky_replacement",
+          "label": "Sky isolation / replacement prep",
+          "state": "needs_review",
+          "version": 1,
+          "approval": null,
+          "notes": "",
+          "confidence": {
+            "frames": 96,
+            "mean": 0.9,
+            "min": 0.66,
+            "low": 4,
+            "flagged": 1,
+            "reviewed": 92
+          },
+          "problems": 1,
+          "exported": true,
+          "exportVersion": 1
+        }
+      ],
+      "approval": null,
+      "packaged": null,
+      "delivered": null,
+      "problems": [
+        {
+          "task": "sky_replacement",
+          "severity": "warn",
+          "text": "Power line crosses the sky matte at frames 1080–1096; isolated as a separate element, check before approving.",
+          "frames": [
+            1080,
+            1096
+          ]
+        }
+      ],
+      "supervisorNotes": "Dusk window was 22 minutes; sky replacement to hold the colour from take 1.",
+      "notes": null
+    },
+    {
+      "handoffShotId": "5B-02",
+      "vfxShotId": "CL_050_020",
+      "scene": "5",
+      "setup": "B",
+      "take": "2",
+      "circled": true,
+      "cameraRoll": "B003",
+      "clip": "B003C010",
+      "unit": "Main",
+      "shootDay": "Day 003 · 2026-09-16",
+      "shootDate": "2026-09-16",
+      "frames": {
+        "in": 1001,
+        "out": 1096,
+        "handles": 8,
+        "count": 112,
+        "rangeFrom": "handoff"
+      },
+      "frameRate": 24,
+      "timecodeIn": "13:04:12:00",
+      "timecodeOut": "13:04:16:00",
+      "camera": {
+        "body": "ARRI ALEXA 35",
+        "lens": "Signature Prime 75mm",
+        "focalLengthMm": 75
+      },
+      "pixelAspect": 1,
+      "status": {
+        "key": "needs_review",
+        "label": "Needs Review"
+      },
+      "source": {
+        "verified": "verified",
+        "at": "2026-09-15T20:02:00Z"
+      },
+      "plates": {
+        "version": 1,
+        "frames": 112,
+        "format": "exr",
+        "bitDepth": 16,
+        "colour": "ARRI LogC4 / AWG4 → ACEScg (linear), no look baked",
+        "writtenAt": "2026-09-15T22:10:00Z"
+      },
+      "tasks": [
+        {
+          "kind": "sequence_conversion",
+          "label": "Image-sequence conversion",
+          "state": "approved",
+          "version": 1,
+          "approval": {
+            "by": "Ruth Okafor",
+            "at": "2026-09-16T18:20:00Z"
+          },
+          "notes": "",
+          "confidence": null,
+          "problems": 0,
+          "exported": true,
+          "exportVersion": 1
+        },
+        {
+          "kind": "roto",
+          "label": "Paint-to-roto",
+          "state": "needs_review",
+          "version": 2,
+          "approval": null,
+          "notes": "Reopened: Mara’s coat edge pops at 1032 on the vendor’s first look.",
+          "confidence": {
+            "frames": 96,
+            "mean": 0.9,
+            "min": 0.7,
+            "low": 2,
+            "flagged": 1,
+            "reviewed": 94
+          },
+          "problems": 0,
+          "exported": true,
+          "exportVersion": 2
+        },
+        {
+          "kind": "track_2d",
+          "label": "2D / planar track",
+          "state": "approved",
+          "version": 1,
+          "approval": {
+            "by": "Ruth Okafor",
+            "at": "2026-09-16T18:20:00Z"
+          },
+          "notes": "",
+          "confidence": null,
+          "problems": 0,
+          "exported": true,
+          "exportVersion": 1
+        }
+      ],
+      "approval": null,
+      "packaged": {
+        "version": 1,
+        "at": "2026-09-16T21:30:00Z",
+        "folder": "DEMO_THE_COPPER_LINE_VFX/SCENE_5/SHOT_CL_050_020",
+        "taskVersions": {
+          "sequence_conversion": 1,
+          "roto": 1,
+          "track_2d": 1
+        }
+      },
+      "delivered": null,
+      "problems": [],
+      "supervisorNotes": null,
+      "notes": null
+    },
+    {
+      "handoffShotId": "7A-03",
+      "vfxShotId": "CL_070_010",
+      "scene": "7",
+      "setup": "A",
+      "take": "3",
+      "circled": true,
+      "cameraRoll": "A002",
+      "clip": "A002C011",
+      "unit": "Main",
+      "shootDay": "Day 002 · 2026-09-15",
+      "shootDate": "2026-09-15",
+      "frames": {
+        "in": 1001,
+        "out": 1096,
+        "handles": 8,
+        "count": 112,
+        "rangeFrom": "handoff"
+      },
+      "frameRate": 24,
+      "timecodeIn": "12:05:12:00",
+      "timecodeOut": "12:05:16:00",
+      "camera": {
+        "body": "ARRI ALEXA 35",
+        "lens": "Signature Prime 35mm",
+        "focalLengthMm": 35
+      },
+      "pixelAspect": 1,
+      "status": {
+        "key": "needs_correction",
+        "label": "Needs Correction"
+      },
+      "source": {
+        "verified": "verified",
+        "at": "2026-09-15T20:02:00Z"
+      },
+      "plates": {
+        "version": 1,
+        "frames": 112,
+        "format": "exr",
+        "bitDepth": 16,
+        "colour": "ARRI LogC4 / AWG4 → ACEScg (linear), no look baked",
+        "writtenAt": "2026-09-15T22:10:00Z"
+      },
+      "tasks": [
+        {
+          "kind": "sequence_conversion",
+          "label": "Image-sequence conversion",
+          "state": "approved",
+          "version": 1,
+          "approval": {
+            "by": "Ruth Okafor",
+            "at": "2026-09-16T18:20:00Z"
+          },
+          "notes": "",
+          "confidence": null,
+          "problems": 0,
+          "exported": true,
+          "exportVersion": 1
+        },
+        {
+          "kind": "clean_plate",
+          "label": "Clean plate",
+          "state": "needs_correction",
+          "version": 1,
+          "approval": null,
+          "notes": "",
+          "confidence": {
+            "frames": 96,
+            "mean": 0.64,
+            "min": 0.22,
+            "low": 31,
+            "flagged": 1,
+            "reviewed": 65
+          },
+          "problems": 1,
+          "exported": false,
+          "exportVersion": null
+        },
+        {
+          "kind": "texture_extraction",
+          "label": "Texture extraction",
+          "state": "pending",
+          "version": 1,
+          "approval": null,
+          "notes": "",
+          "confidence": null,
+          "problems": 0,
+          "exported": false,
+          "exportVersion": null
+        }
+      ],
+      "approval": null,
+      "packaged": null,
+      "delivered": null,
+      "problems": [
+        {
+          "task": "clean_plate",
+          "severity": "error",
+          "text": "Rain bar pipe is never clear of the wallpaper behind it — 31 frames below confidence; needs a shot clean plate or paint.",
+          "frames": [
+            1001,
+            1031
+          ]
+        }
+      ],
+      "supervisorNotes": "Rain bar on the kitchen window: clean the rain bar pipe out of frame top; extract the wallpaper for the CG extension.",
+      "notes": null
+    },
+    {
+      "handoffShotId": "7B-01",
+      "vfxShotId": "CL_070_020",
+      "scene": "7",
+      "setup": "B",
+      "take": "1",
+      "circled": true,
+      "cameraRoll": "B002",
+      "clip": "B002C012",
+      "unit": "Main",
+      "shootDay": "Day 002 · 2026-09-15",
+      "shootDate": "2026-09-15",
+      "frames": {
+        "in": 1001,
+        "out": 1096,
+        "handles": 8,
+        "count": 112,
+        "rangeFrom": "handoff"
+      },
+      "frameRate": 24,
+      "timecodeIn": "12:00:12:00",
+      "timecodeOut": "12:00:16:00",
+      "camera": {
+        "body": "ARRI ALEXA 35",
+        "lens": "Signature Prime 75mm",
+        "focalLengthMm": 75
+      },
+      "pixelAspect": 1,
+      "status": {
+        "key": "processing",
+        "label": "Processing"
+      },
+      "source": {
+        "verified": "verified",
+        "at": "2026-09-15T20:02:00Z"
+      },
+      "plates": {
+        "version": 1,
+        "frames": 112,
+        "format": "exr",
+        "bitDepth": 16,
+        "colour": "ARRI LogC4 / AWG4 → ACEScg (linear), no look baked",
+        "writtenAt": "2026-09-15T22:10:00Z"
+      },
+      "tasks": [
+        {
+          "kind": "sequence_conversion",
+          "label": "Image-sequence conversion",
+          "state": "approved",
+          "version": 1,
+          "approval": {
+            "by": "Ruth Okafor",
+            "at": "2026-09-16T18:20:00Z"
+          },
+          "notes": "",
+          "confidence": null,
+          "problems": 0,
+          "exported": true,
+          "exportVersion": 1
+        },
+        {
+          "kind": "lighting_analysis",
+          "label": "Lighting and lens analysis",
+          "state": "processing",
+          "version": 1,
+          "approval": null,
+          "notes": "",
+          "confidence": null,
+          "problems": 0,
+          "exported": false,
+          "exportVersion": null
+        },
+        {
+          "kind": "composite",
+          "label": "Prep composite",
+          "state": "pending",
+          "version": 1,
+          "approval": null,
+          "notes": "",
+          "confidence": null,
+          "problems": 0,
+          "exported": false,
+          "exportVersion": null
+        }
+      ],
+      "approval": null,
+      "packaged": null,
+      "delivered": null,
+      "problems": [],
+      "supervisorNotes": null,
+      "notes": null
+    },
+    {
+      "handoffShotId": "8A-02",
+      "vfxShotId": "CL_080_010",
+      "scene": "8",
+      "setup": "A",
+      "take": "2",
+      "circled": true,
+      "cameraRoll": "A003",
+      "clip": "A003C013",
+      "unit": "Main",
+      "shootDay": "Day 003 · 2026-09-16",
+      "shootDate": "2026-09-16",
+      "frames": {
+        "in": 1001,
+        "out": 1096,
+        "handles": 8,
+        "count": 112,
+        "rangeFrom": "handoff"
+      },
+      "frameRate": 24,
+      "timecodeIn": "13:01:12:00",
+      "timecodeOut": "13:01:16:00",
+      "camera": {
+        "body": "ARRI ALEXA 35",
+        "lens": "Signature Prime 35mm",
+        "focalLengthMm": 35
+      },
+      "pixelAspect": 1,
+      "status": {
+        "key": "ready_for_prep",
+        "label": "Ready for Prep"
+      },
+      "source": {
+        "verified": "unchecked",
+        "at": null
+      },
+      "plates": null,
+      "tasks": [
+        {
+          "kind": "sequence_conversion",
+          "label": "Image-sequence conversion",
+          "state": "pending",
+          "version": 1,
+          "approval": null,
+          "notes": "",
+          "confidence": null,
+          "problems": 0,
+          "exported": false,
+          "exportVersion": null
+        },
+        {
+          "kind": "roto",
+          "label": "Paint-to-roto",
+          "state": "pending",
+          "version": 1,
+          "approval": null,
+          "notes": "",
+          "confidence": null,
+          "problems": 0,
+          "exported": false,
+          "exportVersion": null
+        },
+        {
+          "kind": "sky_replacement",
+          "label": "Sky isolation / replacement prep",
+          "state": "pending",
+          "version": 1,
+          "approval": null,
+          "notes": "",
+          "confidence": null,
+          "problems": 0,
+          "exported": false,
+          "exportVersion": null
+        }
+      ],
+      "approval": null,
+      "packaged": null,
+      "delivered": null,
+      "problems": [],
+      "supervisorNotes": null,
+      "notes": null
+    },
+    {
+      "handoffShotId": "8B-01",
+      "vfxShotId": "CL_080_020",
+      "scene": "8",
+      "setup": "B",
+      "take": "1",
+      "circled": true,
+      "cameraRoll": "B003",
+      "clip": "B003C014",
+      "unit": "Main",
+      "shootDay": "Day 003 · 2026-09-16",
+      "shootDate": "2026-09-16",
+      "frames": {
+        "in": 1001,
+        "out": 1096,
+        "handles": 8,
+        "count": 112,
+        "rangeFrom": "handoff"
+      },
+      "frameRate": 24,
+      "timecodeIn": "13:02:12:00",
+      "timecodeOut": "13:02:16:00",
+      "camera": {
+        "body": "ARRI ALEXA 35",
+        "lens": "Signature Prime 75mm",
+        "focalLengthMm": 75
+      },
+      "pixelAspect": 1,
+      "status": {
+        "key": "not_started",
+        "label": "Not Started"
+      },
+      "source": {
+        "verified": "unchecked",
+        "at": null
+      },
+      "plates": null,
+      "tasks": [],
+      "approval": null,
+      "packaged": null,
+      "delivered": null,
+      "problems": [],
+      "supervisorNotes": null,
+      "notes": null
+    },
+    {
+      "handoffShotId": "6A-04",
+      "vfxShotId": "CL_060_010",
+      "scene": "6",
+      "setup": "A",
+      "take": "4",
+      "circled": true,
+      "cameraRoll": "A004",
+      "clip": "A004C015",
+      "unit": "Main",
+      "shootDay": null,
+      "shootDate": null,
+      "frames": {
+        "in": 1001,
+        "out": 1096,
+        "handles": 8,
+        "count": 112,
+        "rangeFrom": "handoff"
+      },
+      "frameRate": 24,
+      "timecodeIn": "14:03:12:00",
+      "timecodeOut": "14:03:16:00",
+      "camera": {
+        "body": "ARRI ALEXA 35",
+        "lens": "Signature Prime 35mm",
+        "focalLengthMm": 35
+      },
+      "pixelAspect": 1,
+      "status": {
+        "key": "ready_for_prep",
+        "label": "Ready for Prep"
+      },
+      "source": {
+        "verified": "mismatch",
+        "at": "2026-09-17T09:12:00Z"
+      },
+      "plates": null,
+      "tasks": [
+        {
+          "kind": "sequence_conversion",
+          "label": "Image-sequence conversion",
+          "state": "pending",
+          "version": 1,
+          "approval": null,
+          "notes": "",
+          "confidence": null,
+          "problems": 0,
+          "exported": false,
+          "exportVersion": null
+        },
+        {
+          "kind": "background_removal",
+          "label": "Background removal",
+          "state": "pending",
+          "version": 1,
+          "approval": null,
+          "notes": "",
+          "confidence": null,
+          "problems": 0,
+          "exported": false,
+          "exportVersion": null
+        }
+      ],
+      "approval": null,
+      "packaged": null,
+      "delivered": null,
+      "problems": [
+        {
+          "task": null,
+          "severity": "error",
+          "text": "Source checksum does not match the DIT’s (xxHash64) for A004C015 — ask the DIT for a fresh copy before any prep.",
+          "frames": []
+        }
+      ],
+      "supervisorNotes": null,
+      "notes": null
+    },
+    {
+      "handoffShotId": "2A-01",
+      "vfxShotId": "CL_020_010",
+      "scene": "2",
+      "setup": "A",
+      "take": "1",
+      "circled": true,
+      "cameraRoll": "A004",
+      "clip": "A004C016",
+      "unit": "Main",
+      "shootDay": null,
+      "shootDate": null,
+      "frames": {
+        "in": 1001,
+        "out": 1096,
+        "handles": 8,
+        "count": 112,
+        "rangeFrom": "handoff"
+      },
+      "frameRate": 24,
+      "timecodeIn": "14:04:12:00",
+      "timecodeOut": "14:04:16:00",
+      "camera": {
+        "body": "ARRI ALEXA 35",
+        "lens": "Signature Prime 35mm",
+        "focalLengthMm": 35
+      },
+      "pixelAspect": 1,
+      "status": {
+        "key": "packaged",
+        "label": "Packaged"
+      },
+      "source": {
+        "verified": "verified",
+        "at": "2026-09-15T20:02:00Z"
+      },
+      "plates": {
+        "version": 1,
+        "frames": 112,
+        "format": "exr",
+        "bitDepth": 16,
+        "colour": "ARRI LogC4 / AWG4 → ACEScg (linear), no look baked",
+        "writtenAt": "2026-09-15T22:10:00Z"
+      },
+      "tasks": [
+        {
+          "kind": "sequence_conversion",
+          "label": "Image-sequence conversion",
+          "state": "approved",
+          "version": 1,
+          "approval": {
+            "by": "Ruth Okafor",
+            "at": "2026-09-16T18:20:00Z"
+          },
+          "notes": "",
+          "confidence": null,
+          "problems": 0,
+          "exported": true,
+          "exportVersion": 1
+        }
+      ],
+      "approval": {
+        "by": "Ada Renke",
+        "at": "2026-09-16T16:00:00Z"
+      },
+      "packaged": {
+        "version": 1,
+        "at": "2026-09-16T16:20:00Z",
+        "folder": "DEMO_THE_COPPER_LINE_VFX/SCENE_2/SHOT_CL_020_010",
+        "taskVersions": {
+          "sequence_conversion": 1
+        }
+      },
+      "delivered": null,
+      "problems": [],
+      "supervisorNotes": null,
+      "notes": null
+    },
+    {
+      "handoffShotId": "9X-01",
+      "vfxShotId": null,
+      "scene": "9",
+      "setup": "X",
+      "take": "1",
+      "circled": false,
+      "cameraRoll": "A004",
+      "clip": "A004C017",
+      "unit": "Main",
+      "shootDay": null,
+      "shootDate": null,
+      "frames": {
+        "in": 1001,
+        "out": 1096,
+        "handles": 8,
+        "count": 112,
+        "rangeFrom": "handoff"
+      },
+      "frameRate": 24,
+      "timecodeIn": "14:05:12:00",
+      "timecodeOut": "14:05:16:00",
+      "camera": {
+        "body": "ARRI ALEXA 35",
+        "lens": "Signature Prime 35mm",
+        "focalLengthMm": 35
+      },
+      "pixelAspect": 1,
+      "status": {
+        "key": "needs_review",
+        "label": "Needs Review"
+      },
+      "source": {
+        "verified": "verified",
+        "at": "2026-09-15T20:02:00Z"
+      },
+      "plates": {
+        "version": 1,
+        "frames": 112,
+        "format": "exr",
+        "bitDepth": 16,
+        "colour": "ARRI LogC4 / AWG4 → ACEScg (linear), no look baked",
+        "writtenAt": "2026-09-15T22:10:00Z"
+      },
+      "tasks": [
+        {
+          "kind": "sequence_conversion",
+          "label": "Image-sequence conversion",
+          "state": "approved",
+          "version": 1,
+          "approval": {
+            "by": "Ruth Okafor",
+            "at": "2026-09-16T18:20:00Z"
+          },
+          "notes": "",
+          "confidence": null,
+          "problems": 0,
+          "exported": true,
+          "exportVersion": 1
+        },
+        {
+          "kind": "camera_track",
+          "label": "Camera track / matchmove",
+          "state": "needs_review",
+          "version": 1,
+          "approval": null,
+          "notes": "",
+          "confidence": {
+            "frames": 240,
+            "mean": 0.82,
+            "min": 0.58,
+            "low": 9,
+            "flagged": 1,
+            "reviewed": 231
+          },
+          "problems": 0,
+          "exported": true,
+          "exportVersion": 1
+        }
+      ],
+      "approval": null,
+      "packaged": null,
+      "delivered": null,
+      "problems": [
+        {
+          "task": "camera_track",
+          "severity": "warn",
+          "text": "Solve drifts in the last 40 frames where the cutting goes out of frame; survey points would pin it.",
+          "frames": [
+            1201,
+            1240
+          ]
+        }
+      ],
+      "supervisorNotes": "Pickup: drone pass over the cutting, not in the script yet.",
+      "notes": null,
+      "vendorBid": {
+        "company": "Northlight VFX",
+        "days": 3
+      }
+    }
+  ],
+  "summary": {
+    "shots": 17,
+    "byStatus": {
+      "not_started": 1,
+      "ready_for_prep": 2,
+      "processing": 2,
+      "needs_review": 4,
+      "needs_correction": 2,
+      "prep_approved": 1,
+      "packaged": 4,
+      "delivered": 1
+    },
+    "byTaskState": {
+      "pending": 8,
+      "processing": 2,
+      "needs_review": 5,
+      "needs_correction": 2,
+      "approved": 25
+    },
+    "readyToHandOff": 4
+  }
+}
