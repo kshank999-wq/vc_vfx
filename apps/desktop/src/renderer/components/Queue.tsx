@@ -11,11 +11,14 @@ import {
   type Project,
   type QueueFilter,
   type QueueRow,
+  type ReadyFor,
   type ShotStatus,
+  readyForText,
 } from '@vcvfx/domain';
 import { deliveredRange, requiredPrep } from '../../shared/queue';
 import { MODULES, moduleStatus, type ModuleId } from '../modules';
 import { Icon } from './Icons';
+import { ReadyForPicker } from './ShotDetail';
 
 const PROGRESS: ModuleId[] = ['plates', 'roto', 'key', 'camera', 'track2d', 'deliver'];
 
@@ -126,6 +129,7 @@ export function BulkBar({
   canEdit,
   busy,
   onAddTask,
+  onSetReadyFor,
   onClear,
 }: {
   project: Project;
@@ -133,6 +137,8 @@ export function BulkBar({
   canEdit: boolean;
   busy: boolean;
   onAddTask: (kind: PrepTaskKind) => void;
+  /** The same destination for every picked shot (addendum 20). */
+  onSetReadyFor?: (value: ReadyFor | null) => void;
   onClear: () => void;
 }) {
   const [kind, setKind] = useState<PrepTaskKind | ''>('');
@@ -159,6 +165,7 @@ export function BulkBar({
       >
         Add to {shotIds.length} shots
       </button>
+      {onSetReadyFor ? <ReadyForPicker project={project} value={null} disabled={!canEdit || busy} onCommit={onSetReadyFor} commitLabel={`Set for ${shotIds.length} shots`} compact /> : null}
       <button type="button" className="link" onClick={onClear}>
         Clear selection
       </button>
@@ -253,6 +260,11 @@ export function QueueTable({
             </td>
             <td title={state.approval ? `Approved by ${state.approval.by}` : undefined}>
               <StatusPill status={status} />
+              {state.readyFor && status !== 'delivered' ? (
+                <div className="muted small ready-for-tag" title={`Ready for ${readyForText(state.readyFor)}`}>
+                  for {state.readyFor.name}
+                </div>
+              ) : null}
             </td>
             <td>
               <span className={`verify verify-${state.sourceVerified}`}>{VERIFY_LABEL[state.sourceVerified]}</span>

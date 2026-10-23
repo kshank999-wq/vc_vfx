@@ -159,6 +159,10 @@
         }
       },
       "delivered": null,
+      "readyFor": {
+        "kind": "vendor",
+        "name": "Northlight VFX"
+      },
       "problems": [],
       "supervisorNotes": "Remove the modern fence posts camera left; track for the survey-chain insert.",
       "notes": null
@@ -494,6 +498,10 @@
       "approval": null,
       "packaged": null,
       "delivered": null,
+      "readyFor": {
+        "kind": "vendor",
+        "name": "Northlight VFX"
+      },
       "problems": [],
       "supervisorNotes": "The boy walks the rail line: remove the sleepers replaced in 2019, match-move for the CG signal box.",
       "notes": null

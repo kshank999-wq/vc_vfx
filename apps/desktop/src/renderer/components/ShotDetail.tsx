@@ -26,8 +26,14 @@ import {
   shotStatus,
   shotTiming,
   versionTag,
+  READY_FOR_KINDS,
+  READY_FOR_KIND_LABELS,
+  readyForNames,
+  readyForText,
   type PrepTaskKind,
   type Project,
+  type ReadyFor,
+  type ReadyForKind,
   type TaskRecord,
   type TaskState,
 } from '@vcvfx/domain';
@@ -66,6 +72,8 @@ export interface ShotDetailHandlers {
   onPixelAspect?(change: { value: number | null; note?: string }): void;
   /** Open one of the module tabs on this shot (addendum 08). */
   onOpenModule?(id: ModuleId): void;
+  /** Where the shot goes once ready: a VFX company or software, or null for not said (addendum 20). */
+  onReadyFor?(value: ReadyFor | null): void;
 }
 
 export interface ShotDetailProps extends ShotDetailHandlers {
@@ -246,6 +254,82 @@ function VfxIdField({ value, handoffId, disabled, onCommit }: { value: string | 
   );
 }
 
+/**
+ * Where the shot goes once it is ready (addendum 20): a VFX company, or the
+ * software it is opened in next. The operator's pick, per shot, sent to VC
+ * Film Studio with the status. It says where, never whether.
+ */
+export function ReadyForPicker({
+  project,
+  value,
+  disabled,
+  onCommit,
+  commitLabel,
+  compact = false,
+}: {
+  project: Project;
+  value: ReadyFor | null;
+  disabled: boolean;
+  onCommit: (v: ReadyFor | null) => void;
+  /** The button's words; "Set / Change / Clear where it goes" when not given. */
+  commitLabel?: string;
+  compact?: boolean;
+}) {
+  const [kind, setKind] = useState<ReadyForKind | ''>(value?.kind ?? '');
+  const [name, setName] = useState(value?.name ?? '');
+  useEffect(() => {
+    setKind(value?.kind ?? '');
+    setName(value?.name ?? '');
+  }, [value?.kind, value?.name]);
+  const next: ReadyFor | null = kind && name.trim() ? { kind, name: name.trim() } : null;
+  const changed = commitLabel !== undefined || (next?.kind ?? null) !== (value?.kind ?? null) || (next?.name ?? null) !== (value?.name ?? null);
+  const incomplete = kind !== '' && !name.trim();
+  const listId = `ready-for-names-${kind || 'none'}${compact ? '-bulk' : ''}`;
+  return (
+    <form
+      className={`ready-for${compact ? ' compact' : ''}`}
+      title="Where the shot goes once it is ready: a VFX company, or the software it is opened in. Sent to VC Film Studio with the status."
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (changed && !incomplete) onCommit(next);
+      }}
+    >
+      <label>
+        {compact ? null : <span className="muted">Ready for</span>}
+        <select aria-label="Ready for" value={kind} disabled={disabled} onChange={(e) => setKind(e.target.value as ReadyForKind | '')}>
+          <option value="">{compact ? 'Ready for… (not said)' : 'Not said'}</option>
+          {READY_FOR_KINDS.map((k) => (
+            <option key={k} value={k}>
+              {k === 'vendor' ? 'A VFX company' : 'Software (Nuke…)'}
+            </option>
+          ))}
+        </select>
+      </label>
+      {kind ? (
+        <input
+          aria-label={READY_FOR_KIND_LABELS[kind]}
+          list={listId}
+          value={name}
+          maxLength={120}
+          disabled={disabled}
+          placeholder={kind === 'vendor' ? 'The company’s name' : 'Nuke, Fusion, Flame…'}
+          onChange={(e) => setName(e.target.value)}
+        />
+      ) : null}
+      {kind ? (
+        <datalist id={listId}>
+          {readyForNames(project, kind).map((n) => (
+            <option key={n} value={n} />
+          ))}
+        </datalist>
+      ) : null}
+      <button type="submit" disabled={disabled || !changed || incomplete}>
+        {commitLabel ?? (!kind && value ? 'Clear where it goes' : value ? 'Change where it goes' : 'Set where it goes')}
+      </button>
+    </form>
+  );
+}
+
 /** Shot approval, packaging and delivery, and where the package goes. */
 export function ApprovalPanel(props: ShotDetailProps) {
   const { project, shotId, now, canEdit, busy } = props;
@@ -284,6 +368,16 @@ export function ApprovalPanel(props: ShotDetailProps) {
           Reopen
         </ActionButton>
       </div>
+      {props.onReadyFor ? (
+        state.stage === 'delivered' ? (
+          <p className="muted small ready-for-done">
+            Delivered{state.deliveredTo ? ` to ${state.deliveredTo}` : ''}
+            {state.readyFor ? ` · it was ready for ${readyForText(state.readyFor)}` : ''}. Reopen it to change where it goes.
+          </p>
+        ) : (
+          <ReadyForPicker project={project} value={state.readyFor} disabled={!canEdit || busy} onCommit={props.onReadyFor} />
+        )
+      ) : null}
       <OutputRoot {...props} />
     </section>
   );

@@ -5,7 +5,7 @@
  * Studio accepts fails CI here (addendum 19).
  *
  *   source: github.com/kshank999-wq/VC_Film_Studio, lib/vfx-status.ts
- *   branch: claude/vfx-status at 618a180 (the file itself last changed in f08788e)
+ *   branch: main at f58a891 (readyFor: where each shot goes once it is ready)
  *
  * Do not edit by hand: when Film Studio changes its reader, copy it again and
  * update the commit above. The demo reports beside it
@@ -130,6 +130,13 @@ export const SEVERITIES = ['info', 'warn', 'error'] as const;
 export type Severity = (typeof SEVERITIES)[number];
 export const SOURCE_CHECKS = ['unchecked', 'verified', 'mismatch', 'missing'] as const;
 export type SourceCheck = (typeof SOURCE_CHECKS)[number];
+/** Where the operator says a shot goes once it is ready: a VFX company by name, or the software it is opened in (Nuke…). */
+export const READY_FOR_KINDS = ['vendor', 'software'] as const;
+export type ReadyForKind = (typeof READY_FOR_KINDS)[number];
+export type ReadyFor = { kind: ReadyForKind; name: string };
+
+/** "Framestore (VFX company)", "Nuke (software)". */
+export const readyForText = (rf: ReadyFor) => `${rf.name} (${rf.kind === 'vendor' ? 'VFX company' : 'software'})`;
 
 /* ------------------------------------------------------------ the shape --- */
 
@@ -184,6 +191,8 @@ export type VfxShot = {
   approval: Approval | null;
   packaged: { version: number; at: string; folder: string | null; taskVersions: Record<string, number> | null } | null;
   delivered: { at: string; to: string | null } | null;
+  /** Where it goes when ready, as the VC VFX operator picked for this shot; null when not said (or a VC VFX before it). */
+  readyFor: ReadyFor | null;
   problems: Problem[];
   supervisorNotes: string | null;
   notes: string | null;
@@ -459,6 +468,14 @@ function readShot(r: Reader, s: unknown, path: string): VfxShot | null {
     if (at) delivered = { at, to: r.str(dv, 'to', `${path}.delivered`, { max: 200 }) };
   }
 
+  const rf = r.obj(s, 'readyFor', path);
+  let readyFor: ReadyFor | null = null;
+  if (rf) {
+    const kind = r.oneOf(rf, 'kind', `${path}.readyFor`, READY_FOR_KINDS, null);
+    const forName = r.str(rf, 'name', `${path}.readyFor`, { required: true, max: 120 });
+    if (kind && forName) readyFor = { kind, name: forName };
+  }
+
   const problems: Problem[] = [];
   if (s.problems !== undefined && s.problems !== null && !Array.isArray(s.problems)) r.bad(`${path}.problems`, 'a list', s.problems);
   (Array.isArray(s.problems) ? s.problems : []).slice(0, 500).forEach((x, i) => {
@@ -502,6 +519,7 @@ function readShot(r: Reader, s: unknown, path: string): VfxShot | null {
     approval: r.approval(s, 'approval', path),
     packaged,
     delivered,
+    readyFor,
     problems,
     supervisorNotes: r.str(s, 'supervisorNotes', path, { max: 4000 }),
     notes: r.str(s, 'notes', path, { max: 4000 }),
@@ -807,6 +825,12 @@ export function diffReports(before: VfxShot[], after: VfxShot[]): Change[] {
     } else if (prev.status.key !== s.status.key) {
       out.push({ shot: name, handoffShotId: s.handoffShotId, kind: 'status', text: `${name}: ${prev.status.label} → ${s.status.label}.` });
     }
+    /* Where it goes: a change of company or of software is news to whoever was waiting for it. */
+    const goes = (x: VfxShot) => (x.readyFor ? readyForText(x.readyFor) : null);
+    if (goes(prev) !== goes(s) && !now.delivered) {
+      out.push({ shot: name, handoffShotId: s.handoffShotId, kind: 'status',
+        text: s.readyFor ? `${name} is now for ${goes(s)}${prev.readyFor ? `, not ${goes(prev)}` : ''}.` : `${name} no longer says where it goes (was ${goes(prev)}).` });
+    }
     for (const t of s.tasks) {
       const pt = prev.tasks.find((x) => x.kind === t.kind);
       if (pt && pt.state === 'approved' && t.state !== 'approved') {
@@ -855,6 +879,7 @@ export const CSV_COLUMNS: { key: string; label: string }[] = [
   { key: 'approval', label: 'Shot approved' },
   { key: 'package', label: 'Package' },
   { key: 'delivered', label: 'Delivered' },
+  { key: 'readyFor', label: 'Ready for' },
   { key: 'problems', label: 'Problems' },
   { key: 'why', label: 'What is holding it' },
 ];
@@ -876,6 +901,7 @@ export function shotRow(s: VfxShot, dayLabel: string | null = null): Record<stri
     approval: approvalWords(s.approval),
     package: s.packaged ? `${vtag(s.packaged.version)} ${s.packaged.at.slice(0, 10)}` : null,
     delivered: s.delivered ? `${s.delivered.at.slice(0, 10)}${s.delivered.to ? ` to ${s.delivered.to}` : ''}` : null,
+    readyFor: s.readyFor ? readyForText(s.readyFor) : null,
     problems: s.problems.map((p) => `[${p.severity}] ${p.text}`).join('; ') || null,
     why: r.why.join('; ') || null,
   };

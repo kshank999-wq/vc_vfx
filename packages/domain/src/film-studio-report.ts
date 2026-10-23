@@ -1,5 +1,6 @@
 import { versionTag } from './frames.js';
 import { TASK_STATE_LABELS } from './tasks.js';
+import { readyForText } from './project.js';
 import {
   STATUS_BUCKETS,
   STATUS_BUCKET_TITLES,
@@ -56,6 +57,7 @@ function shotRow(s: VfxStatusShot, lifted: ReadonlySet<string>): string {
   const pkg = s.packaged
     ? `${versionTag(s.packaged.version)} <span class="muted">${e(day(s.packaged.at))}</span>${s.status.key !== 'packaged' && !r.delivered ? '<div class="stale">out of date</div>' : ''}`
     : '—';
+  const goes = s.readyFor && !r.delivered ? `<div class="muted small">for ${e(readyForText(s.readyFor))}</div>` : '';
   const holding: string[] = [];
   if (r.delivered) holding.push(`<div class="done">Delivered ${e(day(s.delivered?.at))}${s.delivered?.to ? ` to ${e(s.delivered.to)}` : ''}</div>`);
   else if (r.ready) holding.push('<div class="done">Ready to hand off</div>');
@@ -70,7 +72,7 @@ function shotRow(s: VfxStatusShot, lifted: ReadonlySet<string>): string {
 <td class="nw">${e(s.shootDay ?? s.shootDate)}</td>
 <td class="nw">${e(s.status.label)}${approval}</td>
 <td class="tasks">${tasks}</td>
-<td class="nw">${pkg}</td>
+<td class="nw">${pkg}${goes}</td>
 <td class="holding">${holding.join('') || '—'}${notes ? `<div class="notes">${e(notes)}</div>` : ''}</td>
 </tr>`;
 }
@@ -190,6 +192,7 @@ export const STATUS_CSV_COLUMNS: { key: string; label: string }[] = [
   { key: 'approval', label: 'Shot approved' },
   { key: 'package', label: 'Package' },
   { key: 'delivered', label: 'Delivered' },
+  { key: 'readyFor', label: 'Ready for' },
   { key: 'problems', label: 'Problems' },
   { key: 'why', label: 'What is holding it' },
 ];
@@ -211,6 +214,7 @@ export function statusCsvRow(s: VfxStatusShot): Record<string, string> {
     approval: s.approval ? `${s.approval.by}, ${s.approval.at.slice(0, 10)}` : '',
     package: s.packaged ? `${versionTag(s.packaged.version)} ${s.packaged.at.slice(0, 10)}` : '',
     delivered: s.delivered ? `${s.delivered.at.slice(0, 10)}${s.delivered.to ? ` to ${s.delivered.to}` : ''}` : '',
+    readyFor: s.readyFor ? readyForText(s.readyFor) : '',
     problems: s.problems.map((x) => `[${x.severity}] ${x.text}`).join('; '),
     why: r.why.join('; '),
   };

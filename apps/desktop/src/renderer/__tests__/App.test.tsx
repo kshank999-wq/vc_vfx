@@ -214,6 +214,35 @@ describe('a VCDIT handoff', () => {
   });
 });
 
+describe('where each shot goes once it is ready (addendum 20)', () => {
+  it('the operator picks software for the shot, and the queue says so', async () => {
+    const table = await openSample();
+    fireEvent.change(screen.getByLabelText('Ready for'), { target: { value: 'software' } });
+    const name = screen.getByLabelText('Software') as HTMLInputElement;
+    // The usual programs are offered.
+    expect([...document.querySelectorAll('#ready-for-names-software option')].map((o) => o.getAttribute('value'))).toContain('Nuke');
+    fireEvent.change(name, { target: { value: 'Nuke' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Set where it goes' }));
+    expect(within(shotRows(table)[0]!).getByText('for Nuke')).toBeTruthy();
+    // Clearing it is one choice and one click.
+    fireEvent.change(screen.getByLabelText('Ready for'), { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Clear where it goes' }));
+    expect(within(shotRows(table)[0]!).queryByText('for Nuke')).toBeNull();
+  });
+
+  it('a VFX company for several shots at once', async () => {
+    const table = await openSample();
+    fireEvent.click(shotRows(table)[1]!, { ctrlKey: true });
+    fireEvent.click(shotRows(table)[2]!, { ctrlKey: true });
+    const bar = screen.getByRole('toolbar', { name: 'Selected shots' });
+    fireEvent.change(within(bar).getByLabelText('Ready for'), { target: { value: 'vendor' } });
+    fireEvent.change(within(bar).getByLabelText('VFX company'), { target: { value: 'Northlight VFX' } });
+    fireEvent.click(within(bar).getByRole('button', { name: 'Set for 3 shots' }));
+    expect(screen.getByText(/3 shots ready for Northlight VFX/)).toBeTruthy();
+    expect(shotRows(table).filter((r) => within(r).queryByText('for Northlight VFX'))).toHaveLength(3);
+  });
+});
+
 describe('plate colour', () => {
   it('shows the decision in one line and records a change, logged', async () => {
     await openSample();

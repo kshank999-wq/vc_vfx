@@ -111,6 +111,8 @@ export interface VfxStatusShot {
   approval: VfxStatusApproval | null;
   packaged?: { version: number; at: string; folder?: string; taskVersions?: Record<string, number> };
   delivered?: { at: string; to?: string };
+  /** Where it goes once ready, as the operator picked (addendum 20): a VFX company, or software. */
+  readyFor?: { kind: 'vendor' | 'software'; name: string };
   problems: VfxStatusProblem[];
   supervisorNotes?: string;
   notes?: string;
@@ -422,6 +424,7 @@ export function statusShot(p: Project, shotId: string): VfxStatusShot {
         })
       : undefined,
     delivered: delivered ? defined(delivered) : undefined,
+    readyFor: s.readyFor && text(s.readyFor.name, 120) ? { kind: s.readyFor.kind, name: text(s.readyFor.name, 120)! } : undefined,
     problems,
     supervisorNotes: text(shot.supervisorNotes, 4000),
     notes: text(s.notes, 4000),

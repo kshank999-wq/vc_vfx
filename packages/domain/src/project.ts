@@ -65,14 +65,33 @@ export const PROJECT_FORMAT = 'vcvfx-project';
  *    task versions it was made from (`packagedTaskVersions`), a delivery may
  *    name who it went to (`deliveredTo`), and the project may name the Film
  *    Studio production it reports to (`filmStudioProduction`).
+ * 13: where each shot goes once it is ready (addendum 20): a VFX company by
+ *    name, or the software it is opened in (`readyFor`), picked per shot by
+ *    the operator.
  * An older project opens (the new fields empty) and is saved as the current
  * version; an older VC VFX refuses a newer project rather than silently
  * dropping what it does not know about.
  */
-export const PROJECT_VERSION = 12;
+export const PROJECT_VERSION = 13;
 export const PROJECT_EXTENSION = 'vcvfx';
 
 export const ApprovalSchema = z.object({ by: z.string().min(1), at: z.string() });
+
+/**
+ * Where a shot goes once it is ready (addendum 20): a VFX company (`vendor`,
+ * by name), or the software it is opened in next (`software`: Nuke, Fusion…).
+ * The operator picks it per shot. It says where, never whether: it is no
+ * part of "ready to hand off".
+ */
+export const READY_FOR_KINDS = ['vendor', 'software'] as const;
+export type ReadyForKind = (typeof READY_FOR_KINDS)[number];
+export const ReadyForSchema = z.object({ kind: z.enum(READY_FOR_KINDS), name: z.string().min(1).max(120) });
+export type ReadyFor = z.infer<typeof ReadyForSchema>;
+/** Offered for `software`; any other name may be typed. */
+export const READY_FOR_SOFTWARE = ['Nuke', 'Fusion', 'Flame', 'After Effects', 'Houdini', 'Blender', 'DaVinci Resolve'] as const;
+export const READY_FOR_KIND_LABELS: Record<ReadyForKind, string> = { vendor: 'VFX company', software: 'Software' };
+/** "Northlight VFX (VFX company)", "Nuke (software)" — the words VC Film Studio uses for it. */
+export const readyForText = (rf: ReadyFor): string => `${rf.name} (${rf.kind === 'vendor' ? 'VFX company' : 'software'})`;
 export type Approval = z.infer<typeof ApprovalSchema>;
 
 export const TaskRecordSchema = z.object({
@@ -211,6 +230,8 @@ export const ShotStateSchema = z.object({
   packagedTaskVersions: z.record(z.number().int().positive()).nullable().default(null),
   /** Who the shot was delivered to (the VFX vendor), when the operator said. Null: not said, or not delivered. */
   deliveredTo: z.string().nullable().default(null),
+  /** Where the shot goes once it is ready, as the operator picked (addendum 20). Null: not said. */
+  readyFor: ReadyForSchema.nullable().default(null),
 });
 export type ShotState = z.infer<typeof ShotStateSchema>;
 
@@ -284,6 +305,7 @@ export function createProject(handoff: Handoff, handoffPath: string, actor: stri
     pixelAspect: null,
     packagedTaskVersions: null,
     deliveredTo: null,
+    readyFor: null,
   }));
   return log(
     { format: PROJECT_FORMAT, version: PROJECT_VERSION, createdAt: at, updatedAt: at, handoffPath, handoff, plateColorDefault: 'acescg', shots, lensProfiles: [], customCameras: [], filmStudioProduction: '', log: [] },
@@ -524,6 +546,58 @@ export function markDelivered(p: Project, shotId: string, actor: string, now: Da
   const vendor = to?.trim() || null;
   const r = updateShot(p, shotId, (s) => (s.stage !== 'packaged' ? `${shotId} must be packaged before it is delivered` : { ...s, stage: 'delivered', deliveredTo: vendor }));
   return chain(r, (proj) => log(proj, { at, actor, shotId, action: 'shot.delivered', ...(vendor ? { detail: `to ${vendor}` } : {}) }));
+}
+
+/**
+ * Say where the shot goes once it is ready (addendum 20) — a VFX company, or
+ * the software it is opened in — or clear it with null. Logged like every
+ * change. A delivered shot has gone already: reopen it first.
+ */
+export function setReadyFor(p: Project, shotId: string, value: ReadyFor | null, actor: string, now: Date): Result {
+  const name = value?.name.trim().replace(/\s+/g, ' ').slice(0, 120) ?? '';
+  const next: ReadyFor | null = value && name ? { kind: value.kind, name } : null;
+  if (value && !READY_FOR_KINDS.includes(value.kind)) return { ok: false, reason: `${value.kind} is not a VFX company or software` };
+  let changed = false;
+  const r = updateShot(p, shotId, (s) => {
+    if (s.stage === 'delivered') return `${shotId} has been delivered; reopen it first`;
+    changed = s.readyFor?.kind !== next?.kind || s.readyFor?.name !== next?.name;
+    return changed ? { ...s, readyFor: next } : s;
+  });
+  if (!r.ok || !changed) return r;
+  return chain(r, (proj) => log(proj, { at: now.toISOString(), actor, shotId, action: 'shot.ready_for', detail: next ? readyForText(next) : 'cleared' }));
+}
+
+/** The same destination for several shots; delivered ones are skipped and reported, as adding a task to several is. */
+export function setReadyForShots(
+  p: Project,
+  shotIds: readonly string[],
+  value: ReadyFor | null,
+  actor: string,
+  now: Date,
+): { project: Project; set: string[]; skipped: { shotId: string; reason: string }[] } {
+  let project = p;
+  const set: string[] = [];
+  const skipped: { shotId: string; reason: string }[] = [];
+  for (const shotId of shotIds) {
+    const r = setReadyFor(project, shotId, value, actor, now);
+    if (r.ok) {
+      project = r.project;
+      set.push(shotId);
+    } else skipped.push({ shotId, reason: r.reason });
+  }
+  return { project, set, skipped };
+}
+
+/** Names already used for a kind in this project, to offer again: VFX companies also from deliveries; software also the usual programs. */
+export function readyForNames(p: Project, kind: ReadyForKind): string[] {
+  const used = p.shots.flatMap((s) => [
+    ...(s.readyFor?.kind === kind ? [s.readyFor.name] : []),
+    ...(kind === 'vendor' && s.deliveredTo ? [s.deliveredTo] : []),
+  ]);
+  const all = kind === 'software' ? [...used, ...READY_FOR_SOFTWARE] : used;
+  const seen = new Map<string, string>();
+  for (const n of all) if (!seen.has(n.toLowerCase())) seen.set(n.toLowerCase(), n);
+  return [...seen.values()].sort((a, b) => a.localeCompare(b, 'en', { sensitivity: 'base' }));
 }
 
 /** Take a packaged or delivered shot back into prep (e.g. a note came back). */

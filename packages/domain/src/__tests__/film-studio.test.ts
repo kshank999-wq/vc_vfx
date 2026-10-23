@@ -20,10 +20,14 @@ import {
   parseHandoff,
   parseProject,
   readiness,
+  readyForNames,
+  readyForText,
   recordStatusSend,
   reopenShot,
   serializeProject,
   setFilmStudioProduction,
+  setReadyFor,
+  setReadyForShots,
   setSourceVerified,
   setTaskState,
   shotState,
@@ -344,7 +348,7 @@ describe('the project format', () => {
     if (!r.ok) return;
     p = r.project;
     expect(p.version).toBe(PROJECT_VERSION);
-    expect(PROJECT_VERSION).toBe(12);
+    expect(PROJECT_VERSION).toBe(13);
     expect(p.filmStudioProduction).toBe('');
     expect(shotState(p, '010_030')).toMatchObject({ packagedTaskVersions: null, deliveredTo: null, stage: 'packaged' });
     const doc = buildFilmStudioStatus(p, INPUT);
@@ -400,11 +404,84 @@ describe('the printed log and the CSV', () => {
   it('writes one CSV row per shot under Film Studio’s columns, safe for a spreadsheet', () => {
     const csv = vfxStatusCsv(doc);
     const lines = csv.replace(/^﻿/, '').trimEnd().split('\r\n');
-    expect(lines[0]).toBe('VFX shot,Handoff shot,Scene,Setup,Take,Shoot day,Status,Section,Ready to hand off,Tasks,Shot approved,Package,Delivered,Problems,What is holding it');
+    expect(lines[0]).toBe('VFX shot,Handoff shot,Scene,Setup,Take,Shoot day,Status,Section,Ready to hand off,Tasks,Shot approved,Package,Delivered,Ready for,Problems,What is holding it');
     expect(lines).toHaveLength(14);
     expect(lines.find((l) => l.startsWith('S08,'))).toContain(',Ready to hand off,Yes,');
     const evil = vfxStatusCsv({ shots: [{ ...doc.shots[0]!, scene: '=HYPERLINK("x")' }] });
     expect(evil).toContain(`"'=HYPERLINK(""x"")"`);
+  });
+});
+
+describe('where each shot goes once it is ready (addendum 20)', () => {
+  it('the operator picks a VFX company or software per shot, logged', () => {
+    let p = ok(setReadyFor(rich(), 'S08', { kind: 'software', name: '  Nuke ' }, 'Ruth', at(400)));
+    expect(shotState(p, 'S08')!.readyFor).toEqual({ kind: 'software', name: 'Nuke' });
+    expect(p.log.at(-1)).toMatchObject({ actor: 'Ruth', shotId: 'S08', action: 'shot.ready_for', detail: 'Nuke (software)' });
+    const entries = p.log.length;
+    p = ok(setReadyFor(p, 'S08', { kind: 'software', name: 'Nuke' }, 'Ruth', at(401)));
+    expect(p.log).toHaveLength(entries); // the same again changes nothing, and logs nothing
+    p = ok(setReadyFor(p, 'S08', { kind: 'vendor', name: 'Northlight VFX' }, 'Ruth', at(402)));
+    expect(p.log.at(-1)!.detail).toBe('Northlight VFX (VFX company)');
+    p = ok(setReadyFor(p, 'S08', null, 'Ruth', at(403)));
+    expect(shotState(p, 'S08')!.readyFor).toBeNull();
+    expect(p.log.at(-1)!.detail).toBe('cleared');
+    // A blank name is no destination.
+    expect(shotState(ok(setReadyFor(p, 'S08', { kind: 'vendor', name: '   ' }, 'Ruth', at(404))), 'S08')!.readyFor).toBeNull();
+  });
+
+  it('a delivered shot has gone already: reopen it first', () => {
+    const r = setReadyFor(rich(), 'S11', { kind: 'software', name: 'Nuke' }, 'Ruth', at(400));
+    expect(r.ok).toBe(false);
+    expect(!r.ok && r.reason).toMatch(/delivered; reopen it first/);
+  });
+
+  it('several shots at once, the delivered ones skipped and said', () => {
+    const r = setReadyForShots(rich(), ['S08', 'S11', 'S01'], { kind: 'vendor', name: 'Northlight VFX' }, 'Ruth', at(400));
+    expect(r.set).toEqual(['S08', 'S01']);
+    expect(r.skipped).toEqual([{ shotId: 'S11', reason: 'S11 has been delivered; reopen it first' }]);
+    expect(shotState(r.project, 'S01')!.readyFor).toEqual({ kind: 'vendor', name: 'Northlight VFX' });
+  });
+
+  it('offers the names already used: companies also from deliveries, software also the usual programs', () => {
+    const p = ok(setReadyFor(rich(), 'S01', { kind: 'vendor', name: 'Ember Pictures' }, 'Ruth', at(400)));
+    expect(readyForNames(p, 'vendor')).toEqual(['Ember Pictures', 'Northlight VFX']);
+    const q = ok(setReadyFor(p, 'S02', { kind: 'software', name: 'nuke' }, 'Ruth', at(401)));
+    const software = readyForNames(q, 'software');
+    expect(software).toContain('Fusion');
+    expect(software.filter((n) => n.toLowerCase() === 'nuke')).toHaveLength(1);
+  });
+
+  it('goes to Film Studio as readyFor, read back as sent, and never changes what is ready', () => {
+    const before = buildFilmStudioStatus(rich(), INPUT);
+    const p = ok(setReadyFor(ok(setReadyFor(rich(), 'S08', { kind: 'software', name: 'Nuke' }, 'Ruth', at(400))), 'S01', { kind: 'vendor', name: 'Northlight VFX' }, 'Ruth', at(401)));
+    const doc = buildFilmStudioStatus(p, INPUT);
+    expect(byId(doc, 'S08').readyFor).toEqual({ kind: 'software', name: 'Nuke' });
+    expect(byId(doc, 'S02').readyFor).toBeUndefined();
+    const read = readAsFilmStudio(doc);
+    expect(read.shots.find((s) => s.handoffShotId === 'S08')!.readyFor).toEqual({ kind: 'software', name: 'Nuke' });
+    expect(read.shots.find((s) => s.handoffShotId === 'S02')!.readyFor).toBeNull();
+    expect(filmStudio.readyForText({ kind: 'software', name: 'Nuke' })).toBe(readyForText({ kind: 'software', name: 'Nuke' }));
+    for (const s of doc.shots) expect(readiness(s), s.handoffShotId).toEqual(readiness(byId(before, s.handoffShotId)));
+    expect(doc.summary.readyToHandOff).toBe(before.summary.readyToHandOff);
+  });
+
+  it('the printed log and the CSV say where each goes', () => {
+    const doc = buildFilmStudioStatus(ok(setReadyFor(rich(), 'S08', { kind: 'vendor', name: '<b>Northlight</b>' }, 'Ruth', at(400))), INPUT);
+    const html = vfxStatusReportHtml(doc);
+    expect(html).toContain('for &lt;b&gt;Northlight&lt;/b&gt; (VFX company)');
+    expect(html).not.toContain('<b>Northlight</b>');
+    expect(vfxStatusCsv(doc).split('\r\n').find((l) => l.startsWith('S08,'))).toContain(',<b>Northlight</b> (VFX company),');
+  });
+
+  it('opens a format 12 project with nothing said for any shot', () => {
+    const old = JSON.parse(serializeProject(sample())) as Record<string, unknown> & { shots: Record<string, unknown>[] };
+    old['version'] = 12;
+    for (const s of old.shots) delete s['readyFor'];
+    const r = parseProject(JSON.stringify(old));
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.project.version).toBe(PROJECT_VERSION);
+    expect(r.project.shots.every((s) => s.readyFor === null)).toBe(true);
   });
 });
 

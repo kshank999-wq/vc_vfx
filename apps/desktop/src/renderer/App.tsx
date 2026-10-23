@@ -17,6 +17,8 @@ import {
   recordPlates,
   recordStatusSend,
   setFilmStudioProduction,
+  setReadyFor,
+  setReadyForShots,
   reopenShot,
   serializeProject,
   setPlateColorDefault,
@@ -35,6 +37,7 @@ import {
   type PrepTaskKind,
   type Project,
   type QueueFilter,
+  type ReadyFor,
   type Result,
   type StatusSendOutcome,
   type TaskState,
@@ -678,6 +681,17 @@ export function App({ api, now = () => new Date() }: { api: VcvfxApi; now?: () =
     notify(r.added.length ? 'ok' : 'error', `${label} added to ${r.added.length} shot${r.added.length === 1 ? '' : 's'}.${skipped}`);
   };
 
+  /* Where the picked shots go once ready (addendum 20); delivered ones are skipped and said. */
+  const readyForToMarked = (value: ReadyFor | null) => {
+    const current = docRef.current;
+    if (!current) return;
+    const r = setReadyForShots(current.project, visibleMarked, value, actor, now());
+    if (r.set.length) setDoc({ ...current, project: r.project, dirty: true });
+    const skipped = r.skipped.length ? ` Skipped ${r.skipped.length}: ${r.skipped.map((x) => x.reason).slice(0, 3).join('; ')}${r.skipped.length > 3 ? '…' : ''}` : '';
+    const what = value ? `ready for ${value.name}` : 'where they go cleared';
+    notify(r.set.length ? 'ok' : 'error', `${r.set.length} shot${r.set.length === 1 ? '' : 's'} ${what}.${skipped}`);
+  };
+
   // --- the shot's handlers, shared by the Shots tab and the modules ----------
   const shotProps = (shotId: string, p: Project): ShotDetailProps => ({
     project: p,
@@ -702,7 +716,11 @@ export function App({ api, now = () => new Date() }: { api: VcvfxApi; now?: () =
       setPrompt({
         title: 'Mark delivered',
         label: 'Delivered to (the VFX vendor)',
-        initial: '',
+        // The company the operator said it was ready for, when one was said.
+        initial: (() => {
+          const rf = shotState(p, shotId)?.readyFor;
+          return rf?.kind === 'vendor' ? rf.name : '';
+        })(),
         confirmLabel: 'Mark delivered',
         detail: `Record that ${shotId}’s package was handed off. The vendor’s name goes in the log and in the VFX status; it may be left empty.`,
         optional: true,
@@ -723,6 +741,7 @@ export function App({ api, now = () => new Date() }: { api: VcvfxApi; now?: () =
     onPlateColor: (change) => apply((x) => setShotPlateColor(x, shotId, change, actor, now())),
     onPixelAspect: (change) => apply((x) => setShotPixelAspect(x, shotId, change, actor, now())),
     onOpenModule: (id) => openModule(id, shotId),
+    onReadyFor: (value) => apply((x) => setReadyFor(x, shotId, value, actor, now())),
   });
 
   const moduleScreen = () => {
@@ -880,7 +899,7 @@ export function App({ api, now = () => new Date() }: { api: VcvfxApi; now?: () =
             <QueueFilters project={project} filter={filter} onChange={setFilter} />
             <main className="workspace" aria-label="Shots">
               <section className="queue-pane" aria-label="Queue">
-                {visibleMarked.length > 1 ? <BulkBar project={project} shotIds={visibleMarked} canEdit={canEdit} busy={busy} onAddTask={addTaskToMarked} onClear={() => setMarked([])} /> : null}
+                {visibleMarked.length > 1 ? <BulkBar project={project} shotIds={visibleMarked} canEdit={canEdit} busy={busy} onAddTask={addTaskToMarked} onSetReadyFor={readyForToMarked} onClear={() => setMarked([])} /> : null}
                 <QueueTable project={project} rows={rows} selected={selected} marked={visibleMarked} onSelect={selectShot} onOpen={(id) => openModule(moduleToOpen(project, id, lastModule), id)} />
               </section>
               {selected ? <ShotDetail {...shotProps(selected, project)} /> : <aside className="detail empty">Select a shot.</aside>}

@@ -291,7 +291,7 @@ describe('outputs, manifest and project format', () => {
   });
 
   it('since project format 4: a version 3 project opens with no key, and keys survive a round trip', () => {
-    expect(PROJECT_VERSION).toBe(12);
+    expect(PROJECT_VERSION).toBe(13);
     expect(PREP_TASKS.key.available).toBe(true);
     expect(PREP_TASKS.despill.available).toBe(true);
     const v3 = JSON.parse(serializeProject(sample()));

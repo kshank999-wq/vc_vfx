@@ -194,7 +194,7 @@ describe('the subject prior in the key document', () => {
 
 describe('project format 11', () => {
   it('opens a format-10 project: keys get no subject and the shadow pass off; a subject survives a round trip', () => {
-    expect(PROJECT_VERSION).toBe(12);
+    expect(PROJECT_VERSION).toBe(13);
     const p = keyed();
     const v10 = JSON.parse(serializeProject(p));
     v10.version = 10;
@@ -204,7 +204,7 @@ describe('project format 11', () => {
     }
     const opened = parseProject(JSON.stringify(v10));
     if (!opened.ok) throw new Error(opened.reason);
-    expect(opened.project.version).toBe(12);
+    expect(opened.project.version).toBe(13);
     expect(key(opened.project).subject.source).toBe('none');
     expect(key(opened.project).params.shadowPass).toBe(false);
     let q = ok(setKeySubject(opened.project, SHOT, { source: 'auto', seed: { frame: 1003, points: [{ x: 5, y: 6, label: 1 }] } }, 'ana', NOW));
