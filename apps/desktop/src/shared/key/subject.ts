@@ -200,6 +200,23 @@ export interface ShadowOptions {
    * darker screen, stay inside the band. Null: no such test.
    */
   anchor?: Uint8Array | null;
+  /**
+   * Pixels next to the subject. With it, only shadows that reach the subject
+   * are kept — the subject's own cast shadow, not the folds of the cloth or a
+   * light stand's shadow far off (which the garbage takes anyway). Null: no
+   * such test.
+   */
+  touch?: Uint8Array | null;
+  /**
+   * The frame's own detailed screen (the clean plate refined by the frame's
+   * screen pixels, which follows the cloth's folds and the cove's fall-off but
+   * not a deep shadow). A shadow must have a deep core against it too (at
+   * least `minArea` pixels darker than 0.7 of it): shading of the screen that
+   * the coarse clean plate does not follow is not a shadow. Null: no test.
+   */
+  detail?: Float32Array | null;
+  /** How far (pixels) a shadow's soft edge may reach from its deep core (default 1 % of the width). */
+  penumbra?: number;
   /** Ignore density below this (folds of the cloth, the clean plate's own error). */
   floor?: number;
   /** Chromaticity distance still counted as the screen's. */
@@ -242,6 +259,21 @@ export function shadowPass(P: Float32Array, clean: Float32Array, w: number, h: n
     // Below the floor fades in: the clean plate's own error is not a shadow.
     dens[i] = clamp01(d) * clamp01((d - 0.5 * floor) / floor) * cw * al;
   }
+  // Shading the coarse clean plate does not follow (the cove's fall-off, folds) is not a shadow: keep
+  // density only within reach of a deep core — darker than 0.7 of the frame's own detailed screen.
+  if (o.detail) {
+    const coreMask = new Uint8Array(n);
+    for (let i = 0; i < n; i += 1) {
+      if (!(dens[i]! > 0)) continue;
+      const q = 3 * i;
+      const ld = lum(o.detail[q]!, o.detail[q + 1]!, o.detail[q + 2]!);
+      if (ld > 1e-6 && lum(P[q]!, P[q + 1]!, P[q + 2]!) < 0.7 * ld) coreMask[i] = 1;
+    }
+    const reach = o.penumbra ?? Math.max(3, w / 100);
+    const opened0 = morph(morph(coreMask, w, h, -1), w, h, 1);
+    const near0 = gaussianBlur(Float32Array.from(morph(opened0, w, h, reach)), w, h, reach / 3);
+    for (let i = 0; i < n; i += 1) dens[i] = dens[i]! * clamp01(near0[i]! * 2);
+  }
   // Drop specks: a shadow is an area, not a strand or a noise speck.
   const bin = new Uint8Array(n);
   for (let i = 0; i < n; i += 1) bin[i] = dens[i]! > floor ? 1 : 0;
@@ -250,12 +282,19 @@ export function shadowPass(P: Float32Array, clean: Float32Array, w: number, h: n
   const lab = components(opened, w, h, 1);
   const grown = morph(opened, w, h, 2);
   const anchored = new Float64Array(lab.sizes.length);
+  const touching = new Uint8Array(lab.sizes.length);
   if (o.anchor) for (let i = 0; i < n; i += 1) if (lab.labels[i] && o.anchor[i]) anchored[lab.labels[i]!]! += 1;
-  const keepLabel = lab.sizes.map((s, l) => s >= minArea && (!o.anchor || anchored[l]! >= minArea));
+  if (o.touch) for (let i = 0; i < n; i += 1) if (lab.labels[i] && o.touch[i]) touching[lab.labels[i]!] = 1;
+  const keepLabel = lab.sizes.map((s, l) => s >= minArea && (!o.anchor || anchored[l]! >= minArea) && (!o.touch || touching[l] === 1));
   const big = new Uint8Array(n);
   for (let i = 0; i < n; i += 1) if (lab.labels[i] && keepLabel[lab.labels[i]!]) big[i] = 1;
   const near = morph(big, w, h, 2);
   for (let i = 0; i < n; i += 1) if (!near[i] || !grown[i]) dens[i] = 0;
-  // A light smoothing: the density is a soft matte, and noise should not grain it.
+  // Specks inside a shadow (marks on the floor, noise that left the screen's chromaticity) are filled
+  // from the shadow round them; then a light smoothing — the density is a soft matte, not grain.
+  const closed = morph(morph(big, w, h, 2), w, h, -2);
+  const local = gaussianBlur(dens, w, h, 2);
+  const support = gaussianBlur(Float32Array.from(big), w, h, 2);
+  for (let i = 0; i < n; i += 1) if (closed[i] && support[i]! > 0.05) dens[i] = Math.max(dens[i]!, local[i]! / support[i]!);
   return gaussianBlur(dens, w, h, 0.8);
 }

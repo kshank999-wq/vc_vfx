@@ -1,13 +1,13 @@
 import { contactSheetFrames, type KeyDocument, type KeyMetrics, type KeyRunResult, type ScreenKind } from '@vcvfx/domain';
 import { CancelledError } from '../roto/engine';
-import { buildScreenModel, evalScreenModel, flatScreenModel, localScreen, modelSeen, screenGain, type ScreenModel } from './cleanplate';
+import { buildScreenModel, evalScreenModel, fineScreen, flatScreenModel, localScreen, modelSeen, screenGain, type ScreenModel } from './cleanplate';
 import { keyerSettings, keyFrame, type KeyFrameOutput } from './keyer';
 import type { LinearImage } from './linear';
 import { backgroundNear } from './look';
 import { resolveLinks, type ResolvedLink } from './mattes';
 import { detectScreen, type ScreenEstimate } from './screen';
 import type { SubjectInput } from './subject';
-import { morph } from '../roto/image';
+import { morph, resizePlane } from '../roto/image';
 
 /**
  * Keying a shot (addendum 09 §4): detect the screen, build the clean plate,
@@ -76,7 +76,13 @@ export async function shotScreenModel(io: KeyIO, settings: KeySettings, first: n
       excludes.push(morph(bin, img.width, img.height, Math.max(2, Math.round(img.width / 200))));
     } else excludes.push(null);
   }
-  return buildScreenModel(images, { kind: screen.kind, rgb: screen.rgb }, settings.params.cleanPlateGrid, excludes);
+  const model = buildScreenModel(images, { kind: screen.kind, rgb: screen.rgb }, settings.params.cleanPlateGrid, excludes);
+  // The static fine screen, for the shadow pass only (it is not what the key keys against).
+  if (settings.params.shadowPass) {
+    const fine = fineScreen(images, { kind: screen.kind, rgb: screen.rgb }, excludes);
+    if (fine) model.fine = fine;
+  }
+  return model;
 }
 
 export interface KeyAtOptions {
@@ -106,8 +112,46 @@ export class ShotKeyer {
     if (!settings.screen) throw new Error('Pick the screen colour first (Auto key, or the eyedropper).');
   }
 
+  private fineAt = new Map<string, Float32Array | null>();
+
+  /** The shadow pass's clean screen: the static fine screen (× this frame's gain) where it is known, else the model. */
+  private cleanFor(img: LinearImage, model: Float32Array, gain: readonly number[]): Float32Array {
+    const fine = this.model.fine;
+    if (!fine) return model;
+    const key = `${img.width}x${img.height}`;
+    let at = this.fineAt.get(key);
+    if (at === undefined) {
+      if (fine.width === img.width && fine.height === img.height) at = fine.data;
+      else {
+        at = new Float32Array(img.width * img.height * 3);
+        for (let c = 0; c < 3; c += 1) {
+          const plane = new Float32Array(fine.width * fine.height);
+          for (let i = 0; i < plane.length; i += 1) plane[i] = fine.data[3 * i + c]!;
+          // NaN spreads through the resize: what was unknown near a pixel stays unknown.
+          const r = resizePlane(plane, fine.width, fine.height, img.width, img.height);
+          for (let i = 0; i < r.length; i += 1) at[3 * i + c] = r[i]!;
+        }
+      }
+      this.fineAt.set(key, at);
+    }
+    const out = new Float32Array(model.length);
+    for (let i = 0; i < model.length; i += 3) {
+      const v = at![i]!;
+      if (Number.isNaN(v) || Number.isNaN(at![i + 1]!) || Number.isNaN(at![i + 2]!)) {
+        out[i] = model[i]!;
+        out[i + 1] = model[i + 1]!;
+        out[i + 2] = model[i + 2]!;
+      } else {
+        out[i] = at![i]! * gain[0]!;
+        out[i + 1] = at![i + 1]! * gain[1]!;
+        out[i + 2] = at![i + 2]! * gain[2]!;
+      }
+    }
+    return out;
+  }
+
   /** The screen of this frame (model × gain, then detail), and the model × gain alone. */
-  private screenFor(img: LinearImage, exclude: Uint8Array | null = null): { screen: Float32Array; model: Float32Array } {
+  private screenFor(img: LinearImage, exclude: Uint8Array | null = null): { screen: Float32Array; model: Float32Array; gain: [number, number, number] } {
     const key = `${img.width}x${img.height}`;
     let base = this.modelAt.get(key);
     if (!base) {
@@ -116,10 +160,12 @@ export class ShotKeyer {
     }
     const screen = this.settings.screen!;
     let out = base;
+    let applied: [number, number, number] = [1, 1, 1];
     if (screen.track) {
       if (!this.seenAt.has(key)) this.seenAt.set(key, modelSeen(this.model, img.width, img.height));
       const gain = screenGain(img, base, { kind: screen.kind, rgb: screen.rgb }, this.seenAt.get(key)!);
       if (!gain.every((g) => Math.abs(g - 1) < 1e-3)) {
+        applied = [gain[0], gain[1], gain[2]];
         out = new Float32Array(base.length);
         for (let i = 0; i < base.length; i += 3) {
           out[i] = base[i]! * gain[0];
@@ -128,7 +174,7 @@ export class ShotKeyer {
         }
       }
     }
-    return { screen: this.settings.params.screenDetail ? localScreen(img, out, screen.kind, { exclude }) : out, model: out };
+    return { screen: this.settings.params.screenDetail ? localScreen(img, out, screen.kind, { exclude }) : out, model: out, gain: applied };
   }
 
   private async background(io: KeyIO, w: number, h: number, pxScale: number) {
@@ -163,7 +209,7 @@ export class ShotKeyer {
       exclude = new Uint8Array(img.width * img.height);
       for (let i = 0; i < exclude.length; i += 1) exclude[i] = subject.matte[i]! >= 0.5 ? 1 : 0;
     }
-    const { screen, model } = this.screenFor(img, exclude);
+    const { screen, model, gain } = this.screenFor(img, exclude);
     const links: ResolvedLink[] = [];
     for (const l of s.links) if (l.source.type === 'roto' && !rotoCache.has(l.source.partId)) rotoCache.set(l.source.partId, await io.roto(l.source.partId, frame, img.width, img.height));
     links.push(...resolveLinks(s.links, frame, { width: img.width, height: img.height, pxScale: o.pxScale, roto: (id) => rotoCache.get(id) ?? null }));
@@ -180,6 +226,7 @@ export class ShotKeyer {
       background: bg,
       subject,
       shadow: s.params.shadowPass,
+      clean: s.params.shadowPass ? this.cleanFor(img, model, gain) : null,
       lightWrap: o.foreground && (s.lightWrap.output || o.wrapPreview) ? { width: s.lightWrap.widthPx / o.pxScale, intensity: s.lightWrap.intensity, lumaWeight: s.lightWrap.lumaWeight, luma: o.luma } : null,
     });
     return { ...out, screen, background: bg, links };

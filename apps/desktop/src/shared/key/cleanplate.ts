@@ -30,6 +30,15 @@ export interface ScreenModel {
    * Absent: everywhere (a flat model).
    */
   support?: Float32Array;
+  /**
+   * The screen in full detail where it does not move (addendum 18): per
+   * pixel, a bright quantile over the analysis frames of the pixels that were
+   * screen there (the cove's fall-off, folds, seams, at this size), NaN where
+   * too few frames saw it. A shadow that moves with the subject is in few of
+   * those frames, so it is not in here: this is what the shadow pass measures
+   * against. Absent: the grid model.
+   */
+  fine?: { width: number; height: number; data: Float32Array };
 }
 
 export interface ScreenRef {
@@ -189,6 +198,44 @@ function fitGrid(frames: readonly LinearImage[], masks: readonly Uint8Array[], g
   }
   const filled = pullPush(grid, weight, gw, gh, 3);
   return { gw, gh, grid: filled, observed: observed / (gw * gh), support: weight };
+}
+
+/**
+ * The static fine screen (see ScreenModel.fine): per pixel, of the frames
+ * where the pixel has the screen's chromaticity (within 0.06) and is not the
+ * subject, the one at the 0.75 quantile of brightness; NaN with fewer than
+ * two such frames.
+ */
+export function fineScreen(frames: readonly LinearImage[], screen: ScreenRef, excludes?: readonly (Uint8Array | null)[]): ScreenModel['fine'] {
+  if (frames.length < 2) return undefined;
+  const { width: w, height: h } = frames[0]!;
+  const n = w * h;
+  const [sr, sb] = chromaOf(screen.rgb[0], screen.rgb[1], screen.rgb[2]);
+  const out = new Float32Array(n * 3).fill(Number.NaN);
+  const lums = new Float32Array(frames.length);
+  const idx: number[] = [];
+  for (let i = 0; i < n; i += 1) {
+    idx.length = 0;
+    for (let k = 0; k < frames.length; k += 1) {
+      if (excludes?.[k]?.[i]) continue;
+      const d = frames[k]!.data;
+      const r = d[3 * i]!;
+      const g = d[3 * i + 1]!;
+      const b = d[3 * i + 2]!;
+      const [cr, cb] = chromaOf(r, g, b);
+      if ((cr - sr) ** 2 + (cb - sb) ** 2 > 0.06 * 0.06) continue;
+      lums[k] = r + g + b;
+      idx.push(k);
+    }
+    if (idx.length < 2) continue;
+    idx.sort((a, b) => lums[a]! - lums[b]!);
+    const k = idx[Math.min(idx.length - 1, Math.round(0.75 * (idx.length - 1)))]!;
+    const d = frames[k]!.data;
+    out[3 * i] = d[3 * i]!;
+    out[3 * i + 1] = d[3 * i + 1]!;
+    out[3 * i + 2] = d[3 * i + 2]!;
+  }
+  return { width: w, height: h, data: out };
 }
 
 /** The screen model's colour at every pixel of a w × h image (bilinear between cell centres). */

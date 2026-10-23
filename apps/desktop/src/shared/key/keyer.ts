@@ -93,6 +93,8 @@ export interface KeyFrameInput {
   subject?: SubjectInput | null;
   /** Compute the shadow pass (and take it out of the alpha). */
   shadow?: boolean;
+  /** The clean screen the shadow pass measures against (the static fine screen); absent: the model. */
+  clean?: Float32Array | null;
 }
 
 export interface KeyFrameOutput {
@@ -425,6 +427,11 @@ export function keyFrame(input: KeyFrameInput): KeyFrameOutput {
     const margin = input.subject ? Math.max(1, input.subject.margin) : Math.max(2, w / 200);
     const allowed = new Float32Array(n);
     const anchor = new Uint8Array(n);
+    let touch: Uint8Array | null = null;
+    if (prior && prior.area) {
+      touch = new Uint8Array(n);
+      for (let i = 0; i < n; i += 1) if (!prior.inside[i] && prior.outsideDistance[i]! <= 4 * margin) touch[i] = 1;
+    }
     if (prior && prior.area)
       for (let i = 0; i < n; i += 1) {
         if (prior.inside[i]) continue;
@@ -442,7 +449,7 @@ export function keyFrame(input: KeyFrameInput): KeyFrameOutput {
         anchor[i] = d > 6 * margin ? 1 : 0;
       }
     }
-    shadow = shadowPass(P, input.model ?? screen, w, h, { kind: k.kind, allowed, anchor });
+    shadow = shadowPass(P, input.clean ?? input.model ?? screen, w, h, { kind: k.kind, allowed, anchor, touch });
     // Taken out of the alpha only beside a segmented subject: without one, a screen-lit costume away
     // from the key's core reads exactly as a shadow, and the matte keeps it (the pass is still written).
     if (prior && prior.area) for (let i = 0; i < n; i += 1) if (shadow[i]! > 0) alpha[i] = alpha[i]! * (1 - clamp01(shadow[i]! / 0.12));
@@ -471,7 +478,7 @@ export function keyFrame(input: KeyFrameInput): KeyFrameOutput {
   }
   const wrap = !input.matteOnly && input.background && input.lightWrap && input.lightWrap.intensity > 0 ? lightWrap(alpha, input.background, input.lightWrap) : null;
 
-  const metrics: KeyMetrics = keyMetrics(img, screen, raw, edge, keyCore, alpha, k.kind, input.model);
+  const metrics: KeyMetrics = keyMetrics(img, screen, raw, edge, keyCore, alpha, k.kind, input.model, { priorCore: prior && prior.confidence > 0 ? Float32Array.from(prior.inside) : null, keep: prior && prior.confidence > 0 ? prior.keep : null, shadow });
   if (prior) {
     // How much the key, without the prior, would have called solid outside the segmentation (stands, a
     // second actor, or a segmentation that lost a limb), and how much of its core is clean screen.
@@ -496,7 +503,17 @@ export function keyFrame(input: KeyFrameInput): KeyFrameOutput {
  * (the keyer made something transparent that does not look like screen), and
  * how far the clean screen is from its model (a lighting change).
  */
-export function keyMetrics(img: LinearImage, screen: Float32Array, raw: Float32Array, edge: Float32Array, core: Uint8Array, alpha: Float32Array, kind: ScreenKind, model: Float32Array = screen): KeyMetrics {
+export function keyMetrics(
+  img: LinearImage,
+  screen: Float32Array,
+  raw: Float32Array,
+  edge: Float32Array,
+  core: Uint8Array,
+  alpha: Float32Array,
+  kind: ScreenKind,
+  model: Float32Array = screen,
+  hybrid: { priorCore?: Float32Array | null; keep?: Float32Array | null; shadow?: Float32Array | null } = {},
+): KeyMetrics {
   const { width: w, height: h } = img;
   const n = w * h;
   const P = img.data;
@@ -511,7 +528,10 @@ export function keyMetrics(img: LinearImage, screen: Float32Array, raw: Float32A
     const a = alpha[i]!;
     if (a < 0.02) {
       clean += 1;
-      if ((i & 3) === 0) {
+      // Screen vs its model, over what the key itself reads as screen: not what a subject prior
+      // cleared (a light stand), not a shadow (it is darker on purpose).
+      const counted = (!hybrid.shadow || hybrid.shadow[i]! < 0.05) && (!hybrid.priorCore || raw[i]! < 0.25);
+      if ((i & 3) === 0 && counted) {
         const q = 3 * i;
         const ss = model[q]! + model[q + 1]! + model[q + 2]!;
         if (ss > 1e-5) {
@@ -521,9 +541,10 @@ export function keyMetrics(img: LinearImage, screen: Float32Array, raw: Float32A
       }
     } else if (a < 0.98) soft += 1;
     if (a >= 0.5) subject += 1;
+    // What the core rescued — but not what the segmentation vouches for (a screen-lit costume).
     if (core[i]) {
       coreN += 1;
-      if (edge[i]! < 0.9) coreBad += 1;
+      if (edge[i]! < 0.9 && !(hybrid.priorCore && hybrid.priorCore[i]! >= 0.5) && !(hybrid.keep && hybrid.keep[i]! < 0.5)) coreBad += 1;
     }
   }
   // Holes: enclosed transparent regions whose pixels do not look like screen.

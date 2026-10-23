@@ -90,38 +90,78 @@ export function seedFromKey(alpha: Float32Array, w: number, h: number): SubjectS
     }
   }
   if (!best) return null;
+  const solidPart = new Uint8Array(n);
+  for (let i = 0; i < n; i += 1) solidPart[i] = lab.labels[i] === best ? 1 : 0;
+  const sBox = bbox(solidPart, w, h)!;
+  // What the key joins to it — a screen-lit costume keys only part-solid (the astronaut's legs), but
+  // it keys — walked through pixels keyed at all, kept within the solid part's columns (widened by a
+  // quarter): so the box and clicks reach the whole figure, not its solid head and hands only, and a
+  // cast shadow running off sideways does not stretch the box.
+  const bw = sBox.x1 - sBox.x0 + 1;
+  const cx0 = Math.max(0, Math.floor(sBox.x0 - 0.25 * bw));
+  const cx1 = Math.min(w - 1, Math.ceil(sBox.x1 + 0.25 * bw));
   const mine = new Uint8Array(n);
-  for (let i = 0; i < n; i += 1) mine[i] = lab.labels[i] === best ? 1 : 0;
+  const queue = new Int32Array(n);
+  let head = 0;
+  let tail = 0;
+  for (let i = 0; i < n; i += 1) if (solidPart[i]) {
+    mine[i] = 1;
+    queue[tail++] = i;
+  }
+  while (head < tail) {
+    const i = queue[head++]!;
+    const x = i % w;
+    const y = (i - x) / w;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+      const xx = x + dx;
+      const yy = y + dy;
+      if (xx < cx0 || xx > cx1 || yy < 0 || yy >= h) continue;
+      const j = yy * w + xx;
+      if (mine[j] || alpha[j]! < 0.2) continue;
+      mine[j] = 1;
+      queue[tail++] = j;
+    }
+  }
   const inv = new Uint8Array(n);
   for (let i = 0; i < n; i += 1) inv[i] = mine[i] ? 0 : 1;
   const depth = squaredDistance(inv, w, h);
   const box = bbox(mine, w, h)!;
-  const apart = 0.3 * Math.max(box.x1 - box.x0, box.y1 - box.y0);
+  const apart = 0.25 * Math.max(box.x1 - box.x0, box.y1 - box.y0);
   const pts: [number, number, number][] = [];
-  for (let k = 0; k < 3; k += 1) {
-    let bi = -1;
-    for (let i = 0; i < n; i += 1) {
-      if (!mine[i] || (bi >= 0 && depth[i]! <= depth[bi]!)) continue;
-      const x = i % w;
-      const y = (i - x) / w;
-      if (pts.every(([px, py]) => Math.hypot(px - x, py - y) >= apart)) bi = i;
+  // Clicks: the solid part's deepest point first (surely the subject), then the joined region's, spread apart.
+  for (const [region, count] of [[solidPart, 1], [mine, 3]] as const) {
+    const inv2 = new Uint8Array(n);
+    for (let i = 0; i < n; i += 1) inv2[i] = region[i] ? 0 : 1;
+    const dd = region === mine ? depth : squaredDistance(inv2, w, h);
+    for (let k = 0; k < count; k += 1) {
+      let bi = -1;
+      for (let i = 0; i < n; i += 1) {
+        if (!region[i] || (bi >= 0 && dd[i]! <= dd[bi]!)) continue;
+        const x = i % w;
+        const y = (i - x) / w;
+        if (pts.every(([px, py]) => Math.hypot(px - x, py - y) >= apart)) bi = i;
+      }
+      if (bi < 0) break;
+      pts.push([(bi % w) + 0.5, Math.floor(bi / w) + 0.5, Math.sqrt(dd[bi]!)]);
     }
-    if (bi < 0) break;
-    pts.push([(bi % w) + 0.5, Math.floor(bi / w) + 0.5, Math.sqrt(depth[bi]!)]);
   }
   // Clean screen round it, for Track's exclude paint: a ring of points well outside the solid region's box.
-  const all = bbox(solid, w, h)!;
   const m = Math.max(4, w / 40);
   const ring: [number, number][] = [];
-  const x0 = Math.max(1, all.x0 - m);
-  const x1 = Math.min(w - 2, all.x1 + m);
+  const x0 = Math.max(1, box.x0 - m);
+  const x1 = Math.min(w - 2, box.x1 + m);
   const y0 = Math.max(1, box.y0 - m);
   const y1 = Math.min(h - 2, box.y1 + m);
   for (const [x, y] of [[x0, y0], [x1, y0], [x1, y1], [x0, y1]] as const) if (alpha[Math.round(y) * w + Math.round(x)]! < 0.05) ring.push([x, y]);
   const r = Math.max(2, w / 160);
   const strokes: EngineStroke[] = pts.map(([x, y, d]) => ({ mode: 'include' as const, radius: Math.max(r, 0.6 * d), points: [[x, y] as const] }));
   if (ring.length) strokes.push({ mode: 'exclude', radius: r, points: ring });
-  return { prompt: { points: pts.map(([x, y]) => ({ x, y, label: 1 as const })) }, strokes, seededBy: 'key' };
+  const pad = Math.max(2, 0.02 * Math.max(box.x1 - box.x0, box.y1 - box.y0));
+  return {
+    prompt: { box: { x0: Math.max(0, box.x0 - pad), y0: Math.max(0, box.y0 - pad), x1: Math.min(w, box.x1 + 1 + pad), y1: Math.min(h, box.y1 + 1 + pad) }, points: pts.map(([x, y]) => ({ x, y, label: 1 as const })) },
+    strokes,
+    seededBy: 'key',
+  };
 }
 
 export interface SubjectRunIO {
