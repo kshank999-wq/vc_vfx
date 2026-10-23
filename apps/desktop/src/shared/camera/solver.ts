@@ -566,18 +566,20 @@ function chooseKeyframes(w: Work, minTracks: number): number[] {
  */
 async function solveNonSquare(td: TrackData, settings: SolveSettings, a: number, ctx: SolveContext): Promise<SolveResult> {
   const t0 = Date.now();
-  const desq: TrackData = { ...td, width: td.width * a, xy: Float32Array.from(td.xy, (v, i) => (i % 2 === 0 ? v * a : v)) };
+  // Stored pixel index → de-squeezed pixel index (pixel centres): x' = a·(x + ½) − ½.
+  const toDesq = (x: number) => a * (x + 0.5) - 0.5;
+  const desq: TrackData = { ...td, width: td.width * a, xy: Float32Array.from(td.xy, (v, i) => (i % 2 === 0 ? toDesq(v) : v)) };
   const { pixelAspect: _a, ...rest } = settings;
   const square = await solveTracks(
     desq,
     {
       ...rest,
-      ...(settings.principal ? { principal: { cx: settings.principal.cx * a, cy: settings.principal.cy } } : {}),
-      ...(settings.controlPoints ? { controlPoints: settings.controlPoints.map((c) => ({ ...c, u: c.u * a })) } : {}),
+      ...(settings.principal ? { principal: { cx: toDesq(settings.principal.cx), cy: settings.principal.cy } } : {}),
+      ...(settings.controlPoints ? { controlPoints: settings.controlPoints.map((c) => ({ ...c, u: toDesq(c.u) })) } : {}),
     },
     ctx,
   );
-  const intr: Intrinsics = { ...square.intrinsics, cx: square.intrinsics.cx / a, a };
+  const intr: Intrinsics = { ...square.intrinsics, cx: (square.intrinsics.cx + 0.5) / a - 0.5, a };
   if (!square.ok) return { ...square, width: td.width, height: td.height, intrinsics: intr };
   const init: SolveResult = { ...square, width: td.width, height: td.height, intrinsics: intr };
   const out = await solveTracks(td, { ...settings, initial: init, nodal: square.stats.nodal }, ctx);
