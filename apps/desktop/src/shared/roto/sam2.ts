@@ -252,6 +252,24 @@ export function subjectShift(prev: RGBImage, next: RGBImage, prevMask: Mask): [n
   return [t.dx / f, t.dy / f];
 }
 
+/** Of the multimask outputs, the largest whose predicted IoU is within 0.1 of the best. */
+export function pickWholest(masks: Float32Array, ious: Float32Array): number {
+  const best = pickBest(ious);
+  const plane = SAM2_LOWRES * SAM2_LOWRES;
+  let pick = best;
+  let area = -1;
+  for (let k = 0; k < ious.length; k += 1) {
+    if (ious[k]! < ious[best]! - 0.1) continue;
+    let a = 0;
+    for (let i = k * plane; i < (k + 1) * plane; i += 1) if (masks[i]! > 0) a += 1;
+    if (a > area) {
+      area = a;
+      pick = k;
+    }
+  }
+  return pick;
+}
+
 /** Decoder IoU blended with temporal IoU against the previous matte (when there is one). */
 export function sam2Confidence(predictedIou: number, temporalIou: number | null): number {
   const p = Math.min(1, Math.max(0, predictedIou));
@@ -273,11 +291,11 @@ export class Sam2Engine implements SegmentationEngine {
     this.label = model.startsWith('sam2.1') ? 'SAM 2.1 (AI)' : 'SAM 2 (AI)';
   }
 
-  private async run(image: RGBImage, prompt: Sam2Prompt): Promise<{ mask: Mask; iou: number; logits: Float32Array }> {
+  private async run(image: RGBImage, prompt: Sam2Prompt, wholest = false): Promise<{ mask: Mask; iou: number; logits: Float32Array }> {
     const embedding = await this.runtime.encode(sam2Preprocess(image));
     const out = await this.runtime.decode(embedding, prompt);
     const plane = SAM2_LOWRES * SAM2_LOWRES;
-    const best = pickBest(out.ious.subarray(0, out.count));
+    const best = wholest ? pickWholest(out.masks, out.ious.subarray(0, out.count)) : pickBest(out.ious.subarray(0, out.count));
     const logits = out.masks.slice(best * plane, (best + 1) * plane);
     return { mask: logitsToMask(upsampleLogits(logits, image.width, image.height), image.width, image.height), iou: out.ious[best]!, logits };
   }
@@ -288,7 +306,9 @@ export class Sam2Engine implements SegmentationEngine {
       // A box / clicks on the subject (the key's subject seed): with paint as well, both prompt.
       const paint = req.strokes.length ? promptFromStrokes(req.strokes, req.image.width, req.image.height) : null;
       const prompt = paint ? { coords: Float32Array.from([...paint.coords, ...seeded.coords]), labels: Float32Array.from([...paint.labels, ...seeded.labels]), maskInput: null } : seeded;
-      const r = await this.run(req.image, prompt);
+      // Clicks alone are ambiguous (a click on a helmet: the helmet, or the astronaut?): take the
+      // largest of the masks SAM is nearly as sure of — the whole subject, which is what a key wants.
+      const r = await this.run(req.image, prompt, !req.prompt?.box);
       this.lastLogits = r.logits;
       return { mask: r.mask, confidence: sam2Confidence(r.iou, null), detail: { predictedIou: r.iou } };
     }

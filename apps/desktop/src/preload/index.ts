@@ -38,6 +38,7 @@ const api: VcvfxApi = {
   keyProcess: (input) => ipcRenderer.invoke('job:key-process', input),
   keyMatch: (input) => ipcRenderer.invoke('key:match', input),
   keySeedRoto: (input) => ipcRenderer.invoke('key:seed-roto', input),
+  keySubject: (input) => ipcRenderer.invoke('job:key-subject', input),
   keyExport: (input) => ipcRenderer.invoke('job:key-export', input),
   keyChooseBackground: () => ipcRenderer.invoke('key:choose-background'),
   cleanPlateSession: (input) => ipcRenderer.invoke('cleanplate:session', input),

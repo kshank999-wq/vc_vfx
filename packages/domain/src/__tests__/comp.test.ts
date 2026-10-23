@@ -399,7 +399,7 @@ describe('renders, exports and approval', () => {
 
 describe('project format 8 (now 9)', () => {
   it('projects of formats 3 to 7 open with no comp, and a comp survives a round trip', () => {
-    expect(PROJECT_VERSION).toBe(10);
+    expect(PROJECT_VERSION).toBe(11);
     const v7 = JSON.parse(serializeProject(sample()));
     v7.version = 7;
     for (const s of v7.shots) delete s.comp;
@@ -418,7 +418,7 @@ describe('project format 8 (now 9)', () => {
     for (const old of [v7, v6, v5, v4, v3]) {
       const opened = parseProject(JSON.stringify(old));
       if (!opened.ok) throw new Error(opened.reason);
-      expect(opened.project.version).toBe(10);
+      expect(opened.project.version).toBe(11);
       expect(shotState(opened.project, SHOT)!.comp).toBeNull();
     }
     let p = ok(startComp(withComp(), SHOT, 'suggested', 'ana', NOW));

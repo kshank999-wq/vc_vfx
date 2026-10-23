@@ -31,7 +31,18 @@ export function frameView(
   if (out.background) {
     const bg = out.background.width === w ? out.background : resizeLinear(out.background, w, h);
     const f = o.match ? applyMatch(fg, out.alpha, o.match, o.match.strength) : fg;
-    comp = toDisplay(over(f, out.alpha, bg.data, o.wrap ? out.wrap : null), n, space);
+    // The shadow pass multiplies the background (as the compositor would with the written matte).
+    let bgData = bg.data;
+    if (out.shadow) {
+      bgData = bg.data.slice();
+      for (let i = 0; i < n; i += 1) {
+        const k = 1 - out.shadow[i]!;
+        bgData[3 * i]! *= k;
+        bgData[3 * i + 1]! *= k;
+        bgData[3 * i + 2]! *= k;
+      }
+    }
+    comp = toDisplay(over(f, out.alpha, bgData, o.wrap ? out.wrap : null), n, space);
   }
   const union = (kind: ResolvedLink['kind'], pick: (l: ResolvedLink) => Float32Array | null) => {
     const ls = out.links.filter((l) => l.kind === kind);
@@ -73,6 +84,9 @@ export function frameView(
     holdout: union('holdout', (l) => (l.invert ? l.matte.map((v) => 1 - v) : l.matte)),
     repair: union('repair', (l) => l.region ?? l.matte),
     spill,
+    subject: out.prior && out.prior.area ? Uint8Array.from(out.prior.inside, (v) => (v ? 255 : 0)) : null,
+    subjectConfidence: out.prior ? Math.round(out.prior.confidence * 1000) / 1000 : null,
+    shadow: out.shadow ? u8(out.shadow) : null,
     confidence: out.confidence,
     metrics: out.metrics,
     screen: [out.screen[c]!, out.screen[c + 1]!, out.screen[c + 2]!],

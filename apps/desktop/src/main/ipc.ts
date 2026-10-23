@@ -482,7 +482,20 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null, isDev
     progress: (event, id, label) => progressSender(event.sender, id, label),
     env: async () => {
       const t = await currentTools();
-      return { ffmpeg: t.ffmpeg, caps: t.caps, rotoCacheRoot: join(app.getPath('userData'), 'Roto Cache'), keyCacheRoot: join(app.getPath('userData'), 'Key Cache'), workerFile: join(__dirname, 'key-worker.js'), generator: `VC VFX ${app.getVersion()}` };
+      return {
+        ffmpeg: t.ffmpeg,
+        caps: t.caps,
+        rotoCacheRoot: join(app.getPath('userData'), 'Roto Cache'),
+        keyCacheRoot: join(app.getPath('userData'), 'Key Cache'),
+        workerFile: join(__dirname, 'key-worker.js'),
+        generator: `VC VFX ${app.getVersion()}`,
+        // The Auto subject segmentation runs SAM 2 with roto's model and runtime (addendum 18).
+        sam2: async () => sam2Files(await rotoEnv()),
+        sam2Status: async () => {
+          const info = (await engineInfo(await rotoEnv())).find((e) => e.id === 'sam2')!;
+          return { available: info.available, reason: info.reason, label: info.model?.label ?? info.label };
+        },
+      };
     },
     chooseImage: async () => {
       const window = parent();

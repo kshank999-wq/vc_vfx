@@ -299,6 +299,7 @@ export function createBrowserBridge(): BrowserBridge {
     keyProcess: (input) => keying.keyProcess(input),
     keyMatch: (input) => keying.keyMatch(input),
     keySeedRoto: (input) => keying.keySeedRoto(input),
+    keySubject: (input) => keying.keySubject(input),
     keyExport: (input) => keying.keyExport(input),
     keyChooseBackground: () => keying.keyChooseBackground(),
     // Clean plates: the engine runs here on the sample's synthetic panning shot (cleanplate-preview.ts).

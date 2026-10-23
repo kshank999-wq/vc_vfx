@@ -6,6 +6,7 @@ import { buildExrWriteArgs, toPlanar, type ExrLayout } from '../../shared/key/ff
 import { ShotKeyer, checkCancel, shotScreenModel, type KeySettings } from '../../shared/key/engine';
 import type { ScreenModel } from '../../shared/key/cleanplate';
 import { to16 } from '../../shared/roto/refine';
+import { encodeExrFloat } from '../../shared/camera/stmap';
 import { encodePng } from '../roto/png';
 import { createKeyIO, type KeyIOJob } from './io';
 
@@ -134,6 +135,7 @@ export async function exportKey(job: KeyExportJob, o: { signal?: AbortSignal; on
   }
   const keyer = new ShotKeyer(settings, model);
   try {
+    const shadowOn = job.settings.params.shadowPass;
     for (let f = job.first; f <= job.last; f += 1) {
       checkCancel(o.signal);
       const img = await io.frame(f);
@@ -149,6 +151,16 @@ export async function exportKey(job: KeyExportJob, o: { signal?: AbortSignal; on
       if (options.edge) {
         await writeFile(join(folder, keyNames.edgeFile(shot, version, f)), encodePng({ width, height, bitDepth: 16, data: to16({ width, height, data: out.edge }) }, { text }));
         files.push(keyNames.edgeFile(shot, version, f));
+      }
+      if (shadowOn) {
+        // The shadow pass (addendum 18): density, 16-bit; and, with the alpha EXR, both in one EXR as layers.
+        const sh = out.shadow ?? new Float32Array(n);
+        await writeFile(join(folder, keyNames.shadowFile(shot, version, f)), encodePng({ width, height, bitDepth: 16, data: to16({ width, height, data: sh }) }, { text: { ...text, Description: `${shot} key ${versionTag(version)}, shadow pass (density)` } }));
+        files.push(keyNames.shadowFile(shot, version, f));
+        if (options.alphaExr) {
+          await writeFile(join(folder, keyNames.mattesExrFile(shot, version, f)), encodeExrFloat(width, height, { A: out.alpha, 'shadow.A': sh }, 'half'));
+          files.push(keyNames.mattesExrFile(shot, version, f));
+        }
       }
       if (fg) {
         await fg.write(toPlanar('rgba', n, out.fg, out.alpha));

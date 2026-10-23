@@ -57,11 +57,15 @@ export const PROJECT_FORMAT = 'vcvfx-project';
  *    override (`pixelAspect`), the probe records the clip's sample aspect
  *    (`probe.sampleAspect`), and a solve records the pixel aspect it was
  *    solved at (`intrinsics.pixelAspect`, 1 for older solves).
+ * 11: the hybrid key (addendum 18): a key carries its subject prior
+ *    (`key.subject`: none / roto part / Auto with its seed and run), the
+ *    shadow pass switch (`key.params.shadowPass`), per-frame subject and
+ *    shadow measurements, and exports may name a shadow pass.
  * An older project opens (the new fields empty) and is saved as the current
  * version; an older VC VFX refuses a newer project rather than silently
  * dropping what it does not know about.
  */
-export const PROJECT_VERSION = 10;
+export const PROJECT_VERSION = 11;
 export const PROJECT_EXTENSION = 'vcvfx';
 
 export const ApprovalSchema = z.object({ by: z.string().min(1), at: z.string() });

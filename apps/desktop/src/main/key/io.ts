@@ -20,23 +20,51 @@ export interface RotoSource {
   parts: Pick<RotoPart, 'id' | 'parentId' | 'combine' | 'refine' | 'frames'>[];
 }
 
+/** The Auto subject segmentation's masks (key cache, part `subject`) and their per-frame confidence. */
+export interface SubjectSource {
+  store: string;
+  version: number;
+  /** Frame → engine confidence. A frame not listed has no segmentation. */
+  confidence: Record<string, number>;
+}
+
 export interface KeyIOJob {
   frames: KeyFrameSpec;
   size: { width: number; height: number };
   space: WorkingSpace;
   roto: RotoSource | null;
   background: BackgroundSpec | null;
+  subject?: SubjectSource | null;
 }
+
+export const SUBJECT_PART = 'subject';
 
 export function createKeyIO(job: KeyIOJob, signal?: AbortSignal): KeyIO & { reader: LinearFrameReader } {
   const reader = new LinearFrameReader(job.frames, job.size, signal ? { signal } : {});
   const store = job.roto ? MaskStore.at(job.roto.store) : null;
   let bgCache: { key: string; img: LinearImage | null } | null = null;
   const plate = job.frames.plate;
+  const subjectStore = job.subject ? MaskStore.at(job.subject.store) : null;
+  const guideAt = (frame: number, width: number, height: number) => {
+    const lum = luminance(reader.peek(frame) ?? { width, height, data: new Float32Array(width * height * 3) }, job.space.luma);
+    for (let i = 0; i < lum.length; i += 1) lum[i] = Math.sqrt(Math.max(0, Math.min(1, lum[i]!)));
+    return lum;
+  };
   return {
     reader,
     signal,
     frame: (f) => reader.frame(f),
+    async subject(frame, width, height) {
+      if (!job.subject || !subjectStore) return null;
+      const confidence = job.subject.confidence[String(frame)];
+      if (confidence === undefined) return null;
+      const m = await subjectStore.get(SUBJECT_PART, job.subject.version, frame);
+      if (!m) return null;
+      const full = width === plate.width && height === plate.height && (m.width !== width || m.height !== height);
+      // At plate resolution the segmentation's edge is snapped to the frame, as roto's mattes are.
+      const matte = full ? upscaleAlpha(m, width, height, guideAt(frame, width, height), { featherPx: 0, shrinkGrowPx: 0, temporalSmoothing: 0, edgeSnap: true }).data : m.width === width && m.height === height ? maskToPlane(m) : resizePlane(maskToPlane(m), m.width, m.height, width, height);
+      return { matte, confidence };
+    },
     async roto(partId, frame, width, height) {
       if (!job.roto || !store) return null;
       const doc = { formatVersion: 1 as const, parts: job.roto.parts.map((p) => ({ ...p, name: p.id, color: '#000000', visible: true, keyFrames: [], engine: { id: 'track' as const, version: '', settings: {} } })), runs: [], exports: [], workingWidth: 1920, seq: 0 };

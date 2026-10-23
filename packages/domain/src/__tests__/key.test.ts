@@ -283,7 +283,7 @@ describe('outputs, manifest and project format', () => {
     expect(meta.perFrame).toHaveLength(2);
     expect(meta.lightWrap).toBeNull();
     const m = buildManifest(p, SHOT, { generatedAt: NOW, appVersion: '0.1.0', operator: 'ana', files: [] });
-    expect(m.key).toMatchObject({ version: 'v001', state: 'needs_review', exported: true, alpha: '010_020_key_alpha_v001.%04d.png', encoding: 'ACEScg (linear AP1)', algorithm: 'vcvfx-cdk@1.1.0', confidence: { frames: 2 } });
+    expect(m.key).toMatchObject({ version: 'v001', state: 'needs_review', exported: true, alpha: '010_020_key_alpha_v001.%04d.png', encoding: 'ACEScg (linear AP1)', algorithm: 'vcvfx-cdk@1.2.0', confidence: { frames: 2 } });
     expect(buildManifest(sample(), SHOT, { generatedAt: NOW, appVersion: '0.1.0', operator: 'ana', files: [] }).key).toBeNull();
     // A shot can still be approved and packaged as before.
     p = ok(approveTask(p, SHOT, 'key', 'Sup', NOW));
@@ -291,7 +291,7 @@ describe('outputs, manifest and project format', () => {
   });
 
   it('since project format 4: a version 3 project opens with no key, and keys survive a round trip', () => {
-    expect(PROJECT_VERSION).toBe(10);
+    expect(PROJECT_VERSION).toBe(11);
     expect(PREP_TASKS.key.available).toBe(true);
     expect(PREP_TASKS.despill.available).toBe(true);
     const v3 = JSON.parse(serializeProject(sample()));

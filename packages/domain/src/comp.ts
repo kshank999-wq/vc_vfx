@@ -200,7 +200,7 @@ export function compSourceOf(node: Pick<CompNode, 'type' | 'params'>): CompSourc
     case 'roto':
       return 'roto';
     case 'keyer':
-      return p['output'] === 'alpha' ? 'key_alpha' : 'key_foreground';
+      return p['output'] === 'alpha' ? 'key_alpha' : p['output'] === 'shadow' ? 'key_shadow' : 'key_foreground';
     case 'cleanplate':
       return 'cleanplate';
     case 'isolate': {
@@ -461,6 +461,12 @@ export function resolveCompSource(p: Project, shotId: string, source: CompSource
       if (source === 'key_foreground' && !e.foreground) return { ok: false, source, reason: `Key ${versionTag(e.version)} was exported without its foreground (the source encoding is unknown). Set it in Plates and export the key again.` };
       return { ok: true, source, version: e.version, folder: e.folder, file: source === 'key_alpha' ? e.alpha : e.foreground!, format: source === 'key_alpha' ? 'png' : 'exr', still: false, kind, first: e.first, last: e.last, label: `Key ${versionTag(e.version)} ${source === 'key_alpha' ? 'alpha' : 'foreground'}`, note: note(v('key'), e.version, 'The key') };
     }
+    case 'key_shadow': {
+      const e = newest(s.key?.exports ?? [], v('key'));
+      if (!e) return { ok: false, source, reason: 'The key has not been exported: Key tab › Export, then the comp can read it.' };
+      if (!e.shadow) return { ok: false, source, reason: `Key ${versionTag(e.version)} was exported without a shadow pass. Turn on the shadow pass (Key tab › Subject) and export the key again.` };
+      return { ok: true, source, version: e.version, folder: e.folder, file: e.shadow, format: 'png', still: false, kind, first: e.first, last: e.last, label: `Key ${versionTag(e.version)} shadow pass`, note: note(v('key'), e.version, 'The key') };
+    }
     case 'roto': {
       const e = newest(s.roto?.exports ?? [], v('roto'));
       if (!e) return { ok: false, source, reason: 'The roto has not been exported: Roto tab › Export mattes, then the comp can read it.' };
@@ -615,7 +621,15 @@ export function suggestedCompGraph(p: Project, shotId: string): Pick<CompDocumen
       link(d, fg, dsp, 'src');
       fg = dsp;
     }
-    const bg = background();
+    let bg = background();
+    // The key's shadow pass, when it has one: the background darkened by the shadow (Merge stencil: B × (1 − a)).
+    if (s?.key?.params.shadowPass) {
+      const shadow = draftAdd(d, 'keyer', { output: 'shadow' }, 'Key_shadow');
+      const st = draftAdd(d, 'merge', { operation: 'stencil' }, 'Shadow_on_bg');
+      link(d, bg, st, 'B');
+      link(d, shadow, st, 'A');
+      bg = st;
+    }
     const wrap = draftAdd(d, 'lightwrap', s?.key ? { width: s.key.lightWrap.widthPx, intensity: s.key.lightWrap.intensity, lumaWeight: s.key.lightWrap.lumaWeight } : {});
     link(d, fg, wrap, 'fg');
     link(d, bg, wrap, 'bg');
