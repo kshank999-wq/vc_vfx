@@ -22,6 +22,9 @@ const SettingsSchema = z.object({
   modelBaseUrl: z.string().default(''),
   sam2Model: z.string().default(''),
   aiFrames: z.record(z.boolean()).default({}),
+  /** VC Film Studio's address (addendum 19); empty: the default. The upload key is never here (film-studio.ts). */
+  filmStudioUrl: z.string().default(''),
+  filmStudioAutoSend: z.boolean().default(false),
 });
 
 let cache: Settings | null = null;

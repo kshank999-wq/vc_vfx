@@ -384,6 +384,12 @@ describe('the printed log and the CSV', () => {
     expect(html).toContain('matte chatter');
   });
 
+  it('says a note shared by many shots once, above the sections, with the shots it is on', () => {
+    const note = 'The source has not been verified against the DIT’s checksum yet. Run Verify sources on the Deliver tab.';
+    expect(html.split(note).length - 1).toBe(1);
+    expect(html).toMatch(/class="lifted".*\(10 shots: S01, S02/);
+  });
+
   it('escapes what it prints', () => {
     const p = ok(setFilmStudioProduction(rich(), '<b>Prod</b> & "co"', 'sup', at(200)));
     const out = vfxStatusReportHtml(buildFilmStudioStatus(p, INPUT));

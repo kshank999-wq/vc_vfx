@@ -40,7 +40,7 @@ export interface StatusReportOptions {
   supervisor?: string;
 }
 
-function shotRow(s: VfxStatusShot): string {
+function shotRow(s: VfxStatusShot, lifted: ReadonlySet<string>): string {
   const r = readiness(s);
   const name = statusShotName(s);
   const tasks = s.tasks.length
@@ -60,7 +60,7 @@ function shotRow(s: VfxStatusShot): string {
   if (r.delivered) holding.push(`<div class="done">Delivered ${e(day(s.delivered?.at))}${s.delivered?.to ? ` to ${e(s.delivered.to)}` : ''}</div>`);
   else if (r.ready) holding.push('<div class="done">Ready to hand off</div>');
   for (const w of r.why) holding.push(`<div class="why">${e(w)}</div>`);
-  for (const x of s.problems) holding.push(`<div class="problem p-${x.severity}"><span class="sev">${x.severity === 'warn' ? 'warning' : x.severity}</span> ${e(x.text)}</div>`);
+  for (const x of s.problems.filter((p) => !lifted.has(p.text))) holding.push(`<div class="problem p-${x.severity}"><span class="sev">${x.severity === 'warn' ? 'warning' : x.severity}</span> ${e(x.text)}</div>`);
   const approval = s.approval ? `<div class="by">Shot approved · ${e(s.approval.by)} ${e(day(s.approval.at))}</div>` : '';
   const notes = [s.supervisorNotes ? `Sup: ${s.supervisorNotes}` : null, s.notes ? `Prep: ${s.notes}` : null].filter(Boolean).join(' — ');
   return `<tr>
@@ -81,6 +81,10 @@ export function vfxStatusReportHtml(doc: VfxStatusDocument, options: StatusRepor
   const says = statusSays(counts);
   const groups = new Map<StatusBucket, VfxStatusShot[]>(STATUS_BUCKETS.map((b) => [b, []]));
   for (const s of doc.shots) groups.get(readiness(s).bucket)!.push(s);
+  // A note said word for word on many shots ("the source has not been verified yet") is said once, above, with the shots it is on.
+  const noteShots = new Map<string, string[]>();
+  for (const s of doc.shots) for (const x of s.problems) if (x.severity === 'info') noteShots.set(x.text, [...(noteShots.get(x.text) ?? []), statusShotName(s)]);
+  const lifted = new Map([...noteShots].filter(([, shots]) => shots.length >= 3));
   const o = doc.project.origin;
   const meta = [
     doc.project.productionCompany,
@@ -100,9 +104,10 @@ export function vfxStatusReportHtml(doc: VfxStatusDocument, options: StatusRepor
     if (!shots.length) return `<section class="empty">${head}<p class="muted">No shots.</p></section>`;
     return `<section>${head}
 <table>
+<colgroup><col class="c-box"><col class="c-shot"><col class="c-slate"><col class="c-day"><col class="c-status"><col class="c-tasks"><col class="c-pkg"><col></colgroup>
 <thead><tr><th class="box">✓</th><th>Shot</th><th>Scene / setup / take</th><th>Shoot day</th><th>Status</th><th>Tasks</th><th>Package</th><th>${b === 'ready' || b === 'delivered' ? 'Notes' : 'What is holding it'}</th></tr></thead>
 <tbody>
-${shots.map(shotRow).join('\n')}
+${shots.map((x) => shotRow(x, new Set(lifted.keys()))).join('\n')}
 </tbody></table></section>`;
   }).join('\n');
 
@@ -124,13 +129,15 @@ h1 { font-size: 15pt; margin: 0 0 2pt; }
 h2 { font-size: 11pt; margin: 12pt 0 4pt; padding-bottom: 2pt; border-bottom: 1.2pt solid #333; break-after: avoid; }
 h2 .count { color: #666; font-weight: 400; }
 section.empty h2 { border-bottom-color: #ccc; color: #777; } section.empty p { margin: 0 0 4pt; }
-table { width: 100%; border-collapse: collapse; }
+table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+col.c-box { width: 8mm; } col.c-shot { width: 9%; } col.c-slate { width: 10%; } col.c-day { width: 11%; } col.c-status { width: 12%; } col.c-tasks { width: 22%; } col.c-pkg { width: 8%; }
+td { overflow-wrap: anywhere; }
+.lifted { margin: -4pt 0 10pt; color: #555; font-size: 8.5pt; } .lifted li { margin: 1pt 0; }
 th, td { border: 0.5pt solid #aaa; padding: 3pt 4pt; text-align: left; vertical-align: top; }
 th { background: #eee; font-size: 7.5pt; text-transform: uppercase; letter-spacing: .04em; }
 thead { display: table-header-group; }
 tr { break-inside: avoid; page-break-inside: avoid; }
-.box { width: 9mm; } .nw { white-space: nowrap; } .shot { white-space: nowrap; } .tasks { width: 25%; } .holding { width: 32%; }
-.task { white-space: nowrap; } .task.t-needs_correction { color: #c62828; } .task.t-needs_review { color: #b26a00; } .task.t-pending { color: #777; }
+.nw, .shot, .task { white-space: normal; } .task.t-needs_correction { color: #c62828; } .task.t-needs_review { color: #b26a00; } .task.t-pending { color: #777; }
 .by, .conf, .muted { color: #666; } .small { font-size: 7.5pt; }
 .circ { color: #b00; font-size: 7pt; }
 .done { color: #2e7d32; font-weight: 600; } .why { font-weight: 600; } .stale { color: #c62828; font-size: 7.5pt; }
@@ -156,6 +163,7 @@ ${tile('Delivered', counts.delivered, 'delivered')}
 ${tile('Shots', counts.shots, 'total')}
 </div>
 <div class="subtotals">Tasks: ${tasksByState || 'none'} · Problems on shots not yet delivered: ${counts.problems.error} error${counts.problems.error === 1 ? '' : 's'}, ${counts.problems.warn} warning${counts.problems.warn === 1 ? '' : 's'}, ${counts.problems.info} note${counts.problems.info === 1 ? '' : 's'}</div>
+${lifted.size ? `<ul class="lifted">${[...lifted].map(([text, shots]) => `<li><span class="sev">note</span> ${escapeHtml(text)} <span class="muted">(${shots.length} shots: ${escapeHtml(shots.join(', '))})</span></li>`).join('')}</ul>` : ''}
 ${sections}
 <div class="sign">
 <div class="lines">VFX supervisor’s notes</div>

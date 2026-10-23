@@ -1,0 +1,326 @@
+{
+  "format": "vc-film-studio.vfx-status/1",
+  "generatedAt": "2026-10-20T08:00:00.000Z",
+  "generator": {
+    "app": "VC VFX",
+    "version": "0.1.0"
+  },
+  "operator": "Ruth Okafor",
+  "project": {
+    "name": "Night Shift",
+    "productionCompany": "Lantern Pictures"
+  },
+  "shots": [
+    {
+      "handoffShotId": "010_020",
+      "scene": "12A",
+      "setup": "3",
+      "take": "4",
+      "circled": true,
+      "cameraRoll": "A012",
+      "clip": "A012C004_261012_R1AB",
+      "unit": "Main",
+      "shootDay": "Day 07",
+      "frames": {
+        "in": 1001,
+        "out": 1128,
+        "handles": 8,
+        "count": 128,
+        "rangeFrom": "handoff"
+      },
+      "frameRate": 24,
+      "timecodeIn": "01:00:00:00",
+      "timecodeOut": "01:00:04:15",
+      "camera": {
+        "body": "ARRI ALEXA 35",
+        "lens": "Signature Prime",
+        "focalLengthMm": 35
+      },
+      "pixelAspect": 1,
+      "status": {
+        "key": "ready_for_prep",
+        "label": "Ready for Prep"
+      },
+      "source": {
+        "verified": "unchecked"
+      },
+      "tasks": [
+        {
+          "kind": "sequence_conversion",
+          "label": "Image-sequence conversion",
+          "state": "pending",
+          "version": 1,
+          "approval": null,
+          "problems": 0,
+          "exported": false
+        },
+        {
+          "kind": "roto",
+          "label": "Paint-to-roto",
+          "state": "pending",
+          "version": 1,
+          "approval": null,
+          "notes": "Hair and right hand cross the screen edge",
+          "problems": 0,
+          "exported": false
+        },
+        {
+          "kind": "key",
+          "label": "Green/blue-screen key",
+          "state": "pending",
+          "version": 1,
+          "approval": null,
+          "problems": 0,
+          "exported": false
+        }
+      ],
+      "approval": null,
+      "problems": [
+        {
+          "task": null,
+          "severity": "info",
+          "text": "The source has not been verified against the DIT’s checksum yet. Run Verify sources on the Deliver tab."
+        }
+      ],
+      "supervisorNotes": "Actor exits screen"
+    },
+    {
+      "handoffShotId": "010_030",
+      "scene": "12A",
+      "setup": "4",
+      "take": "2",
+      "circled": true,
+      "cameraRoll": "A012",
+      "clip": "A012C009_261012_R1AB",
+      "unit": "Main",
+      "shootDay": "Day 07",
+      "frames": {
+        "in": 1001,
+        "out": 1082,
+        "handles": 8,
+        "count": 82,
+        "rangeFrom": "handoff"
+      },
+      "frameRate": 24,
+      "timecodeIn": "01:02:30:00",
+      "camera": {
+        "body": "ARRI ALEXA 35",
+        "lens": "Signature Prime",
+        "focalLengthMm": 50
+      },
+      "pixelAspect": 1,
+      "status": {
+        "key": "ready_for_prep",
+        "label": "Ready for Prep"
+      },
+      "source": {
+        "verified": "unchecked"
+      },
+      "tasks": [
+        {
+          "kind": "track_2d",
+          "label": "2D / planar track",
+          "state": "pending",
+          "version": 1,
+          "approval": null,
+          "notes": "Four-corner pin on the laptop screen",
+          "problems": 0,
+          "exported": false
+        }
+      ],
+      "approval": null,
+      "problems": [],
+      "supervisorNotes": "Monitor replacement"
+    },
+    {
+      "handoffShotId": "020_010",
+      "scene": "18",
+      "setup": "1",
+      "take": "6",
+      "circled": false,
+      "cameraRoll": "B004",
+      "clip": "B004C002_261014_R2CD",
+      "unit": "Main",
+      "shootDay": "Day 09",
+      "frames": {
+        "in": 1001,
+        "out": 1264,
+        "handles": 12,
+        "count": 264,
+        "rangeFrom": "handoff"
+      },
+      "frameRate": 23.976,
+      "camera": {
+        "body": "Sony VENICE 2",
+        "lens": "Cooke S7/i",
+        "focalLengthMm": 25
+      },
+      "pixelAspect": 1,
+      "status": {
+        "key": "ready_for_prep",
+        "label": "Ready for Prep"
+      },
+      "source": {
+        "verified": "unchecked"
+      },
+      "tasks": [
+        {
+          "kind": "sequence_conversion",
+          "label": "Image-sequence conversion",
+          "state": "pending",
+          "version": 1,
+          "approval": null,
+          "problems": 0,
+          "exported": false
+        },
+        {
+          "kind": "clean_plate",
+          "label": "Clean plate",
+          "state": "pending",
+          "version": 1,
+          "approval": null,
+          "notes": "Remove crew member crossing at frame 1120",
+          "problems": 0,
+          "exported": false
+        },
+        {
+          "kind": "camera_track",
+          "label": "Camera track / matchmove",
+          "state": "pending",
+          "version": 1,
+          "approval": null,
+          "problems": 0,
+          "exported": false
+        }
+      ],
+      "approval": null,
+      "problems": [],
+      "supervisorNotes": "Remove boom shadow and crew; LiDAR of the alley is on the drive"
+    },
+    {
+      "handoffShotId": "030_010",
+      "scene": "22",
+      "setup": "2",
+      "take": "3",
+      "circled": true,
+      "cameraRoll": "C007",
+      "clip": "C007C011_261016_R3EF",
+      "unit": "2nd Unit",
+      "shootDay": "Day 11",
+      "frames": {
+        "in": 1001,
+        "out": 1056,
+        "handles": 4,
+        "count": 56,
+        "rangeFrom": "handoff"
+      },
+      "frameRate": 24,
+      "camera": {
+        "body": "ARRI ALEXA Mini LF",
+        "lens": "Signature Prime",
+        "focalLengthMm": 40
+      },
+      "pixelAspect": 1,
+      "status": {
+        "key": "ready_for_prep",
+        "label": "Ready for Prep"
+      },
+      "source": {
+        "verified": "unchecked"
+      },
+      "tasks": [
+        {
+          "kind": "sky_replacement",
+          "label": "Sky isolation / replacement prep",
+          "state": "pending",
+          "version": 1,
+          "approval": null,
+          "notes": "Flat afternoon sky: replace with the dusk plate",
+          "problems": 0,
+          "exported": false
+        },
+        {
+          "kind": "background_removal",
+          "label": "Background removal",
+          "state": "pending",
+          "version": 1,
+          "approval": null,
+          "notes": "Isolate the runner for the background swap",
+          "problems": 0,
+          "exported": false
+        }
+      ],
+      "approval": null,
+      "problems": [],
+      "supervisorNotes": "Rooftop pan; keep the tree and the power line in front of the new sky"
+    },
+    {
+      "handoffShotId": "040_010",
+      "scene": "25",
+      "setup": "1",
+      "take": "2",
+      "circled": true,
+      "cameraRoll": "A031",
+      "clip": "A031C003_261017_R1AB",
+      "unit": "Main",
+      "shootDay": "Day 12",
+      "frames": {
+        "in": 1001,
+        "out": 1088,
+        "handles": 8,
+        "count": 88,
+        "rangeFrom": "handoff"
+      },
+      "frameRate": 24,
+      "camera": {
+        "body": "ARRI ALEXA 35",
+        "lens": "Signature Prime",
+        "focalLengthMm": 25
+      },
+      "pixelAspect": 1,
+      "status": {
+        "key": "ready_for_prep",
+        "label": "Ready for Prep"
+      },
+      "source": {
+        "verified": "unchecked"
+      },
+      "tasks": [
+        {
+          "kind": "texture_extraction",
+          "label": "Texture extraction",
+          "state": "pending",
+          "version": 1,
+          "approval": null,
+          "notes": "Brick wall, plaster wall and the tiled floor of the storeroom: tileable, on the scan",
+          "problems": 0,
+          "exported": false
+        }
+      ],
+      "approval": null,
+      "problems": [],
+      "supervisorNotes": "Storeroom set: LiDAR, stills and a 360 were taken after wrap"
+    }
+  ],
+  "summary": {
+    "shots": 5,
+    "byStatus": {
+      "not_started": 0,
+      "ready_for_prep": 5,
+      "processing": 0,
+      "needs_review": 0,
+      "needs_correction": 0,
+      "prep_approved": 0,
+      "packaged": 0,
+      "delivered": 0
+    },
+    "byTaskState": {
+      "pending": 10,
+      "processing": 0,
+      "needs_review": 0,
+      "needs_correction": 0,
+      "approved": 0
+    },
+    "readyToHandOff": 0
+  }
+}

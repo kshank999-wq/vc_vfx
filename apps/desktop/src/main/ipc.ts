@@ -12,7 +12,8 @@ import { activateLicence, capability, licenceStanding, READ_ONLY_REASON } from '
 import { buildMenu } from './menu';
 import { packageShot, sourceFiles } from './package-shot';
 import { defaultProjectPath, isInside, outputRootProblem, withProjectExtension } from './paths';
-import { printShotList } from './print';
+import { printShotList, printVfxStatus } from './print';
+import { configureFilmStudio, exportStatus, filmStudioInfo, filmStudioStatusOf, sendStatus } from './film-studio';
 import { FFMPEG_HELP, generateSequence } from './sequence';
 import { probeProject } from './probe';
 import { cachedResolver, type ResolvedTools } from './ffmpeg-tools';
@@ -217,6 +218,42 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null, isDev
   handle('print:shot-list', z.object({ text: projectText, filter: filterSchema, mode: z.enum(['print', 'pdf']) }), async (_e, input) => {
     try {
       return ok(await printShotList(getWindow(), projectFrom(input.text), input.filter as never, input.mode));
+    } catch (error) {
+      return fail(error);
+    }
+  });
+
+  // The VFX status report and VC Film Studio (addendum 19). The document is built here from the re-parsed project; the key never leaves main.
+  handle('print:vfx-status', z.object({ text: projectText, operator: z.string().max(200), mode: z.enum(['print', 'pdf']) }), async (_e, input) => {
+    try {
+      const project = projectFrom(input.text);
+      return ok(await printVfxStatus(getWindow(), project, filmStudioStatusOf(project, input.operator), input.mode));
+    } catch (error) {
+      return fail(error);
+    }
+  });
+  handle('filmstudio:export', z.object({ text: projectText, operator: z.string().max(200), format: z.enum(['json', 'csv']) }), async (_e, input) => {
+    try {
+      return ok(await exportStatus(getWindow(), projectFrom(input.text), input.operator, input.format));
+    } catch (error) {
+      return fail(error);
+    }
+  });
+  handle('filmstudio:info', none, async () => filmStudioInfo());
+  handle(
+    'filmstudio:configure',
+    z.object({ url: z.string().max(2048).optional(), key: z.string().max(400).optional(), clearKey: z.boolean().optional(), autoSend: z.boolean().optional() }).strict(),
+    async (_e, input) => {
+      try {
+        return ok(await configureFilmStudio(input));
+      } catch (error) {
+        return fail(error);
+      }
+    },
+  );
+  handle('filmstudio:send', z.object({ text: projectText, operator: z.string().max(200) }), async (_e, input) => {
+    try {
+      return ok(await sendStatus(projectFrom(input.text), input.operator));
     } catch (error) {
       return fail(error);
     }

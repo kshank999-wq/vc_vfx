@@ -6,7 +6,7 @@ import type { IsolateBridge } from './isolate/bridge-types';
 import type { TextureBridge } from './texture/bridge-types';
 import type { CompBridge } from './comp/bridge-types';
 import type { LightingBridge } from './lighting/bridge-types';
-import type { AiAllowance, ColorEncodingId, LicenseStatus, PlateRecordInput, ProbedMediaInput, QueueFilter, RotoDirection, RotoEngineId, RotoExportInput, RotoPropagationResult, ViewTransformId } from '@vcvfx/domain';
+import type { AiAllowance, ColorEncodingId, LicenseStatus, PlateRecordInput, ProbedMediaInput, QueueFilter, RotoDirection, RotoEngineId, RotoExportInput, RotoPropagationResult, StatusSendOutcome, ViewTransformId } from '@vcvfx/domain';
 
 /**
  * The contract between the renderer and the main process.
@@ -45,6 +45,26 @@ export interface Settings {
   sam2Model?: string;
   /** Projects (by key) whose frames the AI assistant may see (addendum 07 §7). */
   aiFrames?: Record<string, boolean>;
+  /** VC Film Studio's address (addendum 19); empty means https://www.vcfilmstudio.com. The upload key is not here: it is in the OS keychain. */
+  filmStudioUrl?: string;
+  /** Send the VFX status to Film Studio after each package (off unless turned on). */
+  filmStudioAutoSend?: boolean;
+}
+
+/** Where the VFX status goes (addendum 19). Never carries the upload key itself. */
+export interface FilmStudioInfo {
+  /** The site in use: the one set in Settings, or the default. */
+  url: string;
+  defaultUrl: string;
+  hasKey: boolean;
+  /** "vcvfx_…7f3a", to tell keys apart. */
+  keyHint: string | null;
+  /** Whether the key is encrypted with the OS keychain (false: this computer has none, and it is stored as text in VC VFX's settings folder). */
+  encrypted: boolean;
+  autoSend: boolean;
+  /** False in the browser preview: sending needs the desktop app. */
+  available: boolean;
+  reason: string | null;
 }
 
 export interface AccountStatus {
@@ -344,6 +364,12 @@ export const MENU_COMMANDS = [
   'save-as',
   'print',
   'export-pdf',
+  // The VFX status report and VC Film Studio (addendum 19).
+  'print-status',
+  'status-pdf',
+  'export-status',
+  'export-status-csv',
+  'send-status',
   'verify',
   'settings',
   'account',
@@ -382,6 +408,16 @@ export interface VcvfxApi extends Partial<KeyBridge>, Partial<CleanPlateBridge>,
   chooseOutputRoot(input: { projectKey: string; text: string }): Promise<ApiResult<string | null>>;
 
   printShotList(input: { text: string; filter: QueueFilter; mode: 'print' | 'pdf' }): Promise<ApiResult<{ path: string | null } | null>>;
+  /** The VFX status report (addendum 19): print it, or save it as a PDF. Every shot, whatever the queue's filters. */
+  printVfxStatus?(input: { text: string; operator: string; mode: 'print' | 'pdf' }): Promise<ApiResult<{ path: string | null } | null>>;
+  /** Save the `vc-film-studio.vfx-status/1` document (json, for Film Studio's data desk) or the same rows as CSV. Null when cancelled. */
+  exportVfxStatus?(input: { text: string; operator: string; format: 'json' | 'csv' }): Promise<ApiResult<{ path: string | null } | null>>;
+  /** Where the status goes, and whether a key is stored. */
+  filmStudioInfo?(): Promise<FilmStudioInfo>;
+  /** Set the address, store or remove the upload key (kept in main, encrypted), or the automatic send. */
+  configureFilmStudio?(input: { url?: string; key?: string; clearKey?: boolean; autoSend?: boolean }): Promise<ApiResult<FilmStudioInfo>>;
+  /** Build the status from the project and POST it to Film Studio with the stored key. ok:false only when nothing was attempted (no key, no project). */
+  sendVfxStatus?(input: { text: string; operator: string }): Promise<ApiResult<StatusSendOutcome>>;
 
   verifySources(input: { jobId: string; text: string }): Promise<ApiResult<VerifyResult[]>>;
   packageShot(input: { jobId: string; text: string; shotId: string; projectKey: string; operator: string }): Promise<ApiResult<PackageOutcome>>;

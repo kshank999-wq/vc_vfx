@@ -629,7 +629,19 @@ export function setFilmStudioProduction(p: Project, production: string, actor: s
 
 /** How a send to Film Studio went, as the project log keeps it. Never carries the key. */
 export type StatusSendOutcome =
-  | { kind: 'sent'; url: string; shots: number; readyToHandOff: number; says: string; warnings: string[]; stale: boolean; report: string | null; production: string | null }
+  | {
+      kind: 'sent';
+      url: string;
+      shots: number;
+      readyToHandOff: number;
+      says: string;
+      warnings: string[];
+      stale: boolean;
+      report: string | null;
+      production: string | null;
+      /** Film Studio's own counts (shots, readyToHandOff, delivered, inReview, needsCorrection, inProgress, notStarted). */
+      summary?: Record<string, number>;
+    }
   | { kind: 'refused'; url: string; shots: number; status: number; error: string; issues: string[] }
   | { kind: 'not_sent'; url: string; shots: number; error: string };
 

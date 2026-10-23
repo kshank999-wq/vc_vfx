@@ -15,6 +15,8 @@ import {
   parseProject,
   queueRows,
   recordPlates,
+  recordStatusSend,
+  setFilmStudioProduction,
   reopenShot,
   serializeProject,
   setPlateColorDefault,
@@ -34,14 +36,15 @@ import {
   type Project,
   type QueueFilter,
   type Result,
+  type StatusSendOutcome,
   type TaskState,
 } from '@vcvfx/domain';
-import type { AccountStatus, AppInfo, JobProgress, LicenceStanding, MenuCommand, ProbeResult, Settings, VcvfxApi } from '../shared/bridge';
+import type { AccountStatus, AppInfo, FilmStudioInfo, JobProgress, LicenceStanding, MenuCommand, ProbeResult, Settings, VcvfxApi } from '../shared/bridge';
 import { projectKey } from '../shared/queue';
 import { clampFrame, viewerTimeline } from '../shared/viewer';
 import { BulkBar, QueueFilters, QueueTable, type SelectGesture } from './components/Queue';
 import { ShotDetail, type ShotDetailProps } from './components/ShotDetail';
-import { AccountDialog, IssuesDialog, PromptDialog, SettingsDialog } from './components/Dialogs';
+import { AccountDialog, FilmStudioSendDialog, IssuesDialog, PromptDialog, SettingsDialog } from './components/Dialogs';
 import { Icon } from './components/Icons';
 import { ModuleTabs, NoticeDock, ShotBar, Tour, WhatsHere, modKey } from './components/Layout';
 import { CleanPlateModule, CompModule, DeliverModule, IsolateModule, KeyModule, LightingModule, PlatesModule, TaskInfo, TextureModule } from './components/Modules';
@@ -62,12 +65,16 @@ interface Prompt {
   initial: string;
   confirmLabel: string;
   detail?: string;
+  /** The value may be left empty. */
+  optional?: boolean;
   onSubmit: (value: string) => void;
 }
 
 const SIGNED_OUT: AccountStatus = { configured: false, signedIn: false, email: null, displayName: null };
 const EMPTY_SETTINGS: Settings = { operatorName: '', ffmpegPath: '', outputRoots: {}, recent: [] };
 const AUTOSAVE_MS = 700;
+/** The automatic send after packaging goes at most this often (addendum 19). */
+const AUTO_SEND_MS = 60_000;
 
 let noticeSeq = 0;
 let jobSeq = 0;
@@ -102,6 +109,11 @@ export function App({ api, now = () => new Date() }: { api: VcvfxApi; now?: () =
   const [frameOf, setFrameOf] = useState<{ shotId: string; frame: number } | null>(null);
   const [tour, setTour] = useState(false);
   const tourOffered = useRef(false);
+  /** Where the VFX status goes (addendum 19); null until known, or where the host has no Film Studio. */
+  const [filmStudio, setFilmStudio] = useState<FilmStudioInfo | null>(null);
+  /** Film Studio's answer to the last send (or why nothing was sent), on screen until closed. */
+  const [sendResult, setSendResult] = useState<{ outcome: StatusSendOutcome } | { error: string } | null>(null);
+  const lastAutoSend = useRef(0);
 
   const capability = capabilityFrom(standing, now());
   const canEdit = capability === 'full';
@@ -137,6 +149,7 @@ export function App({ api, now = () => new Date() }: { api: VcvfxApi; now?: () =
     void api.accountStatus().then(setAccount);
     void api.licenceStanding(false).then(setStanding);
     void api.getSettings().then(setSettings);
+    void api.filmStudioInfo?.().then(setFilmStudio);
     return api.onProgress((p) => setJob((current) => (current && current.jobId === p.jobId ? p : current)));
   }, [api]);
 
@@ -339,6 +352,68 @@ export function App({ api, now = () => new Date() }: { api: VcvfxApi; now?: () =
     [api, filter, notify],
   );
 
+  // --- the VFX status report and VC Film Studio (addendum 19) -------------
+  const printStatus = useCallback(
+    async (mode: 'print' | 'pdf') => {
+      const current = docRef.current;
+      if (!current) return notify('info', 'Open a project first.');
+      if (!api.printVfxStatus) return notify('error', 'This version cannot print the VFX status report.');
+      const r = await api.printVfxStatus({ text: serializeProject(current.project), operator: actor, mode });
+      if (!r.ok) return notify('error', r.error);
+      if (r.data?.path) {
+        const path = r.data.path;
+        notify('ok', `VFX status report saved to ${path}`, { label: 'Reveal', run: () => void api.revealPath(path) });
+      }
+    },
+    [actor, api, notify],
+  );
+
+  const exportStatus = useCallback(
+    async (format: 'json' | 'csv') => {
+      const current = docRef.current;
+      if (!current) return notify('info', 'Open a project first.');
+      if (!api.exportVfxStatus) return notify('error', 'This version cannot export the VFX status.');
+      const r = await api.exportVfxStatus({ text: serializeProject(current.project), operator: actor, format });
+      if (!r.ok) return notify('error', r.error);
+      if (!r.data) return;
+      const path = r.data.path;
+      notify(
+        'ok',
+        format === 'json'
+          ? `VFX status exported${path ? ` to ${path}` : ''}. Import it on VC Film Studio’s data desk: From VC VFX → Import VFX status.`
+          : `VFX status CSV saved${path ? ` to ${path}` : ''}.`,
+        path ? { label: 'Reveal', run: () => void api.revealPath(path) } : undefined,
+      );
+    },
+    [actor, api, notify],
+  );
+
+  /** Send the whole project's status to Film Studio; the answer goes in the project log and on screen. */
+  const sendStatus = useCallback(
+    async (auto = false) => {
+      const current = docRef.current;
+      if (!current) return notify('info', 'Open a project first.');
+      if (!api.sendVfxStatus || filmStudio?.available === false) {
+        return notify('info', filmStudio?.reason ?? 'Sending to VC Film Studio is available in the desktop app. Export for VC Film Studio instead, and import the file on Film Studio’s data desk.', {
+          label: 'Export',
+          run: () => void exportStatus('json'),
+        });
+      }
+      const send = api.sendVfxStatus.bind(api);
+      const r = await runJob('Sending status to VC Film Studio', () => send({ text: serializeProject(current.project), operator: actor }));
+      if (!r.ok) {
+        // Nothing was attempted (no key yet): nothing to log.
+        if (auto) return notify('error', r.error);
+        return setSendResult({ error: r.error });
+      }
+      const latest = docRef.current ?? current;
+      setDoc({ ...latest, project: recordStatusSend(latest.project, r.data, actor, now()), dirty: true });
+      if (!auto || r.data.kind !== 'sent') setSendResult({ outcome: r.data });
+      else notify('ok', `Sent to VC Film Studio: ${r.data.says}`);
+    },
+    [actor, api, exportStatus, filmStudio, notify, runJob, setDoc],
+  );
+
   const verify = useCallback(async () => {
     const current = docRef.current;
     if (!current) return notify('info', 'Open a project first.');
@@ -387,6 +462,11 @@ export function App({ api, now = () => new Date() }: { api: VcvfxApi; now?: () =
     setDoc({ ...(docRef.current ?? current), project: parsed.project, dirty: true });
     const folder = r.data.folder;
     notify('ok', `${shotId} packaged as v${String(r.data.version).padStart(3, '0')} (${r.data.files} files checksummed)`, { label: 'Reveal', run: () => void api.revealPath(folder) });
+    // The automatic send (Settings → VC Film Studio, off unless turned on), at most once a minute.
+    if (filmStudio?.autoSend && filmStudio.hasKey && Date.now() - lastAutoSend.current >= AUTO_SEND_MS) {
+      lastAutoSend.current = Date.now();
+      await sendStatus(true);
+    }
   };
 
   const generatePlates = async (shotId: string) => {
@@ -474,6 +554,16 @@ export function App({ api, now = () => new Date() }: { api: VcvfxApi; now?: () =
         return void print('print');
       case 'export-pdf':
         return void print('pdf');
+      case 'print-status':
+        return void printStatus('print');
+      case 'status-pdf':
+        return void printStatus('pdf');
+      case 'export-status':
+        return void exportStatus('json');
+      case 'export-status-csv':
+        return void exportStatus('csv');
+      case 'send-status':
+        return void sendStatus();
       case 'verify':
         return void verify();
       case 'settings':
@@ -608,7 +698,19 @@ export function App({ api, now = () => new Date() }: { api: VcvfxApi; now?: () =
         apply((x) => approveShot(x, shotId, name, now()));
       }),
     onPackage: () => void packageSelected(shotId),
-    onDeliver: () => apply((x) => markDelivered(x, shotId, actor, now())),
+    onDeliver: () =>
+      setPrompt({
+        title: 'Mark delivered',
+        label: 'Delivered to (the VFX vendor)',
+        initial: '',
+        confirmLabel: 'Mark delivered',
+        detail: `Record that ${shotId}’s package was handed off. The vendor’s name goes in the log and in the VFX status; it may be left empty.`,
+        optional: true,
+        onSubmit: (to) => {
+          setPrompt(null);
+          apply((x) => markDelivered(x, shotId, actor, now(), to));
+        },
+      }),
     onReopen: () => apply((x) => reopenShot(x, shotId, actor, now())),
     onTaskNotes: (kind, notes) => apply((x) => setTaskNotes(x, shotId, kind, notes, actor, now())),
     onShotNotes: (notes) => apply((x) => setShotNotes(x, shotId, notes, actor, now())),
@@ -667,7 +769,15 @@ export function App({ api, now = () => new Date() }: { api: VcvfxApi; now?: () =
           />
         );
       case 'deliver':
-        return <DeliverModule {...screen} onVerify={() => void verify()} onPrint={(mode) => void print(mode)} shownShots={rows.length} />;
+        return (
+          <DeliverModule
+            {...screen}
+            onVerify={() => void verify()}
+            onPrint={(mode) => void print(mode)}
+            shownShots={rows.length}
+            status={{ filmStudio, onPrint: (mode) => void printStatus(mode), onExport: (format) => void exportStatus(format), onSend: () => void sendStatus(), onSettings: () => setDialog('settings') }}
+          />
+        );
       default:
         return null;
     }
@@ -764,6 +874,7 @@ export function App({ api, now = () => new Date() }: { api: VcvfxApi; now?: () =
               onOpenHandoff={() => void openHandoff()}
               onOpenProject={() => void openProject()}
               onSample={openSample}
+              onStatusReport={() => void printStatus('print')}
             />
             <WhatsHere onOpen={(id) => openModule(id)} />
             <QueueFilters project={project} filter={filter} onChange={setFilter} />
@@ -859,7 +970,25 @@ export function App({ api, now = () => new Date() }: { api: VcvfxApi; now?: () =
             notify('ok', 'Settings saved');
           }}
           onChooseOutputRoot={() => void chooseOutputRoot()}
+          filmStudio={filmStudio}
+          onFilmStudio={setFilmStudio}
+          filmStudioProduction={project ? project.filmStudioProduction : null}
+          onFilmStudioProduction={(value) => apply((p) => setFilmStudioProduction(p, value, actor, now()))}
           onClose={() => setDialog(null)}
+        />
+      ) : null}
+      {sendResult ? (
+        <FilmStudioSendDialog
+          result={sendResult}
+          onExport={() => {
+            setSendResult(null);
+            void exportStatus('json');
+          }}
+          onSettings={() => {
+            setSendResult(null);
+            setDialog('settings');
+          }}
+          onClose={() => setSendResult(null)}
         />
       ) : null}
       {dialog === 'account' ? (
@@ -880,6 +1009,7 @@ function ProjectHeader({
   onOpenHandoff,
   onOpenProject,
   onSample,
+  onStatusReport,
 }: {
   project: Project;
   path: string | null;
@@ -888,6 +1018,7 @@ function ProjectHeader({
   onOpenHandoff: () => void;
   onOpenProject: () => void;
   onSample: () => void;
+  onStatusReport: () => void;
 }) {
   const h = project.handoff;
   const day = h.origin?.day ? [h.origin.day.number !== undefined ? `Day ${h.origin.day.number}` : null, h.origin.day.date].filter(Boolean).join(' · ') : null;
@@ -914,6 +1045,9 @@ function ProjectHeader({
         </button>
         <button type="button" onClick={onSample}>
           Sample project
+        </button>
+        <button type="button" onClick={onStatusReport} title="Print the VFX status of every shot: ready to hand off, in review, needs correction, in progress, not started, delivered (File › Print VFX Status Report)">
+          VFX status report…
         </button>
       </div>
     </section>

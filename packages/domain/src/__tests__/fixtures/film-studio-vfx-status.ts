@@ -1,3 +1,4 @@
+// @ts-nocheck — Film Studio compiles without noUncheckedIndexedAccess; checked there, not here.
 /*
  * VENDORED, TEST-ONLY. A verbatim copy of VC Film Studio's reader for the
  * VFX status report, so a drift between what VC VFX writes and what Film

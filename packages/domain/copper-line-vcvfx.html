@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>DEMO — THE COPPER LINE — VFX Status</title>
+<style>
+@page { size: landscape; margin: 11mm; }
+* { box-sizing: border-box; }
+body { font: 9pt/1.35 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; color: #111; margin: 0; background: #fff; }
+h1 { font-size: 15pt; margin: 0 0 2pt; }
+.meta { color: #555; margin-bottom: 8pt; }
+.says { font-size: 11pt; font-weight: 600; margin: 0 0 8pt; padding: 6pt 8pt; border-left: 3pt solid #888; background: #f4f4f4; }
+.says.ok { border-color: #2e7d32; } .says.warn { border-color: #b26a00; } .says.bad { border-color: #c62828; }
+.tiles { display: flex; gap: 6pt; margin-bottom: 4pt; flex-wrap: wrap; }
+.tile { border: 0.6pt solid #bbb; border-radius: 3pt; padding: 3pt 8pt; min-width: 70pt; }
+.tile b { font-size: 14pt; display: block; } .tile span { color: #444; font-size: 8pt; text-transform: uppercase; letter-spacing: .03em; }
+.tile.zero { color: #999; } .tile.ready b { color: #2e7d32; } .tile.correction b { color: #c62828; } .tile.review b { color: #b26a00; }
+.subtotals { color: #555; margin-bottom: 10pt; font-size: 8.5pt; }
+h2 { font-size: 11pt; margin: 12pt 0 4pt; padding-bottom: 2pt; border-bottom: 1.2pt solid #333; break-after: avoid; }
+h2 .count { color: #666; font-weight: 400; }
+section.empty h2 { border-bottom-color: #ccc; color: #777; } section.empty p { margin: 0 0 4pt; }
+table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+col.c-box { width: 8mm; } col.c-shot { width: 9%; } col.c-slate { width: 10%; } col.c-day { width: 11%; } col.c-status { width: 12%; } col.c-tasks { width: 22%; } col.c-pkg { width: 8%; }
+td { overflow-wrap: anywhere; }
+.lifted { margin: -4pt 0 10pt; color: #555; font-size: 8.5pt; } .lifted li { margin: 1pt 0; }
+th, td { border: 0.5pt solid #aaa; padding: 3pt 4pt; text-align: left; vertical-align: top; }
+th { background: #eee; font-size: 7.5pt; text-transform: uppercase; letter-spacing: .04em; }
+thead { display: table-header-group; }
+tr { break-inside: avoid; page-break-inside: avoid; }
+.nw, .shot, .task { white-space: normal; } .task.t-needs_correction { color: #c62828; } .task.t-needs_review { color: #b26a00; } .task.t-pending { color: #777; }
+.by, .conf, .muted { color: #666; } .small { font-size: 7.5pt; }
+.circ { color: #b00; font-size: 7pt; }
+.done { color: #2e7d32; font-weight: 600; } .why { font-weight: 600; } .stale { color: #c62828; font-size: 7.5pt; }
+.problem { margin-top: 1pt; } .sev { font-size: 6.8pt; text-transform: uppercase; letter-spacing: .04em; padding: 0 2pt; border: 0.5pt solid currentColor; border-radius: 2pt; }
+.p-error { color: #c62828; } .p-warn { color: #8a5300; } .p-info { color: #555; }
+.notes { color: #444; font-style: italic; margin-top: 2pt; }
+.sign { margin-top: 16pt; display: grid; grid-template-columns: 2fr 1fr; gap: 14pt; break-inside: avoid; page-break-inside: avoid; }
+.sign .lines { border: 0.6pt solid #aaa; min-height: 60pt; padding: 4pt 6pt; color: #666; }
+.sign .who div { border-bottom: 0.6pt solid #333; height: 22pt; margin-bottom: 2pt; }
+.sign .who span { color: #555; font-size: 8pt; display: block; margin-bottom: 8pt; }
+footer { margin-top: 10pt; color: #777; font-size: 7.5pt; }
+</style></head><body>
+<h1>DEMO — THE COPPER LINE — VFX Status</h1>
+<div class="meta">DEMO PRODUCTIONS · Shoot day 3 · 2026-09-16 · Film Studio: DEMO — THE COPPER LINE · Prepared by Ruth Okafor · Generated 2026-10-20 08:00 UTC by VC VFX 0.1.0</div>
+<p class="says bad">1 shot is ready to hand off; 1 shot needs correction, 2 in review, 3 in progress, 1 not started. 1 shot has been delivered.</p>
+<div class="tiles">
+<div class="tile ready"><b>1</b><span>Ready to hand off</span></div>
+<div class="tile review"><b>2</b><span>In review</span></div>
+<div class="tile correction"><b>1</b><span>Needs correction</span></div>
+<div class="tile progress"><b>3</b><span>In progress</span></div>
+<div class="tile not-started"><b>1</b><span>Not started</span></div>
+<div class="tile delivered"><b>1</b><span>Delivered</span></div>
+<div class="tile total"><b>9</b><span>Shots</span></div>
+</div>
+<div class="subtotals">Tasks: 1 pending · 2 processing · 2 needs review · 1 needs correction · 6 approved · Problems on shots not yet delivered: 2 errors, 1 warning, 7 notes</div>
+<ul class="lifted"><li><span class="sev">note</span> The source has not been verified against the DIT’s checksum yet. Run Verify sources on the Deliver tab. <span class="muted">(6 shots: 2A-01, 3B-02, 5A-01, 6B-04, 7A-02, 8A-09)</span></li></ul>
+<section><h2 class="b-ready">Ready to hand off <span class="count">1</span></h2>
+<table>
+<colgroup><col class="c-box"><col class="c-shot"><col class="c-slate"><col class="c-day"><col class="c-status"><col class="c-tasks"><col class="c-pkg"><col></colgroup>
+<thead><tr><th class="box">✓</th><th>Shot</th><th>Scene / setup / take</th><th>Shoot day</th><th>Status</th><th>Tasks</th><th>Package</th><th>Notes</th></tr></thead>
+<tbody>
+<tr>
+<td class="box"></td>
+<td class="shot"><b>4A-05</b> <span class="circ" title="Circle take">●</span></td>
+<td class="nw">4 / A / 5<div class="muted small">A001 · A001C005</div></td>
+<td class="nw">Day 002 · 2026-09-15</td>
+<td class="nw">Packaged<div class="by">Shot approved · Ada Renke 2026-10-19</div></td>
+<td class="tasks"><div class="task t-approved"><b>2D track</b> Approved v001 <span class="by">· Ada Renke</span></div><div class="task t-approved"><b>Camera track</b> Approved v001 <span class="by">· Ada Renke</span></div></td>
+<td class="nw">v001 <span class="muted">2026-10-19</span></td>
+<td class="holding"><div class="done">Ready to hand off</div><div class="notes">Sup: Notes for 4A-05</div></td>
+</tr>
+</tbody></table></section>
+<section><h2 class="b-review">In review <span class="count">2</span></h2>
+<table>
+<colgroup><col class="c-box"><col class="c-shot"><col class="c-slate"><col class="c-day"><col class="c-status"><col class="c-tasks"><col class="c-pkg"><col></colgroup>
+<thead><tr><th class="box">✓</th><th>Shot</th><th>Scene / setup / take</th><th>Shoot day</th><th>Status</th><th>Tasks</th><th>Package</th><th>What is holding it</th></tr></thead>
+<tbody>
+<tr>
+<td class="box"></td>
+<td class="shot"><b>3B-02</b> <span class="circ" title="Circle take">●</span></td>
+<td class="nw">3 / B / 2<div class="muted small">A001 · A001C002</div></td>
+<td class="nw">Day 002 · 2026-09-15</td>
+<td class="nw">Needs Review</td>
+<td class="tasks"><div class="task t-needs_review"><b>Clean plate</b> Needs Review v001</div></td>
+<td class="nw">—</td>
+<td class="holding"><div class="why">Clean plate needs review</div><div class="notes">Sup: Notes for 3B-02</div></td>
+</tr>
+<tr>
+<td class="box"></td>
+<td class="shot"><b>6B-04</b> <span class="circ" title="Circle take">●</span></td>
+<td class="nw">6 / B / 4<div class="muted small">A001 · A001C004</div></td>
+<td class="nw">Day 003 · 2026-09-16</td>
+<td class="nw">Needs Review</td>
+<td class="tasks"><div class="task t-approved"><b>Textures</b> Approved v001 <span class="by">· Ada Renke</span></div><div class="task t-needs_review"><b>Lighting</b> Needs Review v002</div></td>
+<td class="nw">v001 <span class="muted">2026-10-19</span><div class="stale">out of date</div></td>
+<td class="holding"><div class="why">Lighting needs review</div><div class="why">package v001 is out of date — the shot went back into prep</div><div class="notes">Sup: Notes for 6B-04</div></td>
+</tr>
+</tbody></table></section>
+<section><h2 class="b-correction">Needs correction <span class="count">1</span></h2>
+<table>
+<colgroup><col class="c-box"><col class="c-shot"><col class="c-slate"><col class="c-day"><col class="c-status"><col class="c-tasks"><col class="c-pkg"><col></colgroup>
+<thead><tr><th class="box">✓</th><th>Shot</th><th>Scene / setup / take</th><th>Shoot day</th><th>Status</th><th>Tasks</th><th>Package</th><th>What is holding it</th></tr></thead>
+<tbody>
+<tr>
+<td class="box"></td>
+<td class="shot"><b>2A-01</b> <span class="circ" title="Circle take">●</span></td>
+<td class="nw">2 / A / 1<div class="muted small">A001 · A001C001</div></td>
+<td class="nw">Day 001 · 2026-09-14</td>
+<td class="nw">Needs Correction</td>
+<td class="tasks"><div class="task t-needs_correction"><b>Key</b> Needs Correction v001</div><div class="task t-pending"><b>Despill</b> Pending v001</div></td>
+<td class="nw">—</td>
+<td class="holding"><div class="why">Key needs correction</div><div class="why">Despill not started</div><div class="problem p-warn"><span class="sev">warning</span> 1 frame marked for correction in review (1010: matte chatter). Correct them, then clear the marks.</div><div class="notes">Sup: Notes for 2A-01</div></td>
+</tr>
+</tbody></table></section>
+<section><h2 class="b-progress">In progress <span class="count">3</span></h2>
+<table>
+<colgroup><col class="c-box"><col class="c-shot"><col class="c-slate"><col class="c-day"><col class="c-status"><col class="c-tasks"><col class="c-pkg"><col></colgroup>
+<thead><tr><th class="box">✓</th><th>Shot</th><th>Scene / setup / take</th><th>Shoot day</th><th>Status</th><th>Tasks</th><th>Package</th><th>What is holding it</th></tr></thead>
+<tbody>
+<tr>
+<td class="box"></td>
+<td class="shot"><b>5A-01</b> <span class="circ" title="Circle take">●</span></td>
+<td class="nw">5 / A / 1<div class="muted small">A001 · A001C001</div></td>
+<td class="nw">Day 002 · 2026-09-15</td>
+<td class="nw">Prep Approved<div class="by">Shot approved · Ada Renke 2026-10-19</div></td>
+<td class="tasks"><div class="task t-approved"><b>Sky</b> Approved v001 <span class="by">· Ada Renke</span></div></td>
+<td class="nw">v001 <span class="muted">2026-10-19</span><div class="stale">out of date</div></td>
+<td class="holding"><div class="why">package v001 is out of date — the shot went back into prep</div><div class="notes">Sup: Notes for 5A-01</div></td>
+</tr>
+<tr>
+<td class="box"></td>
+<td class="shot"><b>7A-02</b> <span class="circ" title="Circle take">●</span></td>
+<td class="nw">7 / A / 2<div class="muted small">A001 · A001C002</div></td>
+<td class="nw">Day 003 · 2026-09-16</td>
+<td class="nw">Processing</td>
+<td class="tasks"><div class="task t-processing"><b>BG removal</b> Processing v001</div></td>
+<td class="nw">—</td>
+<td class="holding"><div class="why">BG removal is being worked on</div><div class="notes">Sup: Notes for 7A-02</div></td>
+</tr>
+<tr>
+<td class="box"></td>
+<td class="shot"><b>8B-01</b> <span class="circ" title="Circle take">●</span></td>
+<td class="nw">8 / B / 1<div class="muted small">A001 · A001C001</div></td>
+<td class="nw">Day 003 · 2026-09-16</td>
+<td class="nw">Processing</td>
+<td class="tasks"><div class="task t-processing"><b>Comp</b> Processing v001</div></td>
+<td class="nw">—</td>
+<td class="holding"><div class="why">Comp is being worked on</div><div class="problem p-error"><span class="sev">error</span> The source does not match the DIT’s checksum: the camera file on this drive is not the one that was shot. Copy the take again from the camera original or the DIT’s other copy, then run Verify sources.</div><div class="problem p-error"><span class="sev">error</span> Comp: Merge1 needs its B input connected</div><div class="problem p-info"><span class="sev">info</span> Comp: Merge1 is not used by the render (not connected to Write1)</div><div class="notes">Sup: Notes for 8B-01</div></td>
+</tr>
+</tbody></table></section>
+<section><h2 class="b-not_started">Not started <span class="count">1</span></h2>
+<table>
+<colgroup><col class="c-box"><col class="c-shot"><col class="c-slate"><col class="c-day"><col class="c-status"><col class="c-tasks"><col class="c-pkg"><col></colgroup>
+<thead><tr><th class="box">✓</th><th>Shot</th><th>Scene / setup / take</th><th>Shoot day</th><th>Status</th><th>Tasks</th><th>Package</th><th>What is holding it</th></tr></thead>
+<tbody>
+<tr>
+<td class="box"></td>
+<td class="shot"><b>8A-09</b> <span class="circ" title="Circle take">●</span></td>
+<td class="nw">8 / A / 9<div class="muted small">A001 · A001C009</div></td>
+<td class="nw">Day 003 · 2026-09-16</td>
+<td class="nw">Not Started</td>
+<td class="tasks"><span class="muted">No prep tasks</span></td>
+<td class="nw">—</td>
+<td class="holding"><div class="why">no prep tasks on it yet</div><div class="notes">Sup: Notes for 8A-09</div></td>
+</tr>
+</tbody></table></section>
+<section><h2 class="b-delivered">Delivered <span class="count">1</span></h2>
+<table>
+<colgroup><col class="c-box"><col class="c-shot"><col class="c-slate"><col class="c-day"><col class="c-status"><col class="c-tasks"><col class="c-pkg"><col></colgroup>
+<thead><tr><th class="box">✓</th><th>Shot</th><th>Scene / setup / take</th><th>Shoot day</th><th>Status</th><th>Tasks</th><th>Package</th><th>Notes</th></tr></thead>
+<tbody>
+<tr>
+<td class="box"></td>
+<td class="shot"><b>1A-03</b> <span class="circ" title="Circle take">●</span></td>
+<td class="nw">1 / A / 3<div class="muted small">A001 · A001C003</div></td>
+<td class="nw">Day 001 · 2026-09-14</td>
+<td class="nw">Delivered<div class="by">Shot approved · Ada Renke 2026-10-19</div></td>
+<td class="tasks"><div class="task t-approved"><b>Plates</b> Approved v001 <span class="by">· Ada Renke</span></div><div class="task t-approved"><b>Roto</b> Approved v001 <span class="by">· Ada Renke</span></div></td>
+<td class="nw">v001 <span class="muted">2026-10-19</span></td>
+<td class="holding"><div class="done">Delivered 2026-10-19 to Northlight VFX</div><div class="notes">Sup: Notes for 1A-03</div></td>
+</tr>
+</tbody></table></section>
+<div class="sign">
+<div class="lines">VFX supervisor’s notes</div>
+<div class="who"><div></div><span>VFX supervisor — Ada Renke</span><div></div><span>Signature</span><div></div><span>Date</span></div>
+</div>
+<footer>“Ready to hand off”: the shot is approved, packaged and not reopened since, every task approved at the version that was packaged, nothing needs correction, and it has not been delivered — the rule VC Film Studio applies to this same report. ● marks a circle take. Versions are task versions (v001 …); a reopened task gets a new one.</footer>
+</body></html>

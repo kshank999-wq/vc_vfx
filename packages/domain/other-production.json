@@ -1,0 +1,625 @@
+{
+  "format": "vc-film-studio.vfx-status/1",
+  "generatedAt": "2026-10-20T08:00:00.000Z",
+  "generator": {
+    "app": "VC VFX",
+    "version": "0.1.0"
+  },
+  "operator": "Ruth Okafor",
+  "project": {
+    "name": "DEMO — THE COPPER LINE",
+    "productionCompany": "DEMO PRODUCTIONS",
+    "origin": {
+      "format": "vcdit.vfx-handoff/1",
+      "tool": "VC DIT 1.3.0",
+      "productionCode": "CPL",
+      "day": {
+        "number": 3,
+        "date": "2026-09-16"
+      }
+    }
+  },
+  "filmStudio": {
+    "production": "Night Shift"
+  },
+  "shots": [
+    {
+      "handoffShotId": "1A-03",
+      "scene": "1",
+      "setup": "A",
+      "take": "3",
+      "circled": true,
+      "cameraRoll": "A001",
+      "clip": "A001C003",
+      "unit": "Main",
+      "shootDay": "Day 001 · 2026-09-14",
+      "shootDate": "2026-09-16",
+      "frames": {
+        "in": 1001,
+        "out": 1112,
+        "handles": 8,
+        "count": 112,
+        "rangeFrom": "handoff"
+      },
+      "frameRate": 24,
+      "camera": {
+        "body": "ARRI ALEXA 35",
+        "lens": "Signature Prime",
+        "focalLengthMm": 35
+      },
+      "pixelAspect": 1,
+      "status": {
+        "key": "delivered",
+        "label": "Delivered"
+      },
+      "source": {
+        "verified": "unchecked"
+      },
+      "tasks": [
+        {
+          "kind": "sequence_conversion",
+          "label": "Image-sequence conversion",
+          "state": "approved",
+          "version": 1,
+          "approval": {
+            "by": "Ada Renke",
+            "at": "2026-10-19T12:01:00.000Z"
+          },
+          "problems": 0,
+          "exported": false
+        },
+        {
+          "kind": "roto",
+          "label": "Paint-to-roto",
+          "state": "approved",
+          "version": 1,
+          "approval": {
+            "by": "Ada Renke",
+            "at": "2026-10-19T12:03:00.000Z"
+          },
+          "problems": 0,
+          "exported": false
+        }
+      ],
+      "approval": {
+        "by": "Ada Renke",
+        "at": "2026-10-19T12:09:00.000Z"
+      },
+      "packaged": {
+        "version": 1,
+        "at": "2026-10-19T12:10:00.000Z",
+        "folder": "DEMO_—_THE_COPPER_LINE_VFX/SCENE_1/SHOT_1A-03",
+        "taskVersions": {
+          "sequence_conversion": 1,
+          "roto": 1
+        }
+      },
+      "delivered": {
+        "at": "2026-10-19T12:11:00.000Z",
+        "to": "Northlight VFX"
+      },
+      "problems": [],
+      "supervisorNotes": "Notes for 1A-03"
+    },
+    {
+      "handoffShotId": "2A-01",
+      "scene": "2",
+      "setup": "A",
+      "take": "1",
+      "circled": true,
+      "cameraRoll": "A001",
+      "clip": "A001C001",
+      "unit": "Main",
+      "shootDay": "Day 001 · 2026-09-14",
+      "shootDate": "2026-09-16",
+      "frames": {
+        "in": 1001,
+        "out": 1112,
+        "handles": 8,
+        "count": 112,
+        "rangeFrom": "handoff"
+      },
+      "frameRate": 24,
+      "camera": {
+        "body": "ARRI ALEXA 35",
+        "lens": "Signature Prime",
+        "focalLengthMm": 35
+      },
+      "pixelAspect": 1,
+      "status": {
+        "key": "needs_correction",
+        "label": "Needs Correction"
+      },
+      "source": {
+        "verified": "unchecked"
+      },
+      "tasks": [
+        {
+          "kind": "key",
+          "label": "Green/blue-screen key",
+          "state": "needs_correction",
+          "version": 1,
+          "approval": null,
+          "problems": 0,
+          "exported": false
+        },
+        {
+          "kind": "despill",
+          "label": "Despill and background match",
+          "state": "pending",
+          "version": 1,
+          "approval": null,
+          "problems": 0,
+          "exported": false
+        }
+      ],
+      "approval": null,
+      "problems": [
+        {
+          "task": null,
+          "severity": "info",
+          "text": "The source has not been verified against the DIT’s checksum yet. Run Verify sources on the Deliver tab."
+        },
+        {
+          "task": null,
+          "severity": "warn",
+          "text": "1 frame marked for correction in review (1010: matte chatter). Correct them, then clear the marks.",
+          "frames": [
+            1010
+          ]
+        }
+      ],
+      "supervisorNotes": "Notes for 2A-01"
+    },
+    {
+      "handoffShotId": "3B-02",
+      "scene": "3",
+      "setup": "B",
+      "take": "2",
+      "circled": true,
+      "cameraRoll": "A001",
+      "clip": "A001C002",
+      "unit": "Main",
+      "shootDay": "Day 002 · 2026-09-15",
+      "shootDate": "2026-09-16",
+      "frames": {
+        "in": 1001,
+        "out": 1112,
+        "handles": 8,
+        "count": 112,
+        "rangeFrom": "handoff"
+      },
+      "frameRate": 24,
+      "camera": {
+        "body": "ARRI ALEXA 35",
+        "lens": "Signature Prime",
+        "focalLengthMm": 35
+      },
+      "pixelAspect": 1,
+      "status": {
+        "key": "needs_review",
+        "label": "Needs Review"
+      },
+      "source": {
+        "verified": "unchecked"
+      },
+      "tasks": [
+        {
+          "kind": "clean_plate",
+          "label": "Clean plate",
+          "state": "needs_review",
+          "version": 1,
+          "approval": null,
+          "problems": 0,
+          "exported": false
+        }
+      ],
+      "approval": null,
+      "problems": [
+        {
+          "task": null,
+          "severity": "info",
+          "text": "The source has not been verified against the DIT’s checksum yet. Run Verify sources on the Deliver tab."
+        }
+      ],
+      "supervisorNotes": "Notes for 3B-02"
+    },
+    {
+      "handoffShotId": "4A-05",
+      "scene": "4",
+      "setup": "A",
+      "take": "5",
+      "circled": true,
+      "cameraRoll": "A001",
+      "clip": "A001C005",
+      "unit": "Main",
+      "shootDay": "Day 002 · 2026-09-15",
+      "shootDate": "2026-09-16",
+      "frames": {
+        "in": 1001,
+        "out": 1112,
+        "handles": 8,
+        "count": 112,
+        "rangeFrom": "handoff"
+      },
+      "frameRate": 24,
+      "camera": {
+        "body": "ARRI ALEXA 35",
+        "lens": "Signature Prime",
+        "focalLengthMm": 35
+      },
+      "pixelAspect": 1,
+      "status": {
+        "key": "packaged",
+        "label": "Packaged"
+      },
+      "source": {
+        "verified": "verified",
+        "at": "2026-10-19T13:43:00.000Z"
+      },
+      "tasks": [
+        {
+          "kind": "track_2d",
+          "label": "2D / planar track",
+          "state": "approved",
+          "version": 1,
+          "approval": {
+            "by": "Ada Renke",
+            "at": "2026-10-19T12:31:00.000Z"
+          },
+          "problems": 0,
+          "exported": false
+        },
+        {
+          "kind": "camera_track",
+          "label": "Camera track / matchmove",
+          "state": "approved",
+          "version": 1,
+          "approval": {
+            "by": "Ada Renke",
+            "at": "2026-10-19T12:33:00.000Z"
+          },
+          "problems": 0,
+          "exported": false
+        }
+      ],
+      "approval": {
+        "by": "Ada Renke",
+        "at": "2026-10-19T12:39:00.000Z"
+      },
+      "packaged": {
+        "version": 1,
+        "at": "2026-10-19T12:40:00.000Z",
+        "folder": "DEMO_—_THE_COPPER_LINE_VFX/SCENE_4/SHOT_4A-05",
+        "taskVersions": {
+          "track_2d": 1,
+          "camera_track": 1
+        }
+      },
+      "problems": [],
+      "supervisorNotes": "Notes for 4A-05"
+    },
+    {
+      "handoffShotId": "5A-01",
+      "scene": "5",
+      "setup": "A",
+      "take": "1",
+      "circled": true,
+      "cameraRoll": "A001",
+      "clip": "A001C001",
+      "unit": "Main",
+      "shootDay": "Day 002 · 2026-09-15",
+      "shootDate": "2026-09-16",
+      "frames": {
+        "in": 1001,
+        "out": 1112,
+        "handles": 8,
+        "count": 112,
+        "rangeFrom": "handoff"
+      },
+      "frameRate": 24,
+      "camera": {
+        "body": "ARRI ALEXA 35",
+        "lens": "Signature Prime",
+        "focalLengthMm": 35
+      },
+      "pixelAspect": 1,
+      "status": {
+        "key": "prep_approved",
+        "label": "Prep Approved"
+      },
+      "source": {
+        "verified": "unchecked"
+      },
+      "tasks": [
+        {
+          "kind": "sky_replacement",
+          "label": "Sky isolation / replacement prep",
+          "state": "approved",
+          "version": 1,
+          "approval": {
+            "by": "Ada Renke",
+            "at": "2026-10-19T12:51:00.000Z"
+          },
+          "problems": 0,
+          "exported": false
+        }
+      ],
+      "approval": {
+        "by": "Ada Renke",
+        "at": "2026-10-19T12:59:00.000Z"
+      },
+      "packaged": {
+        "version": 1,
+        "at": "2026-10-19T13:00:00.000Z",
+        "folder": "DEMO_—_THE_COPPER_LINE_VFX/SCENE_5/SHOT_5A-01",
+        "taskVersions": {
+          "sky_replacement": 1
+        }
+      },
+      "problems": [
+        {
+          "task": null,
+          "severity": "info",
+          "text": "The source has not been verified against the DIT’s checksum yet. Run Verify sources on the Deliver tab."
+        }
+      ],
+      "supervisorNotes": "Notes for 5A-01"
+    },
+    {
+      "handoffShotId": "6B-04",
+      "scene": "6",
+      "setup": "B",
+      "take": "4",
+      "circled": true,
+      "cameraRoll": "A001",
+      "clip": "A001C004",
+      "unit": "Main",
+      "shootDay": "Day 003 · 2026-09-16",
+      "shootDate": "2026-09-16",
+      "frames": {
+        "in": 1001,
+        "out": 1112,
+        "handles": 8,
+        "count": 112,
+        "rangeFrom": "handoff"
+      },
+      "frameRate": 24,
+      "camera": {
+        "body": "ARRI ALEXA 35",
+        "lens": "Signature Prime",
+        "focalLengthMm": 35
+      },
+      "pixelAspect": 1,
+      "status": {
+        "key": "needs_review",
+        "label": "Needs Review"
+      },
+      "source": {
+        "verified": "unchecked"
+      },
+      "tasks": [
+        {
+          "kind": "texture_extraction",
+          "label": "Texture extraction",
+          "state": "approved",
+          "version": 1,
+          "approval": {
+            "by": "Ada Renke",
+            "at": "2026-10-19T13:11:00.000Z"
+          },
+          "problems": 0,
+          "exported": false
+        },
+        {
+          "kind": "lighting_analysis",
+          "label": "Lighting and lens analysis",
+          "state": "needs_review",
+          "version": 2,
+          "approval": null,
+          "problems": 0,
+          "exported": false
+        }
+      ],
+      "approval": null,
+      "packaged": {
+        "version": 1,
+        "at": "2026-10-19T13:20:00.000Z",
+        "folder": "DEMO_—_THE_COPPER_LINE_VFX/SCENE_6/SHOT_6B-04",
+        "taskVersions": {
+          "texture_extraction": 1,
+          "lighting_analysis": 1
+        }
+      },
+      "problems": [
+        {
+          "task": null,
+          "severity": "info",
+          "text": "The source has not been verified against the DIT’s checksum yet. Run Verify sources on the Deliver tab."
+        }
+      ],
+      "supervisorNotes": "Notes for 6B-04"
+    },
+    {
+      "handoffShotId": "7A-02",
+      "scene": "7",
+      "setup": "A",
+      "take": "2",
+      "circled": true,
+      "cameraRoll": "A001",
+      "clip": "A001C002",
+      "unit": "Main",
+      "shootDay": "Day 003 · 2026-09-16",
+      "shootDate": "2026-09-16",
+      "frames": {
+        "in": 1001,
+        "out": 1112,
+        "handles": 8,
+        "count": 112,
+        "rangeFrom": "handoff"
+      },
+      "frameRate": 24,
+      "camera": {
+        "body": "ARRI ALEXA 35",
+        "lens": "Signature Prime",
+        "focalLengthMm": 35
+      },
+      "pixelAspect": 1,
+      "status": {
+        "key": "processing",
+        "label": "Processing"
+      },
+      "source": {
+        "verified": "unchecked"
+      },
+      "tasks": [
+        {
+          "kind": "background_removal",
+          "label": "Background removal",
+          "state": "processing",
+          "version": 1,
+          "approval": null,
+          "problems": 0,
+          "exported": false
+        }
+      ],
+      "approval": null,
+      "problems": [
+        {
+          "task": null,
+          "severity": "info",
+          "text": "The source has not been verified against the DIT’s checksum yet. Run Verify sources on the Deliver tab."
+        }
+      ],
+      "supervisorNotes": "Notes for 7A-02"
+    },
+    {
+      "handoffShotId": "8B-01",
+      "scene": "8",
+      "setup": "B",
+      "take": "1",
+      "circled": true,
+      "cameraRoll": "A001",
+      "clip": "A001C001",
+      "unit": "Main",
+      "shootDay": "Day 003 · 2026-09-16",
+      "shootDate": "2026-09-16",
+      "frames": {
+        "in": 1001,
+        "out": 1112,
+        "handles": 8,
+        "count": 112,
+        "rangeFrom": "handoff"
+      },
+      "frameRate": 24,
+      "camera": {
+        "body": "ARRI ALEXA 35",
+        "lens": "Signature Prime",
+        "focalLengthMm": 35
+      },
+      "pixelAspect": 1,
+      "status": {
+        "key": "processing",
+        "label": "Processing"
+      },
+      "source": {
+        "verified": "mismatch",
+        "at": "2026-10-19T13:42:00.000Z"
+      },
+      "tasks": [
+        {
+          "kind": "composite",
+          "label": "Prep composite",
+          "state": "processing",
+          "version": 1,
+          "approval": null,
+          "problems": 2,
+          "exported": false
+        }
+      ],
+      "approval": null,
+      "problems": [
+        {
+          "task": null,
+          "severity": "error",
+          "text": "The source does not match the DIT’s checksum: the camera file on this drive is not the one that was shot. Copy the take again from the camera original or the DIT’s other copy, then run Verify sources."
+        },
+        {
+          "task": "composite",
+          "severity": "error",
+          "text": "Comp: Merge1 needs its B input connected"
+        },
+        {
+          "task": "composite",
+          "severity": "info",
+          "text": "Comp: Merge1 is not used by the render (not connected to Write1)"
+        }
+      ],
+      "supervisorNotes": "Notes for 8B-01"
+    },
+    {
+      "handoffShotId": "8A-09",
+      "scene": "8",
+      "setup": "A",
+      "take": "9",
+      "circled": true,
+      "cameraRoll": "A001",
+      "clip": "A001C009",
+      "unit": "Main",
+      "shootDay": "Day 003 · 2026-09-16",
+      "shootDate": "2026-09-16",
+      "frames": {
+        "in": 1001,
+        "out": 1112,
+        "handles": 8,
+        "count": 112,
+        "rangeFrom": "handoff"
+      },
+      "frameRate": 24,
+      "camera": {
+        "body": "ARRI ALEXA 35",
+        "lens": "Signature Prime",
+        "focalLengthMm": 35
+      },
+      "pixelAspect": 1,
+      "status": {
+        "key": "not_started",
+        "label": "Not Started"
+      },
+      "source": {
+        "verified": "unchecked"
+      },
+      "tasks": [],
+      "approval": null,
+      "problems": [
+        {
+          "task": null,
+          "severity": "info",
+          "text": "The source has not been verified against the DIT’s checksum yet. Run Verify sources on the Deliver tab."
+        }
+      ],
+      "supervisorNotes": "Notes for 8A-09"
+    }
+  ],
+  "summary": {
+    "shots": 9,
+    "byStatus": {
+      "not_started": 1,
+      "ready_for_prep": 0,
+      "processing": 2,
+      "needs_review": 2,
+      "needs_correction": 1,
+      "prep_approved": 1,
+      "packaged": 1,
+      "delivered": 1
+    },
+    "byTaskState": {
+      "pending": 1,
+      "processing": 2,
+      "needs_review": 2,
+      "needs_correction": 1,
+      "approved": 6
+    },
+    "readyToHandOff": 1
+  }
+}

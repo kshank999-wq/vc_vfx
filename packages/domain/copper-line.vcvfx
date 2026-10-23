@@ -1,0 +1,1136 @@
+{
+  "format": "vcvfx-project",
+  "version": 12,
+  "createdAt": "2026-10-19T12:00:00.000Z",
+  "updatedAt": "2026-10-19T14:00:00.000Z",
+  "handoffPath": "/Volumes/D/handoff.json",
+  "handoff": {
+    "schemaVersion": 1,
+    "project": "DEMO — THE COPPER LINE",
+    "productionCompany": "DEMO PRODUCTIONS",
+    "vfxSupervisor": "Ada Renke",
+    "origin": {
+      "format": "vcdit.vfx-handoff/1",
+      "tool": "VC DIT 1.3.0",
+      "productionCode": "CPL",
+      "day": {
+        "number": 3,
+        "date": "2026-09-16"
+      }
+    },
+    "output": {
+      "format": "exr",
+      "bitDepth": 16,
+      "startFrame": 1001,
+      "compression": "PIZ"
+    },
+    "shots": [
+      {
+        "shotId": "1A-03",
+        "unit": "Main",
+        "shootDay": "Day 001 · 2026-09-14",
+        "scene": "1",
+        "setup": "A",
+        "take": "3",
+        "cameraRoll": "A001",
+        "clip": "A001C003",
+        "circled": true,
+        "sourcePath": "VFX/1A-03.mxf",
+        "frameIn": 100,
+        "frameOut": 195,
+        "handles": 8,
+        "frameRate": 24,
+        "camera": {
+          "body": "ARRI ALEXA 35",
+          "lens": "Signature Prime",
+          "focalLengthMm": 35
+        },
+        "color": {
+          "sourceColorSpace": "ARRI LogC4 / AWG4"
+        },
+        "tasks": [
+          {
+            "kind": "sequence_conversion"
+          },
+          {
+            "kind": "roto"
+          }
+        ],
+        "supervisorNotes": "Notes for 1A-03",
+        "references": [],
+        "checksums": [
+          {
+            "path": "VFX/1A-03.mxf",
+            "algorithm": "sha256",
+            "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        ]
+      },
+      {
+        "shotId": "2A-01",
+        "unit": "Main",
+        "shootDay": "Day 001 · 2026-09-14",
+        "scene": "2",
+        "setup": "A",
+        "take": "1",
+        "cameraRoll": "A001",
+        "clip": "A001C001",
+        "circled": true,
+        "sourcePath": "VFX/2A-01.mxf",
+        "frameIn": 100,
+        "frameOut": 195,
+        "handles": 8,
+        "frameRate": 24,
+        "camera": {
+          "body": "ARRI ALEXA 35",
+          "lens": "Signature Prime",
+          "focalLengthMm": 35
+        },
+        "color": {
+          "sourceColorSpace": "ARRI LogC4 / AWG4"
+        },
+        "tasks": [
+          {
+            "kind": "key"
+          },
+          {
+            "kind": "despill"
+          }
+        ],
+        "supervisorNotes": "Notes for 2A-01",
+        "references": [],
+        "checksums": [
+          {
+            "path": "VFX/2A-01.mxf",
+            "algorithm": "sha256",
+            "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        ]
+      },
+      {
+        "shotId": "3B-02",
+        "unit": "Main",
+        "shootDay": "Day 002 · 2026-09-15",
+        "scene": "3",
+        "setup": "B",
+        "take": "2",
+        "cameraRoll": "A001",
+        "clip": "A001C002",
+        "circled": true,
+        "sourcePath": "VFX/3B-02.mxf",
+        "frameIn": 100,
+        "frameOut": 195,
+        "handles": 8,
+        "frameRate": 24,
+        "camera": {
+          "body": "ARRI ALEXA 35",
+          "lens": "Signature Prime",
+          "focalLengthMm": 35
+        },
+        "color": {
+          "sourceColorSpace": "ARRI LogC4 / AWG4"
+        },
+        "tasks": [
+          {
+            "kind": "clean_plate"
+          }
+        ],
+        "supervisorNotes": "Notes for 3B-02",
+        "references": [],
+        "checksums": [
+          {
+            "path": "VFX/3B-02.mxf",
+            "algorithm": "sha256",
+            "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        ]
+      },
+      {
+        "shotId": "4A-05",
+        "unit": "Main",
+        "shootDay": "Day 002 · 2026-09-15",
+        "scene": "4",
+        "setup": "A",
+        "take": "5",
+        "cameraRoll": "A001",
+        "clip": "A001C005",
+        "circled": true,
+        "sourcePath": "VFX/4A-05.mxf",
+        "frameIn": 100,
+        "frameOut": 195,
+        "handles": 8,
+        "frameRate": 24,
+        "camera": {
+          "body": "ARRI ALEXA 35",
+          "lens": "Signature Prime",
+          "focalLengthMm": 35
+        },
+        "color": {
+          "sourceColorSpace": "ARRI LogC4 / AWG4"
+        },
+        "tasks": [
+          {
+            "kind": "track_2d"
+          },
+          {
+            "kind": "camera_track"
+          }
+        ],
+        "supervisorNotes": "Notes for 4A-05",
+        "references": [],
+        "checksums": [
+          {
+            "path": "VFX/4A-05.mxf",
+            "algorithm": "sha256",
+            "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        ]
+      },
+      {
+        "shotId": "5A-01",
+        "unit": "Main",
+        "shootDay": "Day 002 · 2026-09-15",
+        "scene": "5",
+        "setup": "A",
+        "take": "1",
+        "cameraRoll": "A001",
+        "clip": "A001C001",
+        "circled": true,
+        "sourcePath": "VFX/5A-01.mxf",
+        "frameIn": 100,
+        "frameOut": 195,
+        "handles": 8,
+        "frameRate": 24,
+        "camera": {
+          "body": "ARRI ALEXA 35",
+          "lens": "Signature Prime",
+          "focalLengthMm": 35
+        },
+        "color": {
+          "sourceColorSpace": "ARRI LogC4 / AWG4"
+        },
+        "tasks": [
+          {
+            "kind": "sky_replacement"
+          }
+        ],
+        "supervisorNotes": "Notes for 5A-01",
+        "references": [],
+        "checksums": [
+          {
+            "path": "VFX/5A-01.mxf",
+            "algorithm": "sha256",
+            "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        ]
+      },
+      {
+        "shotId": "6B-04",
+        "unit": "Main",
+        "shootDay": "Day 003 · 2026-09-16",
+        "scene": "6",
+        "setup": "B",
+        "take": "4",
+        "cameraRoll": "A001",
+        "clip": "A001C004",
+        "circled": true,
+        "sourcePath": "VFX/6B-04.mxf",
+        "frameIn": 100,
+        "frameOut": 195,
+        "handles": 8,
+        "frameRate": 24,
+        "camera": {
+          "body": "ARRI ALEXA 35",
+          "lens": "Signature Prime",
+          "focalLengthMm": 35
+        },
+        "color": {
+          "sourceColorSpace": "ARRI LogC4 / AWG4"
+        },
+        "tasks": [
+          {
+            "kind": "texture_extraction"
+          },
+          {
+            "kind": "lighting_analysis"
+          }
+        ],
+        "supervisorNotes": "Notes for 6B-04",
+        "references": [],
+        "checksums": [
+          {
+            "path": "VFX/6B-04.mxf",
+            "algorithm": "sha256",
+            "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        ]
+      },
+      {
+        "shotId": "7A-02",
+        "unit": "Main",
+        "shootDay": "Day 003 · 2026-09-16",
+        "scene": "7",
+        "setup": "A",
+        "take": "2",
+        "cameraRoll": "A001",
+        "clip": "A001C002",
+        "circled": true,
+        "sourcePath": "VFX/7A-02.mxf",
+        "frameIn": 100,
+        "frameOut": 195,
+        "handles": 8,
+        "frameRate": 24,
+        "camera": {
+          "body": "ARRI ALEXA 35",
+          "lens": "Signature Prime",
+          "focalLengthMm": 35
+        },
+        "color": {
+          "sourceColorSpace": "ARRI LogC4 / AWG4"
+        },
+        "tasks": [
+          {
+            "kind": "background_removal"
+          }
+        ],
+        "supervisorNotes": "Notes for 7A-02",
+        "references": [],
+        "checksums": [
+          {
+            "path": "VFX/7A-02.mxf",
+            "algorithm": "sha256",
+            "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        ]
+      },
+      {
+        "shotId": "8B-01",
+        "unit": "Main",
+        "shootDay": "Day 003 · 2026-09-16",
+        "scene": "8",
+        "setup": "B",
+        "take": "1",
+        "cameraRoll": "A001",
+        "clip": "A001C001",
+        "circled": true,
+        "sourcePath": "VFX/8B-01.mxf",
+        "frameIn": 100,
+        "frameOut": 195,
+        "handles": 8,
+        "frameRate": 24,
+        "camera": {
+          "body": "ARRI ALEXA 35",
+          "lens": "Signature Prime",
+          "focalLengthMm": 35
+        },
+        "color": {
+          "sourceColorSpace": "ARRI LogC4 / AWG4"
+        },
+        "tasks": [
+          {
+            "kind": "composite"
+          }
+        ],
+        "supervisorNotes": "Notes for 8B-01",
+        "references": [],
+        "checksums": [
+          {
+            "path": "VFX/8B-01.mxf",
+            "algorithm": "sha256",
+            "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        ]
+      },
+      {
+        "shotId": "8A-09",
+        "unit": "Main",
+        "shootDay": "Day 003 · 2026-09-16",
+        "scene": "8",
+        "setup": "A",
+        "take": "9",
+        "cameraRoll": "A001",
+        "clip": "A001C009",
+        "circled": true,
+        "sourcePath": "VFX/8A-09.mxf",
+        "frameIn": 100,
+        "frameOut": 195,
+        "handles": 8,
+        "frameRate": 24,
+        "camera": {
+          "body": "ARRI ALEXA 35",
+          "lens": "Signature Prime",
+          "focalLengthMm": 35
+        },
+        "color": {
+          "sourceColorSpace": "ARRI LogC4 / AWG4"
+        },
+        "tasks": [],
+        "supervisorNotes": "Notes for 8A-09",
+        "references": [],
+        "checksums": [
+          {
+            "path": "VFX/8A-09.mxf",
+            "algorithm": "sha256",
+            "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        ]
+      }
+    ]
+  },
+  "plateColorDefault": "acescg",
+  "shots": [
+    {
+      "shotId": "1A-03",
+      "vfxShotId": null,
+      "probe": null,
+      "tasks": [
+        {
+          "kind": "sequence_conversion",
+          "state": "approved",
+          "version": 1,
+          "notes": "",
+          "approval": {
+            "by": "Ada Renke",
+            "at": "2026-10-19T12:01:00.000Z"
+          }
+        },
+        {
+          "kind": "roto",
+          "state": "approved",
+          "version": 1,
+          "notes": "",
+          "approval": {
+            "by": "Ada Renke",
+            "at": "2026-10-19T12:03:00.000Z"
+          }
+        }
+      ],
+      "approval": {
+        "by": "Ada Renke",
+        "at": "2026-10-19T12:09:00.000Z"
+      },
+      "stage": "delivered",
+      "packageVersion": 1,
+      "notes": "",
+      "sourceVerified": "unchecked",
+      "sourceEncoding": null,
+      "plateColor": "auto",
+      "plates": [],
+      "reviewMarks": [],
+      "roto": null,
+      "camtrack": null,
+      "track2d": null,
+      "key": null,
+      "cleanPlate": null,
+      "isolate": {
+        "sky": null,
+        "background": null
+      },
+      "texture": null,
+      "comp": null,
+      "lighting": null,
+      "pixelAspect": null,
+      "packagedTaskVersions": {
+        "sequence_conversion": 1,
+        "roto": 1
+      },
+      "deliveredTo": "Northlight VFX"
+    },
+    {
+      "shotId": "2A-01",
+      "vfxShotId": null,
+      "probe": null,
+      "tasks": [
+        {
+          "kind": "key",
+          "state": "needs_correction",
+          "version": 1,
+          "notes": "",
+          "approval": null
+        },
+        {
+          "kind": "despill",
+          "state": "pending",
+          "version": 1,
+          "notes": "",
+          "approval": null
+        }
+      ],
+      "approval": null,
+      "stage": "prep",
+      "packageVersion": 0,
+      "notes": "",
+      "sourceVerified": "unchecked",
+      "sourceEncoding": null,
+      "plateColor": "auto",
+      "plates": [],
+      "reviewMarks": [
+        {
+          "frame": 1010,
+          "viewing": "source",
+          "note": "matte chatter",
+          "by": "sup",
+          "at": "2026-10-19T13:44:00.000Z"
+        }
+      ],
+      "roto": null,
+      "camtrack": null,
+      "track2d": null,
+      "key": null,
+      "cleanPlate": null,
+      "isolate": {
+        "sky": null,
+        "background": null
+      },
+      "texture": null,
+      "comp": null,
+      "lighting": null,
+      "pixelAspect": null,
+      "packagedTaskVersions": null,
+      "deliveredTo": null
+    },
+    {
+      "shotId": "3B-02",
+      "vfxShotId": null,
+      "probe": null,
+      "tasks": [
+        {
+          "kind": "clean_plate",
+          "state": "needs_review",
+          "version": 1,
+          "notes": "",
+          "approval": null
+        }
+      ],
+      "approval": null,
+      "stage": "prep",
+      "packageVersion": 0,
+      "notes": "",
+      "sourceVerified": "unchecked",
+      "sourceEncoding": null,
+      "plateColor": "auto",
+      "plates": [],
+      "reviewMarks": [],
+      "roto": null,
+      "camtrack": null,
+      "track2d": null,
+      "key": null,
+      "cleanPlate": null,
+      "isolate": {
+        "sky": null,
+        "background": null
+      },
+      "texture": null,
+      "comp": null,
+      "lighting": null,
+      "pixelAspect": null,
+      "packagedTaskVersions": null,
+      "deliveredTo": null
+    },
+    {
+      "shotId": "4A-05",
+      "vfxShotId": null,
+      "probe": null,
+      "tasks": [
+        {
+          "kind": "track_2d",
+          "state": "approved",
+          "version": 1,
+          "notes": "",
+          "approval": {
+            "by": "Ada Renke",
+            "at": "2026-10-19T12:31:00.000Z"
+          }
+        },
+        {
+          "kind": "camera_track",
+          "state": "approved",
+          "version": 1,
+          "notes": "",
+          "approval": {
+            "by": "Ada Renke",
+            "at": "2026-10-19T12:33:00.000Z"
+          }
+        }
+      ],
+      "approval": {
+        "by": "Ada Renke",
+        "at": "2026-10-19T12:39:00.000Z"
+      },
+      "stage": "packaged",
+      "packageVersion": 1,
+      "notes": "",
+      "sourceVerified": "verified",
+      "sourceEncoding": null,
+      "plateColor": "auto",
+      "plates": [],
+      "reviewMarks": [],
+      "roto": null,
+      "camtrack": null,
+      "track2d": null,
+      "key": null,
+      "cleanPlate": null,
+      "isolate": {
+        "sky": null,
+        "background": null
+      },
+      "texture": null,
+      "comp": null,
+      "lighting": null,
+      "pixelAspect": null,
+      "packagedTaskVersions": {
+        "track_2d": 1,
+        "camera_track": 1
+      },
+      "deliveredTo": null
+    },
+    {
+      "shotId": "5A-01",
+      "vfxShotId": null,
+      "probe": null,
+      "tasks": [
+        {
+          "kind": "sky_replacement",
+          "state": "approved",
+          "version": 1,
+          "notes": "",
+          "approval": {
+            "by": "Ada Renke",
+            "at": "2026-10-19T12:51:00.000Z"
+          }
+        }
+      ],
+      "approval": {
+        "by": "Ada Renke",
+        "at": "2026-10-19T12:59:00.000Z"
+      },
+      "stage": "prep",
+      "packageVersion": 1,
+      "notes": "",
+      "sourceVerified": "unchecked",
+      "sourceEncoding": null,
+      "plateColor": "auto",
+      "plates": [],
+      "reviewMarks": [],
+      "roto": null,
+      "camtrack": null,
+      "track2d": null,
+      "key": null,
+      "cleanPlate": null,
+      "isolate": {
+        "sky": null,
+        "background": null
+      },
+      "texture": null,
+      "comp": null,
+      "lighting": null,
+      "pixelAspect": null,
+      "packagedTaskVersions": {
+        "sky_replacement": 1
+      },
+      "deliveredTo": null
+    },
+    {
+      "shotId": "6B-04",
+      "vfxShotId": null,
+      "probe": null,
+      "tasks": [
+        {
+          "kind": "texture_extraction",
+          "state": "approved",
+          "version": 1,
+          "notes": "",
+          "approval": {
+            "by": "Ada Renke",
+            "at": "2026-10-19T13:11:00.000Z"
+          }
+        },
+        {
+          "kind": "lighting_analysis",
+          "state": "needs_review",
+          "version": 2,
+          "notes": "",
+          "approval": null
+        }
+      ],
+      "approval": null,
+      "stage": "prep",
+      "packageVersion": 1,
+      "notes": "",
+      "sourceVerified": "unchecked",
+      "sourceEncoding": null,
+      "plateColor": "auto",
+      "plates": [],
+      "reviewMarks": [],
+      "roto": null,
+      "camtrack": null,
+      "track2d": null,
+      "key": null,
+      "cleanPlate": null,
+      "isolate": {
+        "sky": null,
+        "background": null
+      },
+      "texture": null,
+      "comp": null,
+      "lighting": null,
+      "pixelAspect": null,
+      "packagedTaskVersions": {
+        "texture_extraction": 1,
+        "lighting_analysis": 1
+      },
+      "deliveredTo": null
+    },
+    {
+      "shotId": "7A-02",
+      "vfxShotId": null,
+      "probe": null,
+      "tasks": [
+        {
+          "kind": "background_removal",
+          "state": "processing",
+          "version": 1,
+          "notes": "",
+          "approval": null
+        }
+      ],
+      "approval": null,
+      "stage": "prep",
+      "packageVersion": 0,
+      "notes": "",
+      "sourceVerified": "unchecked",
+      "sourceEncoding": null,
+      "plateColor": "auto",
+      "plates": [],
+      "reviewMarks": [],
+      "roto": null,
+      "camtrack": null,
+      "track2d": null,
+      "key": null,
+      "cleanPlate": null,
+      "isolate": {
+        "sky": null,
+        "background": null
+      },
+      "texture": null,
+      "comp": null,
+      "lighting": null,
+      "pixelAspect": null,
+      "packagedTaskVersions": null,
+      "deliveredTo": null
+    },
+    {
+      "shotId": "8B-01",
+      "vfxShotId": null,
+      "probe": null,
+      "tasks": [
+        {
+          "kind": "composite",
+          "state": "processing",
+          "version": 1,
+          "notes": "",
+          "approval": null
+        }
+      ],
+      "approval": null,
+      "stage": "prep",
+      "packageVersion": 0,
+      "notes": "",
+      "sourceVerified": "mismatch",
+      "sourceEncoding": null,
+      "plateColor": "auto",
+      "plates": [],
+      "reviewMarks": [],
+      "roto": null,
+      "camtrack": null,
+      "track2d": null,
+      "key": null,
+      "cleanPlate": null,
+      "isolate": {
+        "sky": null,
+        "background": null
+      },
+      "texture": null,
+      "comp": {
+        "formatVersion": 1,
+        "algorithm": {
+          "id": "vcvfx-comp",
+          "version": "1.0.0"
+        },
+        "nodes": [
+          {
+            "id": "n1",
+            "type": "read",
+            "name": "Read_plate",
+            "x": 0,
+            "y": 0,
+            "params": {
+              "source": "plate"
+            },
+            "disabled": false,
+            "note": ""
+          },
+          {
+            "id": "n2",
+            "type": "write",
+            "name": "Write1",
+            "x": 0,
+            "y": 76,
+            "params": {},
+            "disabled": false,
+            "note": ""
+          },
+          {
+            "id": "n3",
+            "type": "merge",
+            "name": "Merge1",
+            "x": 0,
+            "y": 0,
+            "params": {},
+            "disabled": false,
+            "note": ""
+          }
+        ],
+        "edges": [
+          {
+            "from": "n1",
+            "to": "n2",
+            "input": "src"
+          }
+        ],
+        "viewer": {
+          "a": "n1",
+          "b": null
+        },
+        "render": {
+          "first": null,
+          "last": null,
+          "review": "jpeg"
+        },
+        "renders": [],
+        "exports": [],
+        "revision": 2,
+        "seq": 3
+      },
+      "lighting": null,
+      "pixelAspect": null,
+      "packagedTaskVersions": null,
+      "deliveredTo": null
+    },
+    {
+      "shotId": "8A-09",
+      "vfxShotId": null,
+      "probe": null,
+      "tasks": [],
+      "approval": null,
+      "stage": "prep",
+      "packageVersion": 0,
+      "notes": "",
+      "sourceVerified": "unchecked",
+      "sourceEncoding": null,
+      "plateColor": "auto",
+      "plates": [],
+      "reviewMarks": [],
+      "roto": null,
+      "camtrack": null,
+      "track2d": null,
+      "key": null,
+      "cleanPlate": null,
+      "isolate": {
+        "sky": null,
+        "background": null
+      },
+      "texture": null,
+      "comp": null,
+      "lighting": null,
+      "pixelAspect": null,
+      "packagedTaskVersions": null,
+      "deliveredTo": null
+    }
+  ],
+  "lensProfiles": [],
+  "customCameras": [],
+  "filmStudioProduction": "DEMO — THE COPPER LINE",
+  "log": [
+    {
+      "detail": "9 shots from /Volumes/D/handoff.json",
+      "at": "2026-10-19T12:00:00.000Z",
+      "actor": "dit",
+      "shotId": null,
+      "action": "project.created"
+    },
+    {
+      "detail": "sequence_conversion → needs_review",
+      "at": "2026-10-19T12:00:00.000Z",
+      "actor": "artist",
+      "shotId": "1A-03",
+      "action": "task.state"
+    },
+    {
+      "detail": "sequence_conversion",
+      "at": "2026-10-19T12:01:00.000Z",
+      "actor": "Ada Renke",
+      "shotId": "1A-03",
+      "action": "task.approved"
+    },
+    {
+      "detail": "roto → needs_review",
+      "at": "2026-10-19T12:02:00.000Z",
+      "actor": "artist",
+      "shotId": "1A-03",
+      "action": "task.state"
+    },
+    {
+      "detail": "roto",
+      "at": "2026-10-19T12:03:00.000Z",
+      "actor": "Ada Renke",
+      "shotId": "1A-03",
+      "action": "task.approved"
+    },
+    {
+      "detail": "",
+      "at": "2026-10-19T12:09:00.000Z",
+      "actor": "Ada Renke",
+      "shotId": "1A-03",
+      "action": "shot.approved"
+    },
+    {
+      "detail": "package v001 from sequence_conversion v001, roto v001",
+      "at": "2026-10-19T12:10:00.000Z",
+      "actor": "dit",
+      "shotId": "1A-03",
+      "action": "shot.packaged"
+    },
+    {
+      "detail": "to Northlight VFX",
+      "at": "2026-10-19T12:11:00.000Z",
+      "actor": "dit",
+      "shotId": "1A-03",
+      "action": "shot.delivered"
+    },
+    {
+      "detail": "key → needs_correction",
+      "at": "2026-10-19T12:20:00.000Z",
+      "actor": "artist",
+      "shotId": "2A-01",
+      "action": "task.state"
+    },
+    {
+      "detail": "clean_plate → needs_review",
+      "at": "2026-10-19T12:21:00.000Z",
+      "actor": "artist",
+      "shotId": "3B-02",
+      "action": "task.state"
+    },
+    {
+      "detail": "track_2d → needs_review",
+      "at": "2026-10-19T12:30:00.000Z",
+      "actor": "artist",
+      "shotId": "4A-05",
+      "action": "task.state"
+    },
+    {
+      "detail": "track_2d",
+      "at": "2026-10-19T12:31:00.000Z",
+      "actor": "Ada Renke",
+      "shotId": "4A-05",
+      "action": "task.approved"
+    },
+    {
+      "detail": "camera_track → needs_review",
+      "at": "2026-10-19T12:32:00.000Z",
+      "actor": "artist",
+      "shotId": "4A-05",
+      "action": "task.state"
+    },
+    {
+      "detail": "camera_track",
+      "at": "2026-10-19T12:33:00.000Z",
+      "actor": "Ada Renke",
+      "shotId": "4A-05",
+      "action": "task.approved"
+    },
+    {
+      "detail": "",
+      "at": "2026-10-19T12:39:00.000Z",
+      "actor": "Ada Renke",
+      "shotId": "4A-05",
+      "action": "shot.approved"
+    },
+    {
+      "detail": "package v001 from track_2d v001, camera_track v001",
+      "at": "2026-10-19T12:40:00.000Z",
+      "actor": "dit",
+      "shotId": "4A-05",
+      "action": "shot.packaged"
+    },
+    {
+      "detail": "sky_replacement → needs_review",
+      "at": "2026-10-19T12:50:00.000Z",
+      "actor": "artist",
+      "shotId": "5A-01",
+      "action": "task.state"
+    },
+    {
+      "detail": "sky_replacement",
+      "at": "2026-10-19T12:51:00.000Z",
+      "actor": "Ada Renke",
+      "shotId": "5A-01",
+      "action": "task.approved"
+    },
+    {
+      "detail": "",
+      "at": "2026-10-19T12:59:00.000Z",
+      "actor": "Ada Renke",
+      "shotId": "5A-01",
+      "action": "shot.approved"
+    },
+    {
+      "detail": "package v001 from sky_replacement v001",
+      "at": "2026-10-19T13:00:00.000Z",
+      "actor": "dit",
+      "shotId": "5A-01",
+      "action": "shot.packaged"
+    },
+    {
+      "detail": "",
+      "at": "2026-10-19T13:01:00.000Z",
+      "actor": "sup",
+      "shotId": "5A-01",
+      "action": "shot.reopened"
+    },
+    {
+      "detail": "texture_extraction → needs_review",
+      "at": "2026-10-19T13:10:00.000Z",
+      "actor": "artist",
+      "shotId": "6B-04",
+      "action": "task.state"
+    },
+    {
+      "detail": "texture_extraction",
+      "at": "2026-10-19T13:11:00.000Z",
+      "actor": "Ada Renke",
+      "shotId": "6B-04",
+      "action": "task.approved"
+    },
+    {
+      "detail": "lighting_analysis → needs_review",
+      "at": "2026-10-19T13:12:00.000Z",
+      "actor": "artist",
+      "shotId": "6B-04",
+      "action": "task.state"
+    },
+    {
+      "detail": "lighting_analysis",
+      "at": "2026-10-19T13:13:00.000Z",
+      "actor": "Ada Renke",
+      "shotId": "6B-04",
+      "action": "task.approved"
+    },
+    {
+      "detail": "",
+      "at": "2026-10-19T13:19:00.000Z",
+      "actor": "Ada Renke",
+      "shotId": "6B-04",
+      "action": "shot.approved"
+    },
+    {
+      "detail": "package v001 from texture_extraction v001, lighting_analysis v001",
+      "at": "2026-10-19T13:20:00.000Z",
+      "actor": "dit",
+      "shotId": "6B-04",
+      "action": "shot.packaged"
+    },
+    {
+      "detail": "",
+      "at": "2026-10-19T13:21:00.000Z",
+      "actor": "sup",
+      "shotId": "6B-04",
+      "action": "shot.reopened"
+    },
+    {
+      "detail": "lighting_analysis → needs_review (approved work reopened; new version)",
+      "at": "2026-10-19T13:22:00.000Z",
+      "actor": "artist",
+      "shotId": "6B-04",
+      "action": "task.state"
+    },
+    {
+      "detail": "lighting_analysis reopened",
+      "at": "2026-10-19T13:22:00.000Z",
+      "actor": "artist",
+      "shotId": "6B-04",
+      "action": "shot.approval_withdrawn"
+    },
+    {
+      "detail": "background_removal → processing",
+      "at": "2026-10-19T13:30:00.000Z",
+      "actor": "artist",
+      "shotId": "7A-02",
+      "action": "task.state"
+    },
+    {
+      "detail": "vcvfx-comp@1.0.0",
+      "at": "2026-10-19T13:40:00.000Z",
+      "actor": "artist",
+      "shotId": "8B-01",
+      "action": "comp.started"
+    },
+    {
+      "detail": "started empty (Read → Write)",
+      "at": "2026-10-19T13:40:00.000Z",
+      "actor": "artist",
+      "shotId": "8B-01",
+      "action": "comp.graph"
+    },
+    {
+      "detail": "composite → processing",
+      "at": "2026-10-19T13:40:00.000Z",
+      "actor": "artist",
+      "shotId": "8B-01",
+      "action": "task.state"
+    },
+    {
+      "detail": "Merge1 (Merge)",
+      "at": "2026-10-19T13:41:00.000Z",
+      "actor": "artist",
+      "shotId": "8B-01",
+      "action": "comp.node_added"
+    },
+    {
+      "detail": "sha256 differs",
+      "at": "2026-10-19T13:42:00.000Z",
+      "actor": "dit",
+      "shotId": "8B-01",
+      "action": "source.mismatch"
+    },
+    {
+      "detail": "sha256 matches",
+      "at": "2026-10-19T13:43:00.000Z",
+      "actor": "dit",
+      "shotId": "4A-05",
+      "action": "source.verified"
+    },
+    {
+      "detail": "frame 1010 (source): matte chatter",
+      "at": "2026-10-19T13:44:00.000Z",
+      "actor": "sup",
+      "shotId": "2A-01",
+      "action": "review.marked"
+    },
+    {
+      "at": "2026-10-19T13:45:00.000Z",
+      "actor": "sup",
+      "shotId": null,
+      "action": "filmstudio.production",
+      "detail": "(none) → DEMO — THE COPPER LINE"
+    },
+    {
+      "at": "2026-10-19T14:00:00.000Z",
+      "actor": "Ruth Okafor",
+      "shotId": null,
+      "action": "filmstudio.sent",
+      "detail": "https://www.vcfilmstudio.com: 9 shots, 1 ready to hand off. Film Studio: 9 shots received: 1 ready to hand off, 2 in review, 1 needing correction, 3 in progress, 1 not started, 1 delivered. 9 linked to their scene, 9 to their shoot day."
+    }
+  ]
+}

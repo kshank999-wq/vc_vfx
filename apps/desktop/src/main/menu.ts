@@ -70,6 +70,12 @@ export async function buildMenu(getWindow: () => BrowserWindow | null, isDevelop
         { type: 'separator' },
         { label: 'Print Shot List…', accelerator: 'CmdOrCtrl+P', click: send('print') },
         { label: 'Export Shot List PDF…', accelerator: 'CmdOrCtrl+Shift+P', click: send('export-pdf') },
+        { type: 'separator' },
+        { label: 'Print VFX Status Report…', click: send('print-status') },
+        { label: 'Save VFX Status Report as PDF…', click: send('status-pdf') },
+        { label: 'Export for VC Film Studio…', click: send('export-status') },
+        { label: 'Export VFX Status as CSV…', click: send('export-status-csv') },
+        { label: 'Send Status to VC Film Studio', click: send('send-status') },
         ...(isMac
           ? []
           : ([
