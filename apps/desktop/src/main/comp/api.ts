@@ -1,6 +1,7 @@
 import { stat, writeFile } from 'node:fs/promises';
 import { join, relative, sep } from 'node:path';
 import {
+  pixelAspectOf,
   COMP_NODES,
   COMP_SOURCE_LABELS,
   COMP_TASK,
@@ -129,7 +130,8 @@ async function resolve(project: Project, shotId: string, outputRoot: string | nu
     sources[sourceKey(source, part)] = { file: abs, still: r.still, kind: r.kind, first: r.first, last: r.last, format: r.format, version: `${r.version ?? ''}|${st.mtimeMs}` };
     refs.set(n.id, { node: n.name, source, version: r.version, path: r.folder === null ? r.file : `${r.folder}/${r.file}`, label: r.label, abs, still: r.still, first: r.first, last: r.last, format: r.format, encoding: r.kind === 'alpha' || r.format === 'png' ? null : src.space.encoding, kind: r.kind });
   }
-  return { job: { ffmpeg: env.ffmpeg!, caps: env.caps, plate: src.spec, space: src.space, sources, tracks: state.track2d?.tracks ?? [] }, src, missing, refs, shotDir };
+  const pixelAspect = pixelAspectOf(project, shotId);
+  return { job: { ffmpeg: env.ffmpeg!, caps: env.caps, plate: src.spec, space: src.space, sources, tracks: state.track2d?.tracks ?? [], ...(pixelAspect !== 1 ? { pixelAspect } : {}) }, src, missing, refs, shotDir };
 }
 
 export async function compSession(project: Project, shotId: string, outputRoot: string | null, env: CompEnv): Promise<CompSessionInfo> {
@@ -331,6 +333,7 @@ export async function compExport(
     last: render.last,
     width: render.width,
     height: render.height,
+    pixelAspect: r.job.pixelAspect ?? 1,
     working: r.src.space.encoding,
     sources,
     baked: bakedSources,

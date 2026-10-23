@@ -17,7 +17,7 @@ import {
   shuffle,
   trackCornerPin,
   trackOffset,
-  transformMatrix,
+  transformMatrixAt,
   unpremult,
   warpMatrix,
 } from './ops';
@@ -49,6 +49,8 @@ export interface CompIO {
   tracks: ReadonlyMap<string, Track2d>;
   /** Plate resolution: what scale 1 is. */
   plate: { width: number; height: number };
+  /** The format's pixel aspect (stored pixel width / height; addendum 17). Transforms act in de-squeezed space, as Nuke's do. */
+  pixelAspect?: number;
 }
 
 export class CompEvalError extends Error {
@@ -298,7 +300,7 @@ export class CompEvaluator {
         const src = await need('src');
         const t = vec('translate');
         const c = vec('center');
-        const m = transformMatrix({ translate: [t[0]! * scale, t[1]! * scale], rotate: num('rotate'), scale: vec('scale') as [number, number], center: [c[0]! * width, c[1]! * height], invert: Boolean(p['invert']) });
+        const m = transformMatrixAt({ translate: [t[0]! * scale, t[1]! * scale], rotate: num('rotate'), scale: vec('scale') as [number, number], center: [c[0]! * width, c[1]! * height], invert: Boolean(p['invert']) }, this.io.pixelAspect ?? 1);
         const forward = p['invert'] ? inverseOr(m) : m;
         return masked(warpMatrix(src, forward, p['filter'] as Filter), src, await input('mask'));
       }

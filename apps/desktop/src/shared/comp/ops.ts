@@ -329,6 +329,20 @@ export function transformMatrix(t: TransformParams): Mat3 {
   return m;
 }
 
+/**
+ * The transform on a non-square format (addendum 17): rotation and scale
+ * happen on the de-squeezed picture, as Nuke's Transform does, so a circle
+ * stays round when rotated; translate and centre stay in stored pixels.
+ * M = S⁻¹ · M_physical · S with S = diag(pixelAspect, 1).
+ */
+export function transformMatrixAt(t: TransformParams, pixelAspect: number): Mat3 {
+  if (pixelAspect === 1) return transformMatrix(t);
+  const a = pixelAspect;
+  const m = transformMatrix({ ...t, translate: [t.translate[0] * a, t.translate[1]], center: [t.center[0] * a, t.center[1]] });
+  // S⁻¹ · m · S
+  return [m[0], m[1] / a, m[2] / a, m[3] * a, m[4], m[5], m[6] * a, m[7], m[8]] as Mat3;
+}
+
 /** Warp by a forward matrix: out(p) = in(M⁻¹ p). */
 export function warpMatrix(img: RGBA, forward: readonly number[], filter: Filter): RGBA {
   const inv = inv3(forward);

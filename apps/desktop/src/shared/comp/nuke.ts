@@ -51,6 +51,8 @@ export interface NukeInfo {
   last: number;
   width: number;
   height: number;
+  /** The plate format's pixel aspect (addendum 17): every format the script declares carries it. Absent = 1. */
+  pixelAspect?: number;
   /** The working encoding (the plates'); null: unknown, no colour management written. */
   working: ColorEncodingId | null;
   /** Per node id: where a Read (or a module node) reads. */
@@ -130,7 +132,7 @@ export function writeCompNuke(doc: Pick<CompDocument, 'nodes' | 'edges'>, info: 
       'Read {',
       ' inputs 0',
       ` file ${pathKnob(s)}`,
-      ` format "${info.width} ${info.height} 0 0 ${info.width} ${info.height} 1 ${info.shot}_plate"`,
+      ` format "${info.width} ${info.height} 0 0 ${info.width} ${info.height} ${num(info.pixelAspect ?? 1, 6)} ${info.shot}_plate"`,
       ` first ${s.still ? 1 : s.first}`,
       ` last ${s.still ? 1 : s.last}`,
       ` origfirst ${s.still ? 1 : s.first}`,
@@ -149,7 +151,7 @@ export function writeCompNuke(doc: Pick<CompDocument, 'nodes' | 'edges'>, info: 
     let last = readName;
     if (fit) {
       const fitName = alpha ? `${name}_fit` : name;
-      out.push('Reformat {', ` format "${info.width} ${info.height} 0 0 ${info.width} ${info.height} 1 ${info.shot}_plate"`, ' resize distort', ` name ${fitName}`, ...pos(n, 0, alpha ? -40 : 0), '}');
+      out.push('Reformat {', ` format "${info.width} ${info.height} 0 0 ${info.width} ${info.height} ${num(info.pixelAspect ?? 1, 6)} ${info.shot}_plate"`, ' resize distort', ` name ${fitName}`, ...pos(n, 0, alpha ? -40 : 0), '}');
       last = fitName;
     }
     if (alpha) {
@@ -314,7 +316,7 @@ export function writeCompNuke(doc: Pick<CompDocument, 'nodes' | 'edges'>, info: 
         }
         case 'constant': {
           const c = p['color'] as number[];
-          head('Constant', 0, [` color {${c.map((v) => num(v)).join(' ')}}`, ` format "${info.width} ${info.height} 0 0 ${info.width} ${info.height} 1 ${info.shot}_plate"`]);
+          head('Constant', 0, [` color {${c.map((v) => num(v)).join(' ')}}`, ` format "${info.width} ${info.height} 0 0 ${info.width} ${info.height} ${num(info.pixelAspect ?? 1, 6)} ${info.shot}_plate"`]);
           record('Constant', n.name, 'native');
           break;
         }
@@ -432,7 +434,7 @@ export function writeCompNuke(doc: Pick<CompDocument, 'nodes' | 'edges'>, info: 
     ` first_frame ${info.first}`,
     ` last_frame ${info.last}`,
     ` fps ${num(info.fps, 3)}`,
-    ` format "${info.width} ${info.height} 0 0 ${info.width} ${info.height} 1 ${info.shot}_plate"`,
+    ` format "${info.width} ${info.height} 0 0 ${info.width} ${info.height} ${num(info.pixelAspect ?? 1, 6)} ${info.shot}_plate"`,
     ...(ocio ? [' colorManagement OCIO', ' OCIO_config aces_1.2', ` workingSpaceLUT ${q(ocio)}`] : []),
     '}',
   ];

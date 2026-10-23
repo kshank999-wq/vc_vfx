@@ -389,6 +389,13 @@ describe('the Nuke script', () => {
     expect(nk.untranslated.some((u) => u.startsWith('LightWrap1 (LightWrap): no Nuke node; baked'))).toBe(true);
   });
 
+  it('declares the plate format’s pixel aspect on a non-square plate (addendum 17)', () => {
+    const nk = writeCompNuke(graph, { ...info, pixelAspect: 2 }).text;
+    const formats = [...nk.matchAll(/format "4096 2160 0 0 4096 2160 ([\d.]+) 010_020_plate"/g)].map((m) => Number(m[1]));
+    expect(formats.length).toBeGreaterThan(0);
+    expect(formats.every((v) => v === 2)).toBe(true);
+  });
+
   it('read back, its topology is the graph’s: Merge2 B is input 0 and A input 1, masks, module Reads, the baked Read', () => {
     const nodes = parseNukeTopology(writeCompNuke(graph, info).text);
     const n = (name: string) => nodes.find((x) => x.name === name)!;
@@ -442,5 +449,22 @@ describe('the Nuke script', () => {
     expect(n('M2')).toMatchObject({ cls: 'Merge2', inputs: ['M1', 'Plate'] });
     expect(n('W1').inputs).toEqual(['M2']);
     expect(nodes.filter((x) => x.cls === 'Read' && x.name === 'Plate')).toHaveLength(1);
+  });
+});
+
+describe('transforms on a non-square format (addendum 17)', () => {
+  it('rotate in de-squeezed space: a circle on a 2× plate stays round once de-squeezed', async () => {
+    const { transformMatrixAt, apply3 } = await import('../comp/ops');
+    const a = 2;
+    const M = transformMatrixAt({ translate: [10, 0], rotate: 90, scale: [1, 1], center: [100, 100], invert: false }, a);
+    // A point 20 stored px right of the centre (40 de-squeezed px) turns to 40 px above it (y down): stored (100, 60).
+    const p = apply3(M, 120, 100);
+    expect(p[0]).toBeCloseTo(110, 9); // + translate 10 stored px
+    expect(p[1]).toBeCloseTo(60, 9);
+    // A square-pixel format is unchanged.
+    const sq = transformMatrixAt({ translate: [0, 0], rotate: 90, scale: [1, 1], center: [100, 100], invert: false }, 1);
+    const q = apply3(sq, 120, 100);
+    expect(q[0]).toBeCloseTo(100, 9);
+    expect(q[1]).toBeCloseTo(80, 9);
   });
 });
