@@ -71,6 +71,7 @@ export interface SolveSettings {
    * solve models fx = f / a, fy = f with distortion on physical coordinates;
    * `focal.px` and the result's `intrinsics.f` are the vertical focal in plate
    * pixels (= the focal in de-squeezed pixels). Residuals stay in plate pixels.
+   * Solved from scratch in two passes (`solveNonSquare`).
    */
   pixelAspect?: number;
 }
@@ -555,7 +556,39 @@ function chooseKeyframes(w: Work, minTracks: number): number[] {
   return kfs;
 }
 
+/**
+ * A non-square plate (addendum 17) is solved in two passes. First the tracks
+ * are de-squeezed (x × a) and solved as square pixels — the start (keyframes,
+ * self-calibration, the initial pair) is the square solver's, on the picture
+ * the camera saw. Then that solve is the warm start of a final adjustment in
+ * the plate's own pixels with fx = f / a, fy = f, so residuals, outlier
+ * thresholds and the reported RMS are plate pixels, as tracked.
+ */
+async function solveNonSquare(td: TrackData, settings: SolveSettings, a: number, ctx: SolveContext): Promise<SolveResult> {
+  const t0 = Date.now();
+  const desq: TrackData = { ...td, width: td.width * a, xy: Float32Array.from(td.xy, (v, i) => (i % 2 === 0 ? v * a : v)) };
+  const { pixelAspect: _a, ...rest } = settings;
+  const square = await solveTracks(
+    desq,
+    {
+      ...rest,
+      ...(settings.principal ? { principal: { cx: settings.principal.cx * a, cy: settings.principal.cy } } : {}),
+      ...(settings.controlPoints ? { controlPoints: settings.controlPoints.map((c) => ({ ...c, u: c.u * a })) } : {}),
+    },
+    ctx,
+  );
+  const intr: Intrinsics = { ...square.intrinsics, cx: square.intrinsics.cx / a, a };
+  if (!square.ok) return { ...square, width: td.width, height: td.height, intrinsics: intr };
+  const init: SolveResult = { ...square, width: td.width, height: td.height, intrinsics: intr };
+  const out = await solveTracks(td, { ...settings, initial: init, nodal: square.stats.nodal }, ctx);
+  out.stats.focalInitialPx = square.stats.focalInitialPx;
+  out.stats.warnings = [...new Set([...square.stats.warnings.filter((w) => !/frames could not be solved|good tracks|could not be registered/.test(w)), ...out.stats.warnings])];
+  out.stats.timings.total = Date.now() - t0;
+  return out;
+}
+
 export async function solveTracks(td: TrackData, settings: SolveSettings, ctx: SolveContext = {}): Promise<SolveResult> {
+  if (settings.pixelAspect && settings.pixelAspect !== 1 && !settings.initial) return solveNonSquare(td, settings, settings.pixelAspect, ctx);
   const t0 = Date.now();
   const F = td.last - td.first + 1;
   const width = td.width;
