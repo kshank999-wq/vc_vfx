@@ -2974,3 +2974,24 @@ table.queue td.col-progress {
 .par-label.warn {
   color: var(--warning, #e0a43a);
 }
+.par-summary {
+  margin: 4px 0 6px;
+}
+.par-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: flex-end;
+}
+.par-row label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.par-row input {
+  width: 7em;
+}
+.par-candidates {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}

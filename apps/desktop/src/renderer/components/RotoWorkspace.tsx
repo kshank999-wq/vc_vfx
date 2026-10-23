@@ -37,6 +37,7 @@ import {
 } from '@vcvfx/domain';
 import type { RotoMaskData, RotoSession, VcvfxApi } from '../../shared/bridge';
 import { ModuleLayout, Stat, StepList, Stats, TaskMissing, type StepDef } from './Layout';
+import { AspectTag, useShotAspect } from './FrameBox';
 
 /**
  * The Roto workspace (master spec §5, §5.1, §5.2; addendum 04): paint what
@@ -196,6 +197,7 @@ export function RotoWorkspace(props: RotoWorkspaceProps) {
   const first = session?.first ?? frame;
   const last = session?.last ?? frame;
   const radius = brush ?? Math.max(4, Math.round((plate?.width ?? 1920) * 0.012));
+  const shotAspect = useShotAspect(project, shotId);
   const canPaint = canEdit && !locked && Boolean(session?.available);
   const key = part.keyFrames.find((k) => k.frame === frame);
   const record = part.frames.find((f) => f.frame === frame);
@@ -236,7 +238,8 @@ export function RotoWorkspace(props: RotoWorkspaceProps) {
     const measure = () => {
       const w = el.clientWidth;
       const h = el.clientHeight;
-      const aspect = plate.width / plate.height;
+      // De-squeezed on screen (addendum 17): the plate's stored width × its pixel aspect.
+      const aspect = (plate.width * shotAspect.display) / plate.height;
       const width = Math.min(w, h * aspect);
       const height = width / aspect;
       setBox({ left: (w - width) / 2, top: (h - height) / 2, width, height });
@@ -246,7 +249,7 @@ export function RotoWorkspace(props: RotoWorkspaceProps) {
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [plate?.width, plate?.height]);
+  }, [plate?.width, plate?.height, shotAspect.display]);
   const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
   const mainWidth = sizeFor(box.width * dpr);
 
@@ -328,20 +331,26 @@ export function RotoWorkspace(props: RotoWorkspaceProps) {
     c.width = Math.max(1, Math.round(box.width * dpr));
     c.height = Math.max(1, Math.round(box.height * dpr));
     g.clearRect(0, 0, c.width, c.height);
-    const k = (box.width * dpr) / plate.width;
+    // Strokes are drawn in plate pixels through the box's scale — x and y apart on a non-square plate — so the
+    // footprint on screen is exactly what the matte is painted with (a circle in stored pixels).
+    const kx = (box.width * dpr) / plate.width;
+    const ky = (box.height * dpr) / plate.height;
+    const k = ky;
     const line = (pts: readonly RotoPoint[], r: number, colour: string) => {
       if (!pts.length) return;
+      g.save();
+      g.setTransform(kx, 0, 0, ky, 0, 0);
       g.strokeStyle = colour;
       g.fillStyle = colour;
-      g.lineWidth = Math.max(1, 2 * r * k);
+      g.lineWidth = Math.max(1 / ky, 2 * r);
       g.lineCap = 'round';
       g.lineJoin = 'round';
       g.beginPath();
-      const [x0, y0] = toScreen(pts[0]![0], pts[0]![1]);
-      g.moveTo(x0, y0);
-      if (pts.length === 1) g.lineTo(x0 + 0.01, y0);
-      for (const p of pts.slice(1)) g.lineTo(...toScreen(p[0], p[1]));
+      g.moveTo(pts[0]![0], pts[0]![1]);
+      if (pts.length === 1) g.lineTo(pts[0]![0] + 0.01, pts[0]![1]);
+      for (const p of pts.slice(1)) g.lineTo(p[0], p[1]);
       g.stroke();
+      g.restore();
     };
     for (const s of key?.strokes ?? []) line(s.points, s.radius, s.mode === 'include' ? 'rgba(58, 208, 122, 0.45)' : 'rgba(255, 95, 86, 0.45)');
     if (stroke.current) line(stroke.current, radius, tool === 'include' ? 'rgba(58, 208, 122, 0.6)' : tool === 'exclude' ? 'rgba(255, 95, 86, 0.6)' : 'rgba(230, 232, 236, 0.35)');
@@ -351,7 +360,8 @@ export function RotoWorkspace(props: RotoWorkspaceProps) {
       g.strokeStyle = tool === 'include' ? '#3ad07a' : tool === 'exclude' ? '#ff5f56' : '#e6e8ec';
       g.setLineDash(tool === 'erase' ? [4 * dpr, 3 * dpr] : []);
       g.beginPath();
-      g.arc(cx, cy, Math.max(2, radius * k), 0, Math.PI * 2);
+      if (typeof g.ellipse === 'function') g.ellipse(cx, cy, Math.max(2, radius * kx), Math.max(2, radius * k), 0, 0, Math.PI * 2);
+      else g.arc(cx, cy, Math.max(2, radius * k), 0, Math.PI * 2);
       g.stroke();
       g.setLineDash([]);
     }
@@ -816,6 +826,7 @@ export function RotoWorkspace(props: RotoWorkspaceProps) {
               />
             </div>
           ) : null}
+          {session?.available ? <AspectTag aspect={shotAspect} /> : null}
           {session?.sample ? <span className="stage-tag">sample frames</span> : null}
         </div>
 

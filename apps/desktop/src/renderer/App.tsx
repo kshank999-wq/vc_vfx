@@ -20,6 +20,7 @@ import {
   setPlateColorDefault,
   setProbedMedia,
   setShotPlateColor,
+  setShotPixelAspect,
   setShotNotes,
   setSourceVerified,
   setVfxShotId,
@@ -618,6 +619,7 @@ export function App({ api, now = () => new Date() }: { api: VcvfxApi; now?: () =
     onChangeOutputRoot: () => void chooseOutputRoot(),
     onRevealOutput: () => outputRoot && void api.revealPath(outputRoot),
     onPlateColor: (change) => apply((x) => setShotPlateColor(x, shotId, change, actor, now())),
+    onPixelAspect: (change) => apply((x) => setShotPixelAspect(x, shotId, change, actor, now())),
     onOpenModule: (id) => openModule(id, shotId),
   });
 

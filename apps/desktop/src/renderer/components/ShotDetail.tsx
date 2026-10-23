@@ -9,6 +9,12 @@ import {
   TASK_STATE_LABELS,
   parseColorEncoding,
   plateColorFor,
+  PIXEL_ASPECT_PRESETS,
+  PIXEL_ASPECT_SOURCE_LABELS,
+  formatPixelAspect,
+  parsePixelAspect,
+  pixelAspectLabel,
+  shotPixelAspect,
   type ColorEncodingId,
   type ShotPlateColor,
   formatRange,
@@ -56,6 +62,8 @@ export interface ShotDetailHandlers {
   onRevealOutput(): void;
   /** The plate colour choice and/or the operator's reading of the source encoding (null: the handoff's). */
   onPlateColor(change: { choice?: ShotPlateColor; encoding?: ColorEncodingId | null }): void;
+  /** The artist's pixel aspect for the shot (null: follow the handoff, camera and clip; addendum 17). */
+  onPixelAspect?(change: { value: number | null; note?: string }): void;
   /** Open one of the module tabs on this shot (addendum 08). */
   onOpenModule?(id: ModuleId): void;
 }
@@ -559,6 +567,8 @@ export function ShotDetail(props: ShotDetailProps) {
 
       <PlateColorPanel {...props} />
 
+      <PixelAspectPanel {...props} />
+
       <section className="panel">
         <h3>Camera &amp; colour</h3>
         <CameraColour project={project} shotId={shotId} />
@@ -574,6 +584,81 @@ export function ShotDetail(props: ShotDetailProps) {
         <ShotLog project={project} shotId={shotId} />
       </section>
     </aside>
+  );
+}
+
+/**
+ * Pixel aspect (addendum 17): what the plate's pixels are shaped like, where
+ * that came from, any disagreement between the sources, and the artist's
+ * override. Plates are never resampled; the figure travels with the shot.
+ */
+export function PixelAspectPanel(props: Pick<ShotDetailProps, 'project' | 'shotId' | 'canEdit' | 'busy' | 'onPixelAspect'> & { bare?: boolean }) {
+  const { project, shotId, canEdit, busy } = props;
+  const state = shotState(project, shotId);
+  const [draft, setDraft] = useState('');
+  const decision = state ? shotPixelAspect(project, shotId) : null;
+  useEffect(() => setDraft(decision ? formatPixelAspect(decision.value) : ''), [decision?.value, shotId]);
+  if (!state || !decision) return null;
+  const locked = state.stage !== 'prep' ? `The shot is ${state.stage}; reopen it first.` : null;
+  const disabled = !canEdit || busy || Boolean(locked) || !props.onPixelAspect;
+  const title = !canEdit ? READ_ONLY_TITLE : (locked ?? undefined);
+  const commit = (v: number | null) => props.onPixelAspect?.({ value: v });
+  const parsed = parsePixelAspect(draft);
+  const body = (
+    <>
+      <p className="par-summary" role="status">
+        <b>{pixelAspectLabel(decision.value)}</b> · {PIXEL_ASPECT_SOURCE_LABELS[decision.source]}
+        {decision.detail && decision.source !== 'default' ? <span className="muted"> — {decision.detail}</span> : null}
+      </p>
+      {decision.warnings.map((w) => (
+        <p key={w} className="pc-warning small">
+          {w}
+        </p>
+      ))}
+      <div className="par-row">
+        <label>
+          <span className="muted">Pixel aspect</span>
+          <input aria-label="Pixel aspect" list="par-presets" value={draft} disabled={disabled} title={title ?? 'Width of a stored pixel over its height: 2 for a 2× anamorphic kept squeezed, 1.5 for DVCPRO HD 1080, 1.333 for HDV. A ratio such as 3:2 is read too.'} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && parsed && commit(parsed)} />
+          <datalist id="par-presets">
+            {PIXEL_ASPECT_PRESETS.map((p) => (
+              <option key={p.label} value={formatPixelAspect(p.value)}>
+                {p.label}
+              </option>
+            ))}
+          </datalist>
+        </label>
+        <button type="button" disabled={disabled || !parsed || (decision.source === 'override' && Math.abs(parsed - decision.value) < 1e-9)} title={title} onClick={() => parsed && commit(parsed)}>
+          Set on the shot
+        </button>
+        {decision.hint ? (
+          <button type="button" disabled={disabled} title={decision.hint.detail} onClick={() => commit(decision.hint!.value)}>
+            Use {formatPixelAspect(decision.hint.value)}
+          </button>
+        ) : null}
+        {state.pixelAspect ? (
+          <button type="button" disabled={disabled} title="Follow the handoff, the camera and the clip again" onClick={() => commit(null)}>
+            Clear
+          </button>
+        ) : null}
+      </div>
+      {decision.candidates.length > 1 ? (
+        <ul className="par-candidates small muted">
+          {decision.candidates.map((c) => (
+            <li key={c.source}>
+              {PIXEL_ASPECT_SOURCE_LABELS[c.source]}: {formatPixelAspect(c.value)} — {c.detail}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      <p className="muted small">The plates keep the camera’s pixels; this is written into their headers and every export, and the viewer shows the picture de-squeezed.</p>
+    </>
+  );
+  if (props.bare) return <div className="pixel-aspect">{body}</div>;
+  return (
+    <section className="panel pixel-aspect">
+      <h3>Pixel aspect</h3>
+      {body}
+    </section>
   );
 }
 

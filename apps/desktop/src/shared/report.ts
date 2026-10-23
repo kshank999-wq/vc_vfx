@@ -1,4 +1,7 @@
 import {
+  PIXEL_ASPECT_SOURCE_LABELS,
+  pixelAspectLabel,
+  shotPixelAspect,
   plateColorFor,
   PREP_TASKS,
   SHOT_STATUS_LABELS,
@@ -30,6 +33,7 @@ export function prepReportHtml(p: Project, shotId: string, input: { generatedAt:
   const output = outputFor(p.handoff, shot);
   const plan = planFor(p, shot);
   const timing = shotTiming(p, shot);
+  const par = shotPixelAspect(p, shotId);
   const name = state.vfxShotId ?? shot.shotId;
   const range = (a: number | undefined, b: number | undefined) => (a === undefined || b === undefined ? 'unknown' : formatRange(a, b));
   const e = (v: unknown) => escapeHtml(v === undefined || v === null || v === '' ? '—' : String(v));
@@ -87,7 +91,8 @@ ${row('Flagged by', shot.flaggedBy)}
 ${row('Source', shot.sourcePath)}
 ${row('Timecode', timing?.timecodeIn ? `${timing.timecodeIn}${shot.timecodeOut ? ` – ${shot.timecodeOut}` : ''}` : '')}
 ${row('Frame rate', timing?.frameRate ?? shot.frameRate)}
-${row('Resolution', timing?.resolution ? `${timing.resolution.width} × ${timing.resolution.height}` : '')}
+${row('Resolution', timing?.resolution ? `${timing.resolution.width} × ${timing.resolution.height}${par.value !== 1 ? ` (shown ${Math.round(timing.resolution.width * par.value)} × ${timing.resolution.height})` : ''}` : '')}
+${row('Pixel aspect', `${pixelAspectLabel(par.value)} — ${PIXEL_ASPECT_SOURCE_LABELS[par.source].toLowerCase()}${par.source !== 'default' ? `: ${par.detail}` : ''}${par.warnings.length ? ` · ⚠ ${par.warnings.join(' ⚠ ')}` : ''}`)}
 ${row('Range from', timing ? (timing.from === 'probe' ? `the whole clip, read with ffprobe${state.probe?.codec ? ` (${state.probe.codec})` : ''}` : 'the handoff') : 'unknown')}
 </table></div>
 <div><h2>Camera &amp; colour</h2><table class="kv">
