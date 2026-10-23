@@ -70,7 +70,34 @@ export function sampleSTMap(m: STMap, x: number, y: number): [number, number] {
  * channels, compression, dataWindow, displayWindow, lineOrder,
  * pixelAspectRatio, screenWindowCenter, screenWindowWidth.
  */
-export function encodeExrFloat(width: number, height: number, channels: Record<string, Float32Array>): Uint8Array {
+/** IEEE half from a float (round to nearest even; overflow to infinity). */
+export function toHalf(v: number): number {
+  const f32 = new Float32Array(1);
+  const u32 = new Uint32Array(f32.buffer);
+  f32[0] = v;
+  const x = u32[0]!;
+  const sign = (x >>> 16) & 0x8000;
+  const exp = (x >>> 23) & 0xff;
+  let mant = x & 0x7fffff;
+  if (exp === 0xff) return sign | 0x7c00 | (mant ? 0x200 : 0);
+  let e = exp - 127 + 15;
+  if (e >= 0x1f) return sign | 0x7c00;
+  if (e <= 0) {
+    if (e < -10) return sign;
+    mant = (mant | 0x800000) >> (1 - e);
+    const half = mant >> 13;
+    const rest = mant & 0x1fff;
+    return sign | (half + (rest > 0x1000 || (rest === 0x1000 && half & 1) ? 1 : 0));
+  }
+  let half = (e << 10) | (mant >> 13);
+  const rest = mant & 0x1fff;
+  if (rest > 0x1000 || (rest === 0x1000 && half & 1)) half += 1;
+  return sign | half;
+}
+
+export function encodeExrFloat(width: number, height: number, channels: Record<string, Float32Array>, type: 'float' | 'half' = 'float'): Uint8Array {
+  const half = type === 'half';
+  const bytesPer = half ? 2 : 4;
   const names = Object.keys(channels).sort();
   const parts: number[] = [];
   const bytes: Uint8Array[] = [];
@@ -100,7 +127,7 @@ export function encodeExrFloat(width: number, height: number, channels: Record<s
   attr('channels', 'chlist', chlistSize, () => {
     for (const c of names) {
       str(c);
-      i32(2); // FLOAT
+      i32(half ? 1 : 2); // HALF or FLOAT
       u8(0, 0, 0, 0); // pLinear + reserved
       i32(1); // xSampling
       i32(1); // ySampling
@@ -129,7 +156,7 @@ export function encodeExrFloat(width: number, height: number, channels: Record<s
   attr('screenWindowWidth', 'float', 4, () => f32(1));
   u8(0); // end of header
   const headerLen = bytes.reduce((n, b) => n + b.length, 0);
-  const lineBytes = names.length * width * 4;
+  const lineBytes = names.length * width * bytesPer;
   const chunk = 8 + lineBytes;
   const tableLen = 8 * height;
   const total = headerLen + tableLen + chunk * height;
@@ -151,8 +178,9 @@ export function encodeExrFloat(width: number, height: number, channels: Record<s
     for (const c of names) {
       const src = channels[c]!;
       for (let x = 0; x < width; x += 1) {
-        dv.setFloat32(o, src[y * width + x]!, true);
-        o += 4;
+        if (half) dv.setUint16(o, toHalf(src[y * width + x]!), true);
+        else dv.setFloat32(o, src[y * width + x]!, true);
+        o += bytesPer;
       }
     }
   }

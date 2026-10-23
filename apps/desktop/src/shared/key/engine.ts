@@ -1,11 +1,13 @@
 import { contactSheetFrames, type KeyDocument, type KeyMetrics, type KeyRunResult, type ScreenKind } from '@vcvfx/domain';
 import { CancelledError } from '../roto/engine';
-import { buildScreenModel, evalScreenModel, flatScreenModel, localScreen, modelSeen, screenGain, type ScreenModel } from './cleanplate';
+import { buildScreenModel, evalScreenModel, fineScreen, flatScreenModel, localScreen, modelSeen, screenGain, type ScreenModel } from './cleanplate';
 import { keyerSettings, keyFrame, type KeyFrameOutput } from './keyer';
 import type { LinearImage } from './linear';
 import { backgroundNear } from './look';
 import { resolveLinks, type ResolvedLink } from './mattes';
 import { detectScreen, type ScreenEstimate } from './screen';
+import type { SubjectInput } from './subject';
+import { morph, resizePlane } from '../roto/image';
 
 /**
  * Keying a shot (addendum 09 §4): detect the screen, build the clean plate,
@@ -14,7 +16,7 @@ import { detectScreen, type ScreenEstimate } from './screen';
  * the browser preview; cancellation is checked between frames.
  */
 
-export const KEY_ENGINE_VERSION = '1.1.0';
+export const KEY_ENGINE_VERSION = '1.2.0';
 
 export interface KeyIO {
   /** A frame at the size the key works at, in linear working RGB. */
@@ -23,11 +25,13 @@ export interface KeyIO {
   roto(partId: string, frame: number, width: number, height: number): Promise<Float32Array | null>;
   /** The background plate at w × h (linear working RGB), or null. */
   background(width: number, height: number): Promise<LinearImage | null>;
+  /** The Auto subject segmentation on a frame (0…1 at w × h) and its confidence, or null where there is none. */
+  subject?(frame: number, width: number, height: number): Promise<{ matte: Float32Array; confidence: number; removes?: boolean } | null>;
   signal?: AbortSignal;
   progress?(done: number, total: number, frame: number): void;
 }
 
-export type KeySettings = Pick<KeyDocument, 'screen' | 'params' | 'links' | 'despill' | 'lightWrap'>;
+export type KeySettings = Pick<KeyDocument, 'screen' | 'params' | 'links' | 'despill' | 'lightWrap'> & { subject?: Pick<KeyDocument['subject'], 'source' | 'partId' | 'marginPx' | 'outside'> };
 
 export const checkCancel = (signal?: AbortSignal) => {
   if (signal?.aborted) throw new CancelledError();
@@ -56,11 +60,29 @@ export async function shotScreenModel(io: KeyIO, settings: KeySettings, first: n
   if (!settings.params.cleanPlate) return flatScreenModel(screen.rgb);
   const frames = analysisFrames(first, last, settings.params.cleanPlateFrames);
   const images: LinearImage[] = [];
+  const excludes: (Uint8Array | null)[] = [];
+  const sub = settings.subject;
   for (const f of frames) {
     checkCancel(io.signal);
-    images.push(await io.frame(f));
+    const img = await io.frame(f);
+    images.push(img);
+    // The subject (grown a little) is never screen: keep a screen-lit costume out of the clean plate.
+    let matte: Float32Array | null = null;
+    if (sub?.source === 'roto' && sub.partId) matte = await io.roto(sub.partId, f, img.width, img.height);
+    else if (sub?.source === 'auto' && io.subject) matte = (await io.subject(f, img.width, img.height))?.matte ?? null;
+    if (matte) {
+      const bin = new Uint8Array(matte.length);
+      for (let i = 0; i < bin.length; i += 1) bin[i] = matte[i]! >= 0.5 ? 1 : 0;
+      excludes.push(morph(bin, img.width, img.height, Math.max(2, Math.round(img.width / 200))));
+    } else excludes.push(null);
   }
-  return buildScreenModel(images, { kind: screen.kind, rgb: screen.rgb }, settings.params.cleanPlateGrid);
+  const model = buildScreenModel(images, { kind: screen.kind, rgb: screen.rgb }, settings.params.cleanPlateGrid, excludes);
+  // The static fine screen, for the shadow pass only (it is not what the key keys against).
+  if (settings.params.shadowPass) {
+    const fine = fineScreen(images, { kind: screen.kind, rgb: screen.rgb }, excludes);
+    if (fine) model.fine = fine;
+  }
+  return model;
 }
 
 export interface KeyAtOptions {
@@ -90,8 +112,46 @@ export class ShotKeyer {
     if (!settings.screen) throw new Error('Pick the screen colour first (Auto key, or the eyedropper).');
   }
 
+  private fineAt = new Map<string, Float32Array | null>();
+
+  /** The shadow pass's clean screen: the static fine screen (× this frame's gain) where it is known, else the model. */
+  private cleanFor(img: LinearImage, model: Float32Array, gain: readonly number[]): Float32Array {
+    const fine = this.model.fine;
+    if (!fine) return model;
+    const key = `${img.width}x${img.height}`;
+    let at = this.fineAt.get(key);
+    if (at === undefined) {
+      if (fine.width === img.width && fine.height === img.height) at = fine.data;
+      else {
+        at = new Float32Array(img.width * img.height * 3);
+        for (let c = 0; c < 3; c += 1) {
+          const plane = new Float32Array(fine.width * fine.height);
+          for (let i = 0; i < plane.length; i += 1) plane[i] = fine.data[3 * i + c]!;
+          // NaN spreads through the resize: what was unknown near a pixel stays unknown.
+          const r = resizePlane(plane, fine.width, fine.height, img.width, img.height);
+          for (let i = 0; i < r.length; i += 1) at[3 * i + c] = r[i]!;
+        }
+      }
+      this.fineAt.set(key, at);
+    }
+    const out = new Float32Array(model.length);
+    for (let i = 0; i < model.length; i += 3) {
+      const v = at![i]!;
+      if (Number.isNaN(v) || Number.isNaN(at![i + 1]!) || Number.isNaN(at![i + 2]!)) {
+        out[i] = model[i]!;
+        out[i + 1] = model[i + 1]!;
+        out[i + 2] = model[i + 2]!;
+      } else {
+        out[i] = at![i]! * gain[0]!;
+        out[i + 1] = at![i + 1]! * gain[1]!;
+        out[i + 2] = at![i + 2]! * gain[2]!;
+      }
+    }
+    return out;
+  }
+
   /** The screen of this frame (model × gain, then detail), and the model × gain alone. */
-  private screenFor(img: LinearImage): { screen: Float32Array; model: Float32Array } {
+  private screenFor(img: LinearImage, exclude: Uint8Array | null = null): { screen: Float32Array; model: Float32Array; gain: [number, number, number] } {
     const key = `${img.width}x${img.height}`;
     let base = this.modelAt.get(key);
     if (!base) {
@@ -100,10 +160,12 @@ export class ShotKeyer {
     }
     const screen = this.settings.screen!;
     let out = base;
+    let applied: [number, number, number] = [1, 1, 1];
     if (screen.track) {
       if (!this.seenAt.has(key)) this.seenAt.set(key, modelSeen(this.model, img.width, img.height));
       const gain = screenGain(img, base, { kind: screen.kind, rgb: screen.rgb }, this.seenAt.get(key)!);
       if (!gain.every((g) => Math.abs(g - 1) < 1e-3)) {
+        applied = [gain[0], gain[1], gain[2]];
         out = new Float32Array(base.length);
         for (let i = 0; i < base.length; i += 3) {
           out[i] = base[i]! * gain[0];
@@ -112,7 +174,7 @@ export class ShotKeyer {
         }
       }
     }
-    return { screen: this.settings.params.screenDetail ? localScreen(img, out, screen.kind) : out, model: out };
+    return { screen: this.settings.params.screenDetail ? localScreen(img, out, screen.kind, { exclude }) : out, model: out, gain: applied };
   }
 
   private async background(io: KeyIO, w: number, h: number, pxScale: number) {
@@ -128,9 +190,27 @@ export class ShotKeyer {
 
   async keyAt(io: KeyIO, frame: number, img: LinearImage, o: KeyAtOptions): Promise<KeyFrameOutput & { screen: Float32Array; background: LinearImage | null; links: ResolvedLink[] }> {
     const s = this.settings;
-    const { screen, model } = this.screenFor(img);
-    const links: ResolvedLink[] = [];
     const rotoCache = new Map<string, Float32Array | null>();
+    // The subject prior (hybrid key, addendum 18): a roto part, or the Auto segmentation.
+    const sub = s.subject;
+    let subject: SubjectInput | null = null;
+    if (sub && sub.source !== 'none') {
+      let got: { matte: Float32Array; confidence: number; removes?: boolean } | null = null;
+      if (sub.source === 'roto' && sub.partId) {
+        const m = await io.roto(sub.partId, frame, img.width, img.height);
+        rotoCache.set(sub.partId, m);
+        // The artist's own roto is trusted as drawn.
+        got = m ? { matte: m, confidence: 1 } : null;
+      } else if (sub.source === 'auto' && io.subject) got = await io.subject(frame, img.width, img.height);
+      if (got) subject = { matte: got.matte, confidence: got.confidence, margin: Math.max(1, sub.marginPx / o.pxScale), outside: sub.outside, removes: got.removes ?? true };
+    }
+    let exclude: Uint8Array | null = null;
+    if (subject) {
+      exclude = new Uint8Array(img.width * img.height);
+      for (let i = 0; i < exclude.length; i += 1) exclude[i] = subject.matte[i]! >= 0.5 ? 1 : 0;
+    }
+    const { screen, model, gain } = this.screenFor(img, exclude);
+    const links: ResolvedLink[] = [];
     for (const l of s.links) if (l.source.type === 'roto' && !rotoCache.has(l.source.partId)) rotoCache.set(l.source.partId, await io.roto(l.source.partId, frame, img.width, img.height));
     links.push(...resolveLinks(s.links, frame, { width: img.width, height: img.height, pxScale: o.pxScale, roto: (id) => rotoCache.get(id) ?? null }));
     const { bg, near } = o.foreground ? await this.background(io, img.width, img.height, o.pxScale) : { bg: null, near: null };
@@ -144,6 +224,9 @@ export class ShotKeyer {
       matteOnly: !o.foreground,
       despill: o.foreground && d.enabled ? { kind: s.screen!.kind, limit: d.limit, weight: d.weight, strength: d.strength, restore: d.restore, restoreAmount: d.restoreAmount, protectSkin: d.protectSkin, protect: d.protect, luma: o.luma, bgNear: near } : null,
       background: bg,
+      subject,
+      shadow: s.params.shadowPass,
+      clean: s.params.shadowPass ? this.cleanFor(img, model, gain) : null,
       lightWrap: o.foreground && (s.lightWrap.output || o.wrapPreview) ? { width: s.lightWrap.widthPx / o.pxScale, intensity: s.lightWrap.intensity, lumaWeight: s.lightWrap.lumaWeight, luma: o.luma } : null,
     });
     return { ...out, screen, background: bg, links };
@@ -175,4 +258,14 @@ export async function runKey(
 }
 
 const r4 = (v: number) => Math.round(v * 10_000) / 10_000;
-export const roundMetrics = (m: KeyMetrics): KeyMetrics => ({ screenCoverage: r4(m.screenCoverage), coreNoise: r4(m.coreNoise), edgeActivity: r4(m.edgeActivity), holes: r4(m.holes), residual: r4(m.residual) });
+export const roundMetrics = (m: KeyMetrics): KeyMetrics => ({
+  screenCoverage: r4(m.screenCoverage),
+  coreNoise: r4(m.coreNoise),
+  edgeActivity: r4(m.edgeActivity),
+  holes: r4(m.holes),
+  residual: r4(m.residual),
+  ...(m.subjectDisagree !== undefined ? { subjectDisagree: r4(m.subjectDisagree) } : {}),
+  ...(m.subjectOutside !== undefined ? { subjectOutside: r4(m.subjectOutside) } : {}),
+  ...(m.subjectConfidence !== undefined ? { subjectConfidence: r4(m.subjectConfidence) } : {}),
+  ...(m.shadow !== undefined ? { shadow: r4(m.shadow) } : {}),
+});

@@ -2,7 +2,7 @@ import type { IpcMainInvokeEvent } from 'electron';
 import { z } from 'zod';
 import type { Project } from '@vcvfx/domain';
 import type { ApiResult } from '../../shared/bridge';
-import { keyDetect, keyExport, keyFrameView, keyMatch, keyProcess, keySample, keySeedRoto, keySession, type KeyEnv } from './api';
+import { keyDetect, keyExport, keyFrameView, keyMatch, keyProcess, keySample, keySeedRoto, keySession, keySubject, type KeyEnv } from './api';
 
 /**
  * The key's IPC handlers (addendum 09), registered by ipc.ts with its own
@@ -83,6 +83,20 @@ export function registerKeyHandlers(d: KeyIpcDeps): void {
     try {
       const result = await keyProcess(d.projectFrom(input.text), input, await d.outputRootFor(input.projectKey), await d.env(), { signal, onProgress: (done, total, f) => progress(done, total, f !== undefined ? `frame ${f}` : undefined) });
       return ok({ result });
+    } catch (error) {
+      return fail(error);
+    } finally {
+      d.endJob(input.jobId);
+    }
+  });
+  // The Auto subject segmentation is processing (it writes masks for the key): it needs a licence.
+  d.handle('job:key-subject', z.object({ ...shot, jobId }), async (event, input) => {
+    if (!(await d.licensed())) return fail(d.readOnlyReason);
+    const signal = d.startJob(input.jobId);
+    const progress = d.progress(event, input.jobId, `Finding the subject in ${input.shotId}`);
+    try {
+      const run = await keySubject(d.projectFrom(input.text), input, await d.outputRootFor(input.projectKey), await d.env(), { signal, onProgress: (done, total, f) => progress(done, total, f !== undefined ? `frame ${f}` : undefined) });
+      return ok({ run });
     } catch (error) {
       return fail(error);
     } finally {

@@ -1,10 +1,11 @@
 import { keyConfidence, type KeyMetrics, type KeyParams, type ScreenKind } from '@vcvfx/domain';
-import { bbox, components, gaussianBlur, growBox, morph } from '../roto/image';
+import { bbox, components, gaussianBlur, growBox, morph, squaredDistance } from '../roto/image';
 import { pullPush } from './cleanplate';
 import { despill, type DespillOptions } from './despill';
 import type { LinearImage } from './linear';
 import { blurRgb, lightWrap, type LightWrapOptions } from './look';
 import { combineMattes, type ResolvedLink } from './mattes';
+import { blurCoarse, shadowPass, subjectPrior, type SubjectInput, type SubjectPrior } from './subject';
 
 /**
  * The keyer (master spec §6; addendum 09 §3.3–3.5). Pure TypeScript on
@@ -88,6 +89,12 @@ export interface KeyFrameInput {
   lightWrap?: LightWrapOptions | null;
   /** Skip the foreground (matte only: faster, e.g. for analysis). */
   matteOnly?: boolean;
+  /** The subject segmentation as a prior (hybrid key, addendum 18), or null. */
+  subject?: SubjectInput | null;
+  /** Compute the shadow pass (and take it out of the alpha). */
+  shadow?: boolean;
+  /** The clean screen the shadow pass measures against (the static fine screen); absent: the model. */
+  clean?: Float32Array | null;
 }
 
 export interface KeyFrameOutput {
@@ -107,6 +114,10 @@ export interface KeyFrameOutput {
   spill: Float32Array | null;
   /** The light-wrap layer, or null. */
   wrap: Float32Array | null;
+  /** Shadow density 0…1 (the shadow pass), or null when off. */
+  shadow: Float32Array | null;
+  /** The subject prior as used on this frame, or null without one. */
+  prior: SubjectPrior | null;
   metrics: KeyMetrics;
   confidence: number;
 }
@@ -186,7 +197,7 @@ export function dilate1(m: Uint8Array, w: number, h: number): Uint8Array {
  * the band's bounding box only), falling back to a smooth fill of all the
  * samples (pull–push on a 4× smaller grid) where there are none near.
  */
-export function estimateForeground(P: Float32Array, weights: Float32Array, band: Uint8Array, keyed: Uint8Array, w: number, h: number): Float32Array {
+export function estimateForeground(P: Float32Array, weights: Float32Array, band: Uint8Array, keyed: Uint8Array, w: number, h: number, sigma = F_SIGMA): Float32Array {
   const n = w * h;
   const F = new Float32Array(n * 3);
   const box = bbox(keyed, w, h) ?? bbox(band, w, h);
@@ -217,7 +228,7 @@ export function estimateForeground(P: Float32Array, weights: Float32Array, band:
     }
   const far = pullPush(gv, gwt, gw, gh, 3);
   // Near: normalised convolution on the band's box.
-  const r = Math.ceil(3 * F_SIGMA) + 1;
+  const r = Math.ceil(3 * sigma) + 1;
   const b = growBox(box, r, w, h);
   const bw = b.x1 - b.x0 + 1;
   const bh = b.y1 - b.y0 + 1;
@@ -234,8 +245,8 @@ export function estimateForeground(P: Float32Array, weights: Float32Array, band:
       pw[3 * j + 1] = P[3 * i + 1]! * wv;
       pw[3 * j + 2] = P[3 * i + 2]! * wv;
     }
-  const num = blurRgb(pw, bw, bh, F_SIGMA);
-  const den = gaussianBlur(wt, bw, bh, F_SIGMA);
+  const num = blurRgb(pw, bw, bh, sigma);
+  const den = gaussianBlur(wt, bw, bh, sigma);
   for (let i = 0; i < n; i += 1) {
     if (!band[i]) continue;
     const x = i % w;
@@ -280,8 +291,22 @@ export function keyFrame(input: KeyFrameInput): KeyFrameOutput {
   let solid: Uint8Array = new Uint8Array(n);
   for (let i = 0; i < n; i += 1) solid[i] = raw[i]! >= k.coreThreshold ? 1 : 0;
   if (k.coreClose >= 0.5) solid = morph(morph(solid, w, h, k.coreClose), w, h, -k.coreClose);
-  const filled = fillHoles(solid, raw, w, h);
-  const core = k.coreErode >= 0.5 ? morph(filled, w, h, -k.coreErode) : filled;
+  let filled = fillHoles(solid, raw, w, h);
+  const keyCore = k.coreErode >= 0.5 ? morph(filled, w, h, -k.coreErode) : filled;
+  // The subject prior (hybrid key): inside the eroded segmentation the core is solid whatever the
+  // colour — except where the key calls the pixel clean screen (a segmentation over the screen).
+  const prior = input.subject ? subjectPrior(input.subject, raw, w, h, k.clipBlack) : null;
+  const notScreen = (i: number) => clamp01((raw[i]! - k.clipBlack) / 0.1);
+  let core = keyCore;
+  if (prior && prior.confidence > 0) {
+    core = keyCore.slice();
+    filled = filled.slice();
+    for (let i = 0; i < n; i += 1)
+      if (prior.core[i]! >= 0.5 && (notScreen(i) >= 0.5 || prior.deep[i])) {
+        core[i] = 1;
+        filled[i] = 1;
+      }
+  }
 
   // 4. Edge refinement by unmixing.
   const refined = edge.slice();
@@ -300,7 +325,9 @@ export function keyFrame(input: KeyFrameInput): KeyFrameOutput {
         grad[i] = Math.max(Math.abs(raw[i + 1]! - raw[i - 1]!), Math.abs(raw[i + w]! - raw[i - w]!)) / 2;
       }
     for (let i = 0; i < n; i += 1) {
-      const wv = sampleMask[i] ? clamp01((raw[i]! - 0.85) / 0.15) * clamp01(1 - grad[i]! / F_FLAT) : 0;
+      // Solid by colour, or (with a prior) solid by the segmentation: the suit's own colour is the foreground's.
+      const solidness = prior && prior.core[i]! >= 0.5 ? Math.max(prior.core[i]!, clamp01((raw[i]! - 0.85) / 0.15)) : clamp01((raw[i]! - 0.85) / 0.15);
+      const wv = sampleMask[i] ? solidness * clamp01(1 - grad[i]! / F_FLAT) : 0;
       if (wv > 0) {
         weights[i] = wv;
         anySolid = true;
@@ -327,18 +354,61 @@ export function keyFrame(input: KeyFrameInput): KeyFrameOutput {
         if (raw[i]! > 0.1) keyed[i] = 1;
       }
       const band = dilate1(seed, w, h);
+      // With a prior the nearest solid samples of a costume sit the margin away from its edge: look that far.
       const F = estimateForeground(P, weights, band, keyed, w, h);
+      // Inside the segmentation, the costume's own colour: the prior's solid core spread outward
+      // (normalised convolution over about the margin), so a screen-lit suit's band unmixes against the suit.
+      if (prior && prior.confidence > 0 && input.subject) {
+        // Only from well inside (three margins deep): a segmentation a few pixels too wide must not
+        // lend the costume colour of a screen-mixed fringe of hair.
+        const sig = Math.max(F_SIGMA, 2 * input.subject.margin);
+        const deepAt = 3 * input.subject.margin;
+        const wc = new Float32Array(n);
+        const pc = new Float32Array(n * 3);
+        for (let i = 0; i < n; i += 1)
+          if (prior.core[i]! >= 0.5 * prior.confidence && prior.depth[i]! >= deepAt) {
+            wc[i] = 1;
+            pc[3 * i] = P[3 * i]!;
+            pc[3 * i + 1] = P[3 * i + 1]!;
+            pc[3 * i + 2] = P[3 * i + 2]!;
+          }
+        const den = blurCoarse(wc, w, h, sig);
+        const num = new Float32Array(n * 3);
+        const ch = new Float32Array(n);
+        for (let c = 0; c < 3; c += 1) {
+          for (let i = 0; i < n; i += 1) ch[i] = pc[3 * i + c]!;
+          const b2 = blurCoarse(ch, w, h, sig);
+          for (let i = 0; i < n; i += 1) num[3 * i + c] = b2[i]!;
+        }
+        for (let i = 0; i < n; i += 1) {
+          if (!band[i] || !prior.inside[i] || !(den[i]! > 1e-3)) continue;
+          // Not in hair (the nearest solid colour is right there), and only for a costume that leads the
+          // screen channel more than the colour found near it — the case it is for.
+          const q = 3 * i;
+          const leadIn = (num[q + sc]! - (b * num[q + ac]! + (1 - b) * num[q + cc]!)) / den[i]!;
+          const leadF = F[q + sc]! - (b * F[q + ac]! + (1 - b) * F[q + cc]!);
+          if (!(leadIn > leadF)) continue;
+          const t = clamp01(den[i]! / 0.05) * (1 - prior.texture[i]!);
+          for (let c = 0; c < 3; c += 1) F[3 * i + c] = t * (num[3 * i + c]! / den[i]!) + (1 - t) * F[3 * i + c]!;
+        }
+      }
       for (let i = 0; i < n; i += 1) {
         if (!band[i] || core[i]) continue;
         const q = 3 * i;
         const dS = screen[q + sc]! - (b * screen[q + ac]! + (1 - b) * screen[q + cc]!);
         if (!(dS > 1e-6)) continue;
         const dP = P[q + sc]! - (b * P[q + ac]! + (1 - b) * P[q + cc]!);
-        // The foreground's own lead of the screen channel, kept well below the screen's.
-        const dF = Math.min(0.5 * dS, F[q + sc]! - (b * F[q + ac]! + (1 - b) * F[q + cc]!));
+        // The foreground's own lead of the screen channel, kept well below the screen's — less far
+        // below inside the segmentation, where a screen-lit costume really does lead (addendum 18).
+        const lim = prior && prior.inside[i] ? 0.5 + 0.4 * prior.confidence : 0.5;
+        const dF = Math.min(lim * dS, F[q + sc]! - (b * F[q + ac]! + (1 - b) * F[q + cc]!));
         let au = (dS - dP) / (dS - dF);
         au = au < 0.01 ? 0 : au > 0.99 ? 1 : au;
-        refined[i] = edge[i]! + k.edgeDetail * (au - edge[i]!);
+        // Inside the segmentation, where the unmixing (its foreground colour now the costume's own) calls
+        // the pixel solid, it is: the colour-difference edge there is exactly what failed.
+        // (Within the costume's own shading and noise of solid: above 0.85 fading to solid at 0.95.)
+        const blend = edge[i]! + k.edgeDetail * (au - edge[i]!);
+        refined[i] = prior && prior.depth[i]! >= 2 && au > 0.85 ? blend + (1 - blend) * clamp01((au - 0.85) / 0.1) * prior.confidence : blend;
       }
     }
   }
@@ -350,6 +420,46 @@ export function keyFrame(input: KeyFrameInput): KeyFrameOutput {
   // 5. Combine with the core, then the mattes.
   let alpha: Float32Array = new Float32Array(n);
   for (let i = 0; i < n; i += 1) alpha[i] = core[i] ? 1 : refined[i]!;
+  if (prior && prior.confidence > 0)
+    for (let i = 0; i < n; i += 1) {
+      // The soft rim of the prior's core, then the soft garbage outside the segmentation.
+      const c = prior.core[i]!;
+      if (c > 0 && c < 0.5) alpha[i] = Math.max(alpha[i]!, c * 2 * (prior.deep[i] ? 1 : notScreen(i)));
+      alpha[i] = alpha[i]! * prior.keep[i]!;
+    }
+  // The shadow pass: shadows cast on the screen, outside the subject, leave the alpha for a matte of their own.
+  let shadow: Float32Array | null = null;
+  if (input.shadow) {
+    const margin = input.subject ? Math.max(1, input.subject.margin) : Math.max(2, w / 200);
+    const allowed = new Float32Array(n);
+    const anchor = new Uint8Array(n);
+    let touch: Uint8Array | null = null;
+    if (prior && prior.area) {
+      touch = new Uint8Array(n);
+      for (let i = 0; i < n; i += 1) if (!prior.inside[i] && prior.outsideDistance[i]! <= 4 * margin) touch[i] = 1;
+    }
+    if (prior && prior.area)
+      for (let i = 0; i < n; i += 1) {
+        if (prior.inside[i]) continue;
+        const d = prior.outsideDistance[i]!;
+        allowed[i] = clamp01(d / Math.max(1, 0.5 * margin));
+        // Beyond the band (as wide as the outside garbage's margin, wider by hair).
+        anchor[i] = d > 2 * margin * (1 + 2 * prior.texture[i]!) ? 1 : 0;
+      }
+    else {
+      // No segmentation: away from anything the key calls solid.
+      const dCore = keyCore.some((v) => v) ? squaredDistance(keyCore, w, h) : null;
+      for (let i = 0; i < n; i += 1) {
+        const d = dCore ? Math.sqrt(dCore[i]!) : 1e6;
+        allowed[i] = clamp01((d - margin) / margin);
+        anchor[i] = d > 6 * margin ? 1 : 0;
+      }
+    }
+    shadow = shadowPass(P, input.clean ?? input.model ?? screen, w, h, { kind: k.kind, allowed, anchor, touch });
+    // Taken out of the alpha only beside a segmented subject: without one, a screen-lit costume away
+    // from the key's core reads exactly as a shadow, and the matte keeps it (the pass is still written).
+    if (prior && prior.area && prior.outsideWeight > 0) for (let i = 0; i < n; i += 1) if (shadow[i]! > 0) alpha[i] = alpha[i]! * (1 - prior.outsideWeight * clamp01(shadow[i]! / 0.12));
+  }
   if (input.links?.length) alpha = combineMattes(alpha, input.links);
 
   // 6. Foreground: screen subtracted, then despilled.
@@ -374,8 +484,22 @@ export function keyFrame(input: KeyFrameInput): KeyFrameOutput {
   }
   const wrap = !input.matteOnly && input.background && input.lightWrap && input.lightWrap.intensity > 0 ? lightWrap(alpha, input.background, input.lightWrap) : null;
 
-  const metrics = keyMetrics(img, screen, raw, edge, core, alpha, k.kind, input.model);
-  return { width: w, height: h, alpha, raw, edge: refined, core, fg, spill, wrap, metrics, confidence: keyConfidence(metrics) };
+  const metrics: KeyMetrics = keyMetrics(img, screen, raw, edge, keyCore, alpha, k.kind, input.model, { priorCore: prior && prior.confidence > 0 ? Float32Array.from(prior.inside) : null, keep: prior && prior.confidence > 0 ? prior.keep : null, shadow });
+  if (prior) {
+    // How much the key, without the prior, would have called solid outside the segmentation (stands, a
+    // second actor, or a segmentation that lost a limb), and how much of its core is clean screen.
+    let outsideSolid = 0;
+    for (let i = 0; i < n; i += 1) if (!prior.inside[i] && prior.keep[i]! < 0.5 && refined[i]! >= 0.5) outsideSolid += 1;
+    metrics.subjectDisagree = Math.round(prior.disagree * 10_000) / 10_000;
+    metrics.subjectOutside = prior.area ? Math.round(Math.min(1, outsideSolid / prior.area) * 10_000) / 10_000 : 0;
+    metrics.subjectConfidence = Math.round(prior.confidence * 1000) / 1000;
+  }
+  if (shadow) {
+    let sa = 0;
+    for (let i = 0; i < n; i += 1) if (shadow[i]! > 0.1) sa += 1;
+    metrics.shadow = Math.round((sa / n) * 10_000) / 10_000;
+  }
+  return { width: w, height: h, alpha, raw, edge: refined, core, fg, spill, wrap, shadow, prior, metrics, confidence: keyConfidence(metrics) };
 }
 
 /**
@@ -385,7 +509,17 @@ export function keyFrame(input: KeyFrameInput): KeyFrameOutput {
  * (the keyer made something transparent that does not look like screen), and
  * how far the clean screen is from its model (a lighting change).
  */
-export function keyMetrics(img: LinearImage, screen: Float32Array, raw: Float32Array, edge: Float32Array, core: Uint8Array, alpha: Float32Array, kind: ScreenKind, model: Float32Array = screen): KeyMetrics {
+export function keyMetrics(
+  img: LinearImage,
+  screen: Float32Array,
+  raw: Float32Array,
+  edge: Float32Array,
+  core: Uint8Array,
+  alpha: Float32Array,
+  kind: ScreenKind,
+  model: Float32Array = screen,
+  hybrid: { priorCore?: Float32Array | null; keep?: Float32Array | null; shadow?: Float32Array | null } = {},
+): KeyMetrics {
   const { width: w, height: h } = img;
   const n = w * h;
   const P = img.data;
@@ -400,7 +534,10 @@ export function keyMetrics(img: LinearImage, screen: Float32Array, raw: Float32A
     const a = alpha[i]!;
     if (a < 0.02) {
       clean += 1;
-      if ((i & 3) === 0) {
+      // Screen vs its model, over what the key itself reads as screen: not what a subject prior
+      // cleared (a light stand), not a shadow (it is darker on purpose).
+      const counted = (!hybrid.shadow || hybrid.shadow[i]! < 0.05) && (!hybrid.priorCore || raw[i]! < 0.25);
+      if ((i & 3) === 0 && counted) {
         const q = 3 * i;
         const ss = model[q]! + model[q + 1]! + model[q + 2]!;
         if (ss > 1e-5) {
@@ -410,9 +547,10 @@ export function keyMetrics(img: LinearImage, screen: Float32Array, raw: Float32A
       }
     } else if (a < 0.98) soft += 1;
     if (a >= 0.5) subject += 1;
+    // What the core rescued — but not what the segmentation vouches for (a screen-lit costume).
     if (core[i]) {
       coreN += 1;
-      if (edge[i]! < 0.9) coreBad += 1;
+      if (edge[i]! < 0.9 && !(hybrid.priorCore && hybrid.priorCore[i]! >= 0.5) && !(hybrid.keep && hybrid.keep[i]! < 0.5)) coreBad += 1;
     }
   }
   // Holes: enclosed transparent regions whose pixels do not look like screen.

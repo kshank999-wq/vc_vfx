@@ -4,6 +4,9 @@ import { addPart, newRotoDocument, partIdFor, recordPropagation, rotoPart, setKe
 import {
   BgMatchSchema,
   DEFAULT_KEY_PARAMS,
+  DEFAULT_KEY_SUBJECT,
+  KeySubjectRunSchema,
+  KeySubjectSchema,
   DespillSchema,
   KEY_ALGORITHM,
   KEY_FORMAT_VERSION,
@@ -24,6 +27,8 @@ import {
   type KeyParams,
   type KeyRgb,
   type KeyScreen,
+  type KeySubject,
+  type KeySubjectRun,
   type LightWrapSettings,
   type ScreenKind,
   type ScreenSample,
@@ -73,6 +78,7 @@ export function newKeyDocument(kind: ScreenKind | null = null): KeyDocument {
     screen: kind ? { kind, source: 'auto', rgb: kind === 'green' ? [0.08, 0.45, 0.1] : [0.06, 0.12, 0.5], samples: [], coverage: null, frames: [], track: true } : null,
     params: { ...DEFAULT_KEY_PARAMS },
     links: [],
+    subject: { ...DEFAULT_KEY_SUBJECT, seed: { frame: null, box: null, points: [] } },
     despill: DespillSchema.parse({}),
     lightWrap: LightWrapSchema.parse({}),
     match: { suggestion: null, preview: false },
@@ -386,9 +392,83 @@ export function setKeyWorkingWidth(p: Project, shotId: string, width: number, ac
  * matches its model (a lighting change), then an unusually busy soft edge,
  * and a frame with almost no screen in it cannot be judged well.
  */
+// ---------------------------------------------------------------------------
+// The subject prior (hybrid key, addendum 18)
+// ---------------------------------------------------------------------------
+
+export type KeySubjectChange = Partial<Pick<KeySubject, 'source' | 'partId' | 'engine' | 'marginPx' | 'outside'>> & { seed?: Partial<KeySubject['seed']> };
+
+/**
+ * Choose the subject segmentation the key uses as its core prior, and how.
+ * Every change affects pixels (revision bump); a change of what an Auto
+ * segmentation is made from (engine, seed) also makes its run stale.
+ */
+export function setKeySubject(p: Project, shotId: string, change: KeySubjectChange, actor: string, now: Date): Result {
+  return editKey(p, shotId, actor, now, 'key.subject', (doc, s) => {
+    const cur = doc.subject;
+    const seed = change.seed ? { ...cur.seed, ...change.seed } : cur.seed;
+    const parsed = KeySubjectSchema.safeParse({ ...cur, ...change, seed });
+    if (!parsed.success) return `${parsed.error.issues[0]?.path.join('.') ?? 'value'}: ${parsed.error.issues[0]?.message ?? 'out of range'}`;
+    let next = parsed.data;
+    if (next.source === 'roto') {
+      if (!next.partId) return 'Choose the roto part that is the subject.';
+      if (!rotoPart(s.roto, next.partId)) return `No roto part “${next.partId}”. Paint it in the Roto tab first.`;
+    }
+    const madeFrom = (k: KeySubject) => JSON.stringify([k.engine, k.seed]);
+    const restarted = madeFrom(next) !== madeFrom(cur);
+    if (restarted) next = { ...next, revision: cur.revision + 1 };
+    const fields: string[] = [];
+    if (next.source !== cur.source) fields.push(`source ${cur.source} → ${next.source}`);
+    if (next.partId !== cur.partId && next.source === 'roto') fields.push(`part ${next.partId}`);
+    if (next.engine !== cur.engine) fields.push(`engine ${cur.engine} → ${next.engine}`);
+    if (JSON.stringify(next.seed) !== JSON.stringify(cur.seed)) {
+      const b = next.seed.box;
+      fields.push(`seed ${next.seed.frame ?? 'middle frame'}${b ? `, box ${Math.round(b.x0)},${Math.round(b.y0)}–${Math.round(b.x1)},${Math.round(b.y1)}` : ''}${next.seed.points.length ? `, ${next.seed.points.length} clicks` : ''}${!b && !next.seed.points.length ? ', from the key' : ''}`);
+    }
+    if (next.marginPx !== cur.marginPx) fields.push(`margin ${cur.marginPx} → ${next.marginPx} px`);
+    if (next.outside !== cur.outside) fields.push(next.outside ? 'outside is garbage' : 'outside kept');
+    if (!fields.length) return { doc, detail: 'unchanged' };
+    return { doc: { ...doc, subject: next }, detail: fields.join(', '), task: 'edited', settings: true };
+  });
+}
+
+/** Whether the Auto segmentation needs (re)running: none yet, or made from an older seed or engine. */
+export function keySubjectStale(doc: KeyDocument | null | undefined): boolean {
+  if (!doc || doc.subject.source !== 'auto') return false;
+  return !doc.subject.run || doc.subject.run.revision !== doc.subject.revision;
+}
+
+export type KeySubjectRunInput = Omit<KeySubjectRun, 'at' | 'by' | 'taskVersion' | 'meanConfidence' | 'fallback'> & { fallback?: string | null };
+
+/**
+ * Record an Auto segmentation run (the masks are in the key cache). A run made
+ * from an older seed is refused. It changes the key's pixels, so the settings
+ * revision is bumped and processed frames go stale like any setting change.
+ */
+export function recordKeySubjectRun(p: Project, shotId: string, input: KeySubjectRunInput, actor: string, now: Date): Result {
+  return editKey(p, shotId, actor, now, 'key.subject_run', (doc, s) => {
+    if (doc.subject.source !== 'auto') return 'The subject is not set to Auto.';
+    if (input.revision !== doc.subject.revision) return 'The subject seed changed while it ran; run it again.';
+    if (!input.frames.length) return 'The segmentation produced no frames';
+    const frames = [...input.frames].sort((a, b) => a.frame - b.frame);
+    const mean = Math.round((frames.reduce((a, f) => a + f.confidence, 0) / frames.length) * 1000) / 1000;
+    const parsed = KeySubjectRunSchema.safeParse({ ...input, frames, meanConfidence: mean, fallback: input.fallback ?? null, taskVersion: keyTaskVersion(s), at: now.toISOString(), by: actor });
+    if (!parsed.success) return `The segmentation run is not usable: ${parsed.error.issues[0]?.message ?? 'bad data'}`;
+    const run = parsed.data;
+    return {
+      doc: { ...doc, subject: { ...doc.subject, run } },
+      detail: `${run.engine} from frame ${run.seedFrame} (${run.seededBy === 'key' ? "seeded from the key's foreground" : 'operator seed'}), ${frames.length} frames ${run.first}–${run.last}, mean confidence ${mean.toFixed(2)}${run.fallback ? `; ${run.fallback}` : ''}`,
+      task: 'edited',
+      settings: true,
+    };
+  });
+}
+
 export function keyConfidence(m: KeyMetrics): number {
   let c = 1 - 2.5 * m.coreNoise - 40 * m.holes - 4 * Math.max(0, m.residual - 0.04) - 2 * Math.max(0, m.edgeActivity - 0.12);
   if (m.screenCoverage < 0.05) c *= 0.5 + 10 * m.screenCoverage;
+  // With a subject prior the matte is only as sure as the segmentation (addendum 18), and less where they disagree.
+  if (m.subjectConfidence !== undefined) c = c * (0.6 + 0.4 * m.subjectConfidence) - 3 * (m.subjectDisagree ?? 0);
   return Math.round(Math.max(0, Math.min(1, c)) * 1000) / 1000;
 }
 
@@ -421,6 +501,12 @@ export function keyProblemReasons(records: readonly Pick<KeyFrameRecord, 'frame'
     if (sorted.length >= 3 && r.metrics.edgeActivity > Math.max(2.5 * edge, edge + 0.03)) reasons.push(`edge ${(r.metrics.edgeActivity / Math.max(edge, 1e-6)).toFixed(1)}× busier than the shot`);
     if (sorted.length >= 3 && r.metrics.residual > Math.max(3 * residual, residual + 0.05)) reasons.push('screen differs from its model (lighting change?)');
     if (r.metrics.holes > 0.002) reasons.push(`holes in the subject (${(r.metrics.holes * 100).toFixed(1)} %)`);
+    if ((r.metrics.subjectDisagree ?? 0) > 0.03) reasons.push(`the subject segmentation covers clean screen (${((r.metrics.subjectDisagree ?? 0) * 100).toFixed(0)} % of its core)`);
+    if (r.metrics.subjectConfidence !== undefined && r.metrics.subjectConfidence < 0.5) reasons.push(`subject segmentation unsure (${r.metrics.subjectConfidence.toFixed(2)})`);
+    if (near.length && r.metrics.subjectOutside !== undefined) {
+      const out = median(near.map((n) => n.metrics.subjectOutside ?? 0));
+      if (r.metrics.subjectOutside > Math.max(2 * out, out + 0.15)) reasons.push(`the key and the segmentation disagree (solid outside the subject ${(r.metrics.subjectOutside * 100).toFixed(0)} % of its area)`);
+    }
     out.set(r.frame, reasons.join('; '));
   });
   return out;
@@ -638,6 +724,10 @@ export const keyNames = {
   edgePattern: (shot: string, version: number) => framePattern(shot, 'key_edge', version, 'png'),
   lightWrapFile: (shot: string, version: number, frame: number) => frameFileName(shot, 'key_lightwrap', version, frame, 'exr'),
   lightWrapPattern: (shot: string, version: number) => framePattern(shot, 'key_lightwrap', version, 'exr'),
+  shadowFile: (shot: string, version: number, frame: number) => frameFileName(shot, 'key_shadow', version, frame, 'png'),
+  shadowPattern: (shot: string, version: number) => framePattern(shot, 'key_shadow', version, 'png'),
+  mattesExrFile: (shot: string, version: number, frame: number) => frameFileName(shot, 'key_mattes', version, frame, 'exr'),
+  mattesExrPattern: (shot: string, version: number) => framePattern(shot, 'key_mattes', version, 'exr'),
   metadata: (shot: string, version: number) => `${shot}_key_${versionTag(version)}.json`,
   readme: () => 'README.txt',
 };
@@ -650,6 +740,7 @@ export function keySettings(doc: KeyDocument) {
     screen: doc.screen,
     params: doc.params,
     links: doc.links,
+    subject: doc.subject.source === 'none' ? { source: 'none' as const } : { source: doc.subject.source, partId: doc.subject.partId, engine: doc.subject.engine, seed: doc.subject.seed, marginPx: doc.subject.marginPx, outside: doc.subject.outside, run: doc.subject.run ? { engine: doc.subject.run.engine, seedFrame: doc.subject.run.seedFrame, seededBy: doc.subject.run.seededBy, revision: doc.subject.run.revision, at: doc.subject.run.at } : null },
     despill: doc.despill,
     lightWrap: { output: doc.lightWrap.output, widthPx: doc.lightWrap.widthPx, intensity: doc.lightWrap.intensity, lumaWeight: doc.lightWrap.lumaWeight },
   };
@@ -685,6 +776,8 @@ export function keyMetadata(
     alpha: { bitDepth: 16, meaning: 'PNG greyscale; 0 = background, full = foreground; straight', exr: info.alphaExr },
     foreground: info.files['foreground'] ? 'RGBA half-float EXR, premultiplied by the alpha: the screen subtracted (P − (1 − α)·screen) and despilled. Prep output only — no composite.' : null,
     lightWrap: info.files['lightWrap'] ? 'RGB half-float EXR, an additive layer (add it over a composite); not in the foreground.' : null,
+    shadow: info.files['shadow'] ? 'Shadow pass: 16-bit PNG greyscale, shadow density 0…1 (1 − luminance ratio of the shadowed screen to the clean screen). Multiply the new background by (1 − density), or a tinted version of it; not in the alpha.' : null,
+    mattesExr: info.files['mattesExr'] ? 'Half-float EXR with the alpha (channel A) and the shadow density (layer shadow, channel shadow.A).' : null,
     settings: keySettings(doc),
     background: info.background,
     /** A suggestion for the compositor; never applied to these files (§7). */
@@ -716,6 +809,8 @@ export function keyManifest(s: ShotState) {
     alpha: exported?.alpha ?? null,
     foreground: exported?.foreground ?? null,
     lightWrap: exported?.lightWrap ?? null,
+    shadow: exported?.shadow ?? null,
+    subject: doc.subject.source === 'none' ? null : { source: doc.subject.source, partId: doc.subject.partId, engine: doc.subject.run?.engine ?? doc.subject.engine, meanConfidence: doc.subject.run?.meanConfidence ?? null },
     metadata: exported?.metadata ?? null,
     frames: exported ? { first: exported.first, last: exported.last, count: exported.frames } : null,
     resolution: exported ? { width: exported.width, height: exported.height } : null,

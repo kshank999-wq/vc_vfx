@@ -27,6 +27,9 @@ import {
   setKeyBackground,
   setKeyParams,
   setKeyScreen,
+  setKeySubject,
+  recordKeySubjectRun,
+  keySubjectStale,
   setLightWrap,
   setMatchPreview,
   setScreenKind,
@@ -40,6 +43,7 @@ import {
   type KeyLink,
   type KeyParams,
   type KeyRect,
+  type KeySubjectChange,
   type LightWrapSettings,
   type Project,
   type Result,
@@ -91,7 +95,7 @@ export interface KeyWorkspaceProps {
   taskInfo?: ReactNode;
 }
 
-export const KEY_MODES = ['source', 'alpha', 'premult', 'over', 'edge', 'mattes', 'problems'] as const;
+export const KEY_MODES = ['source', 'alpha', 'premult', 'over', 'edge', 'mattes', 'subject', 'shadow', 'problems'] as const;
 export type KeyMode = (typeof KEY_MODES)[number];
 export const KEY_MODE_LABELS: Record<KeyMode, string> = {
   source: 'Source',
@@ -100,9 +104,11 @@ export const KEY_MODE_LABELS: Record<KeyMode, string> = {
   over: 'Over background',
   edge: 'Edge',
   mattes: 'Core / edge / garbage',
+  subject: 'Subject',
+  shadow: 'Shadow',
   problems: 'Problem frames',
 };
-export type KeyTool = 'eyedropper' | 'protect' | 'garbage' | 'holdout' | 'repair-box' | null;
+export type KeyTool = 'eyedropper' | 'protect' | 'garbage' | 'holdout' | 'repair-box' | 'subject-box' | 'subject-click' | null;
 
 const unwrap = <T,>(r: { ok: true; data: T } | { ok: false; error: string }): T => {
   if (!r.ok) throw new Error(r.error);
@@ -176,7 +182,7 @@ export function useKeyController(props: KeyWorkspaceProps) {
   }, [api, sessionKey]);
 
   // The review key of the current frame: whenever the settings (or the roto mattes they use) change.
-  const keyDeps = JSON.stringify([doc ? { s: doc.screen, p: doc.params, l: doc.links, d: doc.despill, w: doc.lightWrap, m: doc.match } : null, state?.roto?.parts.map((p) => [p.id, p.frames.length]) ?? null]);
+  const keyDeps = JSON.stringify([doc ? { s: doc.screen, p: doc.params, l: doc.links, d: doc.despill, w: doc.lightWrap, m: doc.match, u: doc.subject } : null, state?.roto?.parts.map((p) => [p.id, p.frames.length]) ?? null]);
   const request = useRef(0);
   useEffect(() => {
     if (!api.keyFrame || !session?.available || !doc?.screen) {
@@ -279,6 +285,26 @@ export function useKeyController(props: KeyWorkspaceProps) {
         apply((p, a, t) => recordBgMatch(p, shotId, m, a, t));
       }),
     matchPreview: (change: { preview?: boolean; strength?: number }) => apply((p, a, t) => setMatchPreview(p, shotId, change, a, t)),
+    /** The subject segmentation used as the core prior (addendum 18). */
+    subject: (change: KeySubjectChange) => apply((p, a, t) => setKeySubject(p, shotId, change, a, t)),
+    /** A box drawn round the subject, or a click on (or off) it, on this frame: the Auto seed. */
+    seedBox: (box: KeyRect) => apply((p, a, t) => setKeySubject(p, shotId, { source: 'auto', seed: { frame, box, points: [] } }, a, t)),
+    seedClick: (x: number, y: number, on: boolean) => {
+      const cur = doc?.subject.seed;
+      const points = cur && cur.frame === frame ? [...cur.points, { x, y, label: on ? (1 as const) : (0 as const) }].slice(-16) : [{ x, y, label: on ? (1 as const) : (0 as const) }];
+      return apply((p, a, t) => setKeySubject(p, shotId, { source: 'auto', seed: { frame, box: cur && cur.frame === frame ? cur.box : null, points } }, a, t));
+    },
+    clearSeed: () => apply((p, a, t) => setKeySubject(p, shotId, { seed: { frame, box: null, points: [] } }, a, t)),
+    findSubject: () =>
+      guard('Finding the subject…', async () => {
+        if (!api.keySubject) throw new Error('The subject segmentation is not available here.');
+        const { run } = await runJob(`Finding the subject in ${state?.vfxShotId ?? shotId}`, async (jobId) => unwrap(await api.keySubject!({ jobId, text: textRef.current, shotId, projectKey })));
+        if (apply((p, a, t) => recordKeySubjectRun(p, shotId, run, a, t))) {
+          const mean = run.frames.reduce((s, f) => s + f.confidence, 0) / run.frames.length;
+          notify('ok', `Subject found on ${run.frames.length} frames with ${run.engine.split('@')[0] === 'sam2' ? 'SAM 2' : 'Track'} (mean confidence ${mean.toFixed(2)}).${run.fallback ? ` ${run.fallback}.` : ''}`);
+          setModeState('subject');
+        }
+      }),
     process: () =>
       guard('Processing…', async () => {
         if (!api.keyProcess) throw new Error('Processing is not available here.');
@@ -544,6 +570,7 @@ export function keyStepDefs(ctl: KeyController): KeyStepDef[] {
         </>
       ),
     },
+    subjectStep(ctl, toolButton, noScreen),
     {
       id: 'mattes',
       title: 'Garbage & holdout',
@@ -755,6 +782,107 @@ export function keyStepDefs(ctl: KeyController): KeyStepDef[] {
 
 const bridgeOf = (ctl: KeyController) => ctl.props.api;
 
+/**
+ * The Subject step (addendum 18): a subject segmentation as the key's core
+ * prior — none, a roto part, or Auto (SAM 2, or Track without it) from a box
+ * or clicks on the subject, or seeded from the key itself — and the shadow
+ * pass.
+ */
+function subjectStep(ctl: KeyController, toolButton: (t: Exclude<KeyTool, null>, label: string, title: string) => ReactNode, noScreen: string | null): KeyStepDef {
+  const { doc, canChange, actions, busy } = ctl;
+  const sub = doc?.subject;
+  const source = sub?.source ?? 'none';
+  const parts = ctl.state?.roto?.parts.filter((p) => p.frames.length > 0) ?? [];
+  const sam2 = ctl.session?.subjectEngines?.sam2;
+  const stale = doc ? keySubjectStale(doc) : false;
+  const run = sub?.run ?? null;
+  const seed = sub?.seed;
+  const seedText = seed && (seed.box || seed.points.length) ? `frame ${seed.frame ?? 'middle'}: ${seed.box ? 'a box' : ''}${seed.box && seed.points.length ? ' and ' : ''}${seed.points.length ? `${seed.points.length} click${seed.points.length === 1 ? '' : 's'}` : ''}` : `from the key's own solid foreground on ${seed?.frame !== null && seed?.frame !== undefined ? `frame ${seed.frame}` : 'the middle frame'}`;
+  return {
+    id: 'subject',
+    title: 'Subject',
+    hint: 'Tell the key what the subject is, so a costume lit the colour of the screen stays solid and shadows on the screen do not.',
+    done: source !== 'none' && (source !== 'auto' || (Boolean(run) && !stale)),
+    optional: true,
+    waiting: noScreen,
+    content: (
+      <>
+        <Seg
+          label="Subject"
+          value={source}
+          options={[['none', 'None'], ['roto', 'Roto part'], ['auto', 'Auto']] as const}
+          disabled={!canChange}
+          onChange={(v) => actions.subject(v === 'roto' ? { source: v, partId: sub?.partId ?? parts[0]?.id ?? null } : { source: v })}
+        />
+        {source === 'roto' ? (
+          parts.length ? (
+            <label className="key-field">
+              <span>Roto part</span>
+              <select aria-label="Subject roto part" value={sub?.partId ?? ''} disabled={!canChange} onChange={(e) => actions.subject({ source: 'roto', partId: e.target.value })}>
+                {parts.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : (
+            <p className="muted key-note">No roto parts with mattes yet. Paint the subject in the Roto tab, or use Auto.</p>
+          )
+        ) : null}
+        {source === 'auto' ? (
+          <>
+            <label className="key-field">
+              <span>Engine</span>
+              <select aria-label="Subject engine" value={sub?.engine ?? 'auto'} disabled={!canChange} onChange={(e) => actions.subject({ engine: e.target.value as 'auto' | 'sam2' | 'track' })}>
+                <option value="auto">{sam2?.available ? 'Auto (SAM 2)' : 'Auto (Track; SAM 2 not installed)'}</option>
+                <option value="sam2" disabled={!sam2?.available}>
+                  SAM 2 (AI)
+                </option>
+                <option value="track">Track (classical)</option>
+              </select>
+            </label>
+            {sam2 && !sam2.available && sam2.reason ? <p className="muted key-note">{sam2.reason}</p> : null}
+            <p className="key-note">Seed: {seedText}.</p>
+            <div className="key-row">
+              {toolButton('subject-box', 'Box the subject', 'Drag a box round the subject on this frame')}
+              {toolButton('subject-click', 'Click the subject', 'Click on the subject (Alt-click: not the subject) on this frame')}
+              <button type="button" disabled={!canChange || !(seed?.box || seed?.points.length)} onClick={() => actions.clearSeed()} title="Seed from the key's own solid foreground on this frame">
+                Seed from the key
+              </button>
+            </div>
+            <div className="action">
+              <button type="button" className="primary" disabled={!canChange || busy || !bridgeOf(ctl).keySubject} onClick={() => void actions.findSubject()}>
+                {run ? (stale ? 'Find the subject again (seed changed)' : 'Find the subject again') : 'Find the subject'}
+              </button>
+            </div>
+            {run ? (
+              <p className="key-note">
+                {run.engine.startsWith('sam2') ? 'SAM 2' : 'Track'} from frame {run.seedFrame} · {run.frames.length} frames · mean confidence {run.meanConfidence.toFixed(2)}
+                {run.fallback ? ` · ${run.fallback}` : ''}
+                {stale ? ' · stale: the seed changed' : ''}
+              </p>
+            ) : null}
+          </>
+        ) : null}
+        {source !== 'none' ? (
+          <>
+            <Slider label="Edge band" value={sub?.marginPx ?? 12} min={2} max={60} step={1} unit=" px" disabled={!canChange} hint="Inside the segmentation's edge by this much (more where there is hair), the key decides the edge; deeper in, the subject is solid" onCommit={(v) => actions.subject({ marginPx: v })} />
+            <Check label="Outside the subject is garbage" checked={sub?.outside ?? true} disabled={!canChange} onChange={(v) => actions.subject({ outside: v })} hint="Away from the subject (beyond twice the band), keyed things — light stands, rigging — go, softly and by the segmentation's confidence. Your own garbage and holdout mattes still apply." />
+          </>
+        ) : null}
+        <Check
+          label="Shadow pass"
+          checked={doc?.params.shadowPass ?? false}
+          disabled={!canChange}
+          onChange={(v) => actions.params({ shadowPass: v })}
+          hint="Shadows cast on the screen leave the alpha and are written as their own matte (density), to multiply over the new background. Best with a subject."
+        />
+      </>
+    ),
+  };
+}
+
 /** The numbered steps, in the module screen's step style. */
 export function KeySteps({ ctl }: { ctl: KeyController }) {
   const steps = keyStepDefs(ctl);
@@ -890,6 +1018,28 @@ export function composeMode(view: KeyFrameView, mode: KeyMode, wipe: { on: boole
         if (view.repair && view.repair[i]! > 128) tint(200, 110, 255, 0.35);
         break;
       }
+      case 'subject': {
+        // The picture dimmed, the segmentation in cyan, the final alpha's edge in yellow.
+        r = g = b = (0.3 * src[3 * i]! + 0.59 * src[3 * i + 1]! + 0.11 * src[3 * i + 2]!) * 0.5;
+        if (view.subject && view.subject[i]! > 128) {
+          r += (40 - r) * 0.55;
+          g += (210 - g) * 0.55;
+          b += (230 - b) * 0.55;
+        }
+        if (av > 5 && av < 250) {
+          r += (255 - r) * 0.4;
+          g += (220 - g) * 0.4;
+          b += (60 - b) * 0.4;
+        }
+        break;
+      }
+      case 'shadow': {
+        // Shadow density white on black (black where the pass is off); the subject's alpha faintly, for place.
+        const sd = view.shadow ? view.shadow[i]! : 0;
+        r = g = b = Math.max(sd, av * 0.18);
+        if (sd > 0) b = Math.min(255, b + 20);
+        break;
+      }
       case 'problems': {
         r = g = b = av * 0.85;
         if (holes![i]) {
@@ -947,7 +1097,12 @@ export function KeyViewer({ ctl }: { ctl: KeyController }) {
       void ctl.actions.pick(p.x, p.y);
       return;
     }
-    if (tool === 'garbage' || tool === 'holdout' || tool === 'repair-box') {
+    if (tool === 'subject-click') {
+      const p = toPlate(v);
+      ctl.actions.seedClick(Math.round(p.x), Math.round(p.y), !e.altKey);
+      return;
+    }
+    if (tool === 'garbage' || tool === 'holdout' || tool === 'repair-box' || tool === 'subject-box') {
       (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
       setDrag({ x0: v.x, y0: v.y, x1: v.x, y1: v.y });
       return;
@@ -966,6 +1121,11 @@ export function KeyViewer({ ctl }: { ctl: KeyController }) {
     const b = toPlate({ x: Math.max(drag.x0, drag.x1), y: Math.max(drag.y0, drag.y1) });
     setDrag(null);
     if (b.x - a.x < 2 || b.y - a.y < 2) return;
+    if (tool === 'subject-box') {
+      ctl.actions.seedBox({ x0: Math.round(a.x), y0: Math.round(a.y), x1: Math.round(b.x), y1: Math.round(b.y) });
+      setTool(null);
+      return;
+    }
     const kind = tool === 'garbage' ? 'garbage' : tool === 'holdout' ? 'holdout' : 'repair';
     ctl.actions.addBox(kind, { x0: Math.round(a.x), y0: Math.round(a.y), x1: Math.round(b.x), y1: Math.round(b.y) });
     setTool(null);
@@ -986,7 +1146,7 @@ export function KeyViewer({ ctl }: { ctl: KeyController }) {
   };
 
   const message = ctl.sessionError ?? (ctl.session && !ctl.session.available ? ctl.session.reason : null) ?? (!doc?.screen ? 'Press Auto key (step 1) to key this shot.' : null) ?? (view ? null : ctl.viewError);
-  const cursorClass = tool === 'eyedropper' || tool === 'protect' ? 'tool-pick' : tool ? 'tool-box' : wipe.on ? 'tool-wipe' : '';
+  const cursorClass = tool === 'eyedropper' || tool === 'protect' || tool === 'subject-click' ? 'tool-pick' : tool ? 'tool-box' : wipe.on ? 'tool-wipe' : '';
 
   return (
     <div className="key-viewer" aria-label={`Key viewer — ${ctl.state?.vfxShotId ?? ctl.props.shotId}`} role="region">
@@ -1172,6 +1332,22 @@ export function KeyInfo({ ctl }: { ctl: KeyController }) {
             <dd>{(m.holes * 100).toFixed(2)} %</dd>
             <dt>Screen vs model</dt>
             <dd>{(m.residual * 100).toFixed(1)} %</dd>
+            {m.subjectConfidence !== undefined ? (
+              <>
+                <dt>Subject confidence</dt>
+                <dd>{Math.round(m.subjectConfidence * 100)} %</dd>
+                <dt>Key solid outside it</dt>
+                <dd>{((m.subjectOutside ?? 0) * 100).toFixed(1)} %</dd>
+                <dt>It covers clean screen</dt>
+                <dd>{((m.subjectDisagree ?? 0) * 100).toFixed(1)} %</dd>
+              </>
+            ) : null}
+            {m.shadow !== undefined ? (
+              <>
+                <dt>Shadow</dt>
+                <dd>{(m.shadow * 100).toFixed(1)} % of the frame</dd>
+              </>
+            ) : null}
           </dl>
           {record?.reason ? <p className="warn-text">Problem: {record.reason}</p> : null}
         </section>

@@ -32,6 +32,16 @@ export interface GreenScreenOptions {
   noise?: number;
   /** A frame whose screen loses half its light. */
   badFrame?: number;
+  /**
+   * The real-footage failure (addendum 16, 18): the trousers become a white
+   * suit lit by the green floor's bounce — the screen's own chromaticity at
+   * this brightness (0.4: the astronaut) — so by colour it is a shadow.
+   */
+  screenLitSuit?: number;
+  /** A cast shadow on the floor beside the feet, this dense (0.6: 40 % of the screen's light). */
+  castShadow?: number;
+  /** How far the figure walks to and fro, as a share of the width (default 0.1). */
+  travel?: number;
   seed?: number;
 }
 
@@ -52,6 +62,10 @@ export interface GreenScreenScene {
   screen(n: number): Float32Array;
   /** The background plate (same size). */
   background: LinearImage;
+  /** Ground-truth shadow density 0…1 on frame n (zeros without a cast shadow). */
+  shadow(n: number): Float32Array;
+  /** Where the screen-lit suit is (coverage 0…1), zeros without one. */
+  suit(n: number): Float32Array;
   /** Representative linear colours of the scene. */
   colours: { screen: [number, number, number]; skin: [number, number, number]; shirt: [number, number, number]; hair: [number, number, number] };
 }
@@ -131,19 +145,26 @@ export function greenScreenScene(options: GreenScreenOptions = {}): GreenScreenS
   interface Frame {
     alpha: Float32Array;
     fg: Float32Array;
+    suit: Float32Array;
+    shadow: Float32Array;
   }
+  const suitK = options.screenLitSuit ?? 0;
+  const shadowK = options.castShadow ?? 0;
   const cache = new Map<number, Frame>();
   const layers = (n: number): Frame => {
     const hit = cache.get(n);
     if (hit) return hit;
     const t = n / Math.max(1, frames);
-    const cx = width * (0.42 + 0.1 * Math.sin(2 * Math.PI * t));
+    const cx = width * (0.42 + (options.travel ?? 0.1) * Math.sin(2 * Math.PI * t));
     const top = height * 0.14;
     const headY = top + 34 * u;
     const headR = 22 * u;
     const shoulderY = headY + 46 * u;
     const alpha = new Float32Array(width * height);
     const fg = new Float32Array(width * height * 3);
+    const suitCov = new Float32Array(width * height);
+    const shadow = new Float32Array(width * height);
+    const scrN = suitK > 0 ? screenAt(n) : null;
     const paint = (i: number, a: number, c: readonly number[]) => {
       if (a <= 0) return;
       const k = 1 - a;
@@ -177,7 +198,15 @@ export function greenScreenScene(options: GreenScreenOptions = {}): GreenScreenS
         const py = y + 0.5;
         const i = y * width + x;
         // Trousers (to the bottom of the frame), torso.
-        paint(i, cover(Math.max(Math.abs(px - cx) - 24 * u, shoulderY + 84 * u - py)), trousers);
+        const legs = cover(Math.max(Math.abs(px - cx) - 24 * u, shoulderY + 84 * u - py));
+        if (scrN && legs > 0) {
+          // White suit lit by the screen's bounce: the screen's colour here at suitK of its light, with a
+          // faint fold shading (±6 %).
+          const fold = 1 + 0.06 * Math.sin(px / (5 * u) + py / (11 * u));
+          const k3 = 3 * i;
+          paint(i, legs, [scrN[k3]! * suitK * fold, scrN[k3 + 1]! * suitK * fold, scrN[k3 + 2]! * suitK * fold]);
+          suitCov[i] = legs;
+        } else paint(i, legs, trousers);
         paint(i, cover(sdCapsule(px, py, cx, shoulderY + 14 * u, cx, shoulderY + 80 * u, 28 * u)), shirt);
         // The arm, motion-blurred: coverage averaged over eight positions within the shutter.
         let arm = 0;
@@ -210,7 +239,27 @@ export function greenScreenScene(options: GreenScreenOptions = {}): GreenScreenS
           }
         }
       }
-    const f = { alpha, fg };
+    if (shadowK > 0) {
+      // A cast shadow on the floor, from the legs' right side out to the right, with a soft penumbra.
+      const sx0 = cx + 24 * u;
+      const sx1 = Math.min(width - 2, cx + 170 * u);
+      const sy0 = height * 0.8;
+      const sy1 = height * 0.96;
+      for (let y = Math.floor(sy0 - 4 * u); y < Math.min(height, Math.ceil(sy1 + 4 * u)); y += 1)
+        for (let x = Math.floor(sx0 - 4 * u); x <= Math.min(width - 1, Math.ceil(sx1 + 4 * u)); x += 1) {
+          if (x < 0 || y < 0) continue;
+          const px = x + 0.5;
+          const py = y + 0.5;
+          // Narrowing away from the feet.
+          const t = Math.max(0, Math.min(1, (px - sx0) / (sx1 - sx0)));
+          const half = (sy1 - sy0) * (0.5 - 0.25 * t);
+          const mid = (sy0 + sy1) / 2;
+          const sd = Math.max(Math.abs(py - mid) - half, sx0 - px, px - sx1);
+          const pen = Math.max(0, Math.min(1, 0.5 - sd / (3 * u)));
+          shadow[y * width + x] = shadowK * pen * (1 - 0.25 * t);
+        }
+    }
+    const f = { alpha, fg, suit: suitCov, shadow };
     cache.set(n, f);
     if (cache.size > 8) cache.delete(cache.keys().next().value!);
     return f;
@@ -267,10 +316,18 @@ export function greenScreenScene(options: GreenScreenOptions = {}): GreenScreenS
     spillAdded: spillFor,
     screen: screenAt,
     background: { width, height, data: bgData },
+    shadow: (n) => layers(n).shadow.slice(),
+    suit: (n) => layers(n).suit.slice(),
     colours: { screen: base, skin, shirt, hair },
     render(n) {
-      const { alpha, fg } = layers(n);
+      const { alpha, fg, shadow } = layers(n);
       const scr = screenAt(n);
+      if (shadowK > 0) for (let i = 0; i < width * height; i += 1) {
+        const k = 1 - shadow[i]!;
+        scr[3 * i]! *= k;
+        scr[3 * i + 1]! *= k;
+        scr[3 * i + 2]! *= k;
+      }
       const sp = spillK > 0 ? spillFor(n) : null;
       const data = new Float32Array(width * height * 3);
       for (let i = 0; i < width * height; i += 1) {

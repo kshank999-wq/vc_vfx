@@ -9,7 +9,7 @@ import { Sam2Engine } from '../../shared/roto/sam2';
 import { discScene } from '../../shared/roto/synthetic';
 import { rotoRun, rotoSession } from '../roto/api';
 import { modelDir, SAM2_MODEL } from '../roto/models';
-import { loadOrt, ortCandidates, OrtSam2Runtime } from '../roto/sam2-ort';
+import { HostedSam2Runtime, loadOrt, ortCandidates, OrtSam2Runtime } from '../roto/sam2-ort';
 import { MaskStore } from '../roto/store';
 
 /**
@@ -47,6 +47,22 @@ describe.skipIf(!ort.ok)('SAM 2 through onnxruntime-node (stand-in models)', () 
     runtime.dispose();
   });
 
+  it('runs the same in a process of its own (as it must inside Electron, where a worker thread crashes)', async () => {
+    if (!ort.ok) return;
+    const path = ort.from.includes('/') ? ort.from : require.resolve(ort.from);
+    const runtime = await HostedSam2Runtime.create(path, join(fixtures, 'standin.encoder.onnx'), join(fixtures, 'standin.decoder.onnx'));
+    const scene = discScene({ frames: 4 });
+    const masks = new Map<number, Mask>();
+    await runRoto(
+      new Sam2Engine(runtime),
+      { partId: 'subject', from: 0, directions: ['key', 'forward'], first: 0, last: 3, keyFrames: [{ frame: 0, strokes: [{ id: 's', mode: 'include', radius: 5, points: [[75, 108], [85, 108]], by: '', at: '' }] }], scale: 1, smoothing: 0, settings: {} },
+      { frame: async (f) => scene.render(f), getMask: async (f) => masks.get(f) ?? null, putMask: async (f, m) => void masks.set(f, m) },
+    );
+    for (let f = 0; f < 4; f += 1) expect(iou(masks.get(f)!, scene.truth(f))).toBeGreaterThan(0.85);
+    runtime.dispose();
+    await expect(HostedSam2Runtime.create(path, join(fixtures, 'standin.decoder.onnx'), join(fixtures, 'standin.encoder.onnx'))).rejects.toThrow(/not a samexporter SAM 2 export/);
+  });
+
   it.skipIf(!hasFfmpeg)('runs in the roto worker thread when the model files are present', async () => {
     const { discDriveForSam2 } = await import('./roto-sam2-drive');
     const { project, env } = await discDriveForSam2(candidates);
@@ -55,7 +71,7 @@ describe.skipIf(!ort.ok)('SAM 2 through onnxruntime-node (stand-in models)', () 
     await copyFile(join(fixtures, 'standin.encoder.onnx'), join(dir, SAM2_MODEL.files[0]!.name));
     await copyFile(join(fixtures, 'standin.decoder.onnx'), join(dir, SAM2_MODEL.files[1]!.name));
     const session = await rotoSession(project, 'R1', null, env);
-    expect(session.engines.find((e) => e.id === 'sam2')).toMatchObject({ available: true, model: { present: true, pinned: false } });
+    expect(session.engines.find((e) => e.id === 'sam2')).toMatchObject({ available: true, model: { present: true, pinned: true } });
     let p = ok(addStroke(project, 'R1', 'subject', 1001, { mode: 'include', radius: 5, points: [[75, 108], [85, 108]] }, 'Ana', new Date()));
     p = ok(setPartSettings(p, 'R1', 'subject', { engine: { id: 'sam2' } }, 'Ana', new Date()));
     expect(shotState(p, 'R1')!.roto!.parts[0]!.engine.id).toBe('sam2');

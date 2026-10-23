@@ -187,7 +187,7 @@ describe('project format 10', () => {
     const opened = parseProject(JSON.stringify(v9));
     if (!opened.ok) throw new Error(opened.reason);
     expect(opened.project.version).toBe(PROJECT_VERSION);
-    expect(PROJECT_VERSION).toBe(10);
+    expect(PROJECT_VERSION).toBe(11);
     expect(shotState(opened.project, SHOT)!.pixelAspect).toBeNull();
     const rec = SolveRecordSchema.parse({
       number: 1, taskVersion: 1, file: 'solve-1', tracks: 't', engine: { id: 'vcvfx-ts', version: '1.0.0' },

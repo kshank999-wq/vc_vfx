@@ -1,4 +1,4 @@
-import type { BgMatchInput, KeyExportInput, KeyMetrics, KeyRunResult, ScreenKind } from '@vcvfx/domain';
+import type { BgMatchInput, KeyExportInput, KeyMetrics, KeyRunResult, KeySubjectRunInput, ScreenKind } from '@vcvfx/domain';
 
 /**
  * The key's part of the renderer ↔ main contract (addendum 09). Kept here so
@@ -33,6 +33,8 @@ export interface KeySessionInfo {
   exportable: boolean;
   /** Files can be chosen from disk for the background. */
   fileBackground: boolean;
+  /** What an Auto subject segmentation would run with: SAM 2 when installed, else Track (addendum 18). */
+  subjectEngines?: { sam2: { available: boolean; reason: string | null; label: string }; track: { available: boolean } };
   sample?: boolean;
 }
 
@@ -56,6 +58,12 @@ export interface KeyFrameView {
   repair: Uint8Array | null;
   /** Spill removed, scaled for display; null without despill. */
   spill: Uint8Array | null;
+  /** The subject segmentation used as the core prior (0…255), or null without one (addendum 18). */
+  subject: Uint8Array | null;
+  /** The confidence the segmentation was used with on this frame, or null. */
+  subjectConfidence: number | null;
+  /** The shadow pass, density 0…255, or null when off. */
+  shadow: Uint8Array | null;
   confidence: number;
   metrics: KeyMetrics;
   /** The screen colour used at the centre (linear), and the per-frame gain applied. */
@@ -84,6 +92,11 @@ export interface KeyExportOutcome {
   files: number;
 }
 
+export interface KeySubjectOutcome {
+  /** What the renderer records with `recordKeySubjectRun`. */
+  run: KeySubjectRunInput;
+}
+
 export interface KeyBridge {
   /** Whether keying can run on this shot, at what sizes, in which encoding, with what background. */
   keySession(input: KeyShotInput): Promise<import('../bridge').ApiResult<KeySessionInfo>>;
@@ -99,6 +112,8 @@ export interface KeyBridge {
   keyMatch(input: KeyShotInput & { frame: number }): Promise<import('../bridge').ApiResult<BgMatchInput>>;
   /** Write the current key of `frame` as a roto part's matte (Repair with roto); then the renderer calls `startKeyRepair`. */
   keySeedRoto(input: KeyShotInput & { partId: string; frame: number }): Promise<import('../bridge').ApiResult<{ confidence: number }>>;
+  /** Run the Auto subject segmentation over the shot (SAM 2, or Track without it) from the key's seed (a job). */
+  keySubject(input: KeyShotInput & { jobId: string }): Promise<import('../bridge').ApiResult<KeySubjectOutcome>>;
   /** Write the versioned key into the shot package (a job). */
   keyExport(input: KeyShotInput & { jobId: string; operator: string; options: KeyExportOptions }): Promise<import('../bridge').ApiResult<KeyExportOutcome>>;
   /** Choose a background image from disk (read only). Null when cancelled. */

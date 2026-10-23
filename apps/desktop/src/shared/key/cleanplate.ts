@@ -30,6 +30,15 @@ export interface ScreenModel {
    * Absent: everywhere (a flat model).
    */
   support?: Float32Array;
+  /**
+   * The screen in full detail where it does not move (addendum 18): per
+   * pixel, a bright quantile over the analysis frames of the pixels that were
+   * screen there (the cove's fall-off, folds, seams, at this size), NaN where
+   * too few frames saw it. A shadow that moves with the subject is in few of
+   * those frames, so it is not in here: this is what the shadow pass measures
+   * against. Absent: the grid model.
+   */
+  fine?: { width: number; height: number; data: Float32Array };
 }
 
 export interface ScreenRef {
@@ -160,7 +169,7 @@ function median(v: number[]): number {
   return s.length % 2 ? s[m]! : (s[m - 1]! + s[m]!) / 2;
 }
 
-function fitGrid(frames: readonly LinearImage[], masks: readonly Uint8Array[], gw: number, gh: number): ScreenModel {
+function fitGrid(frames: readonly LinearImage[], masks: readonly Uint8Array[], gw: number, gh: number, quantile = 0.5): ScreenModel {
   const perFrame = frames.map((im, k) => cellSums(im, masks[k]!, gw, gh));
   const grid = new Float32Array(gw * gh * 3);
   const weight = new Float32Array(gw * gh);
@@ -176,12 +185,57 @@ function fitGrid(frames: readonly LinearImage[], masks: readonly Uint8Array[], g
     }
     if (!means.length) continue;
     observed += 1;
-    // The median over frames: a frame where the subject crept into the cell does not pull it.
-    for (let ch = 0; ch < 3; ch += 1) grid[3 * c + ch] = median(means.map((m) => m[ch]!));
+    // The median over frames: a frame where the subject crept into the cell does not pull it. The first
+    // pass takes the brighter frames (a quantile above the median, by brightness): a shadow cast on the
+    // screen only ever darkens it, and must not become the clean plate where it lingers (addendum 18).
+    if (quantile === 0.5) for (let ch = 0; ch < 3; ch += 1) grid[3 * c + ch] = median(means.map((m) => m[ch]!));
+    else {
+      const byLum = [...means].sort((a, b) => a[0] + a[1] + a[2] - (b[0] + b[1] + b[2]));
+      const at = byLum[Math.min(byLum.length - 1, Math.round(quantile * (byLum.length - 1)))]!;
+      for (let ch = 0; ch < 3; ch += 1) grid[3 * c + ch] = at[ch]!;
+    }
     weight[c] = Math.min(1, support / Math.max(1, frames.length) / 0.3);
   }
   const filled = pullPush(grid, weight, gw, gh, 3);
   return { gw, gh, grid: filled, observed: observed / (gw * gh), support: weight };
+}
+
+/**
+ * The static fine screen (see ScreenModel.fine): per pixel, of the frames
+ * where the pixel has the screen's chromaticity (within 0.06) and is not the
+ * subject, the one at the 0.75 quantile of brightness; NaN with fewer than
+ * two such frames.
+ */
+export function fineScreen(frames: readonly LinearImage[], screen: ScreenRef, excludes?: readonly (Uint8Array | null)[]): ScreenModel['fine'] {
+  if (frames.length < 2) return undefined;
+  const { width: w, height: h } = frames[0]!;
+  const n = w * h;
+  const [sr, sb] = chromaOf(screen.rgb[0], screen.rgb[1], screen.rgb[2]);
+  const out = new Float32Array(n * 3).fill(Number.NaN);
+  const lums = new Float32Array(frames.length);
+  const idx: number[] = [];
+  for (let i = 0; i < n; i += 1) {
+    idx.length = 0;
+    for (let k = 0; k < frames.length; k += 1) {
+      if (excludes?.[k]?.[i]) continue;
+      const d = frames[k]!.data;
+      const r = d[3 * i]!;
+      const g = d[3 * i + 1]!;
+      const b = d[3 * i + 2]!;
+      const [cr, cb] = chromaOf(r, g, b);
+      if ((cr - sr) ** 2 + (cb - sb) ** 2 > 0.06 * 0.06) continue;
+      lums[k] = r + g + b;
+      idx.push(k);
+    }
+    if (idx.length < 2) continue;
+    idx.sort((a, b) => lums[a]! - lums[b]!);
+    const k = idx[Math.min(idx.length - 1, Math.round(0.75 * (idx.length - 1)))]!;
+    const d = frames[k]!.data;
+    out[3 * i] = d[3 * i]!;
+    out[3 * i + 1] = d[3 * i + 1]!;
+    out[3 * i + 2] = d[3 * i + 2]!;
+  }
+  return { width: w, height: h, data: out };
 }
 
 /** The screen model's colour at every pixel of a w × h image (bilinear between cell centres). */
@@ -217,13 +271,22 @@ export function flatScreenModel(rgb: readonly [number, number, number]): ScreenM
 }
 
 /** Build the clean-plate model from a few frames (two passes). */
-export function buildScreenModel(frames: readonly LinearImage[], screen: ScreenRef, cols: number): ScreenModel {
+export function buildScreenModel(frames: readonly LinearImage[], screen: ScreenRef, cols: number, excludes?: readonly (Uint8Array | null)[]): ScreenModel {
   if (!frames.length) return flatScreenModel(screen.rgb);
   const { width: w, height: h } = frames[0]!;
   const gw = Math.max(2, Math.min(cols, w));
   const gh = Math.max(2, Math.min(Math.round((cols * h) / w), h));
-  const first = fitGrid(frames, frames.map((im) => screenCandidates(im, screen, null)), gw, gh);
-  const masks = frames.map((im) => screenCandidates(im, screen, evalScreenModel(first, im.width, im.height)));
+  // The subject segmentation, when the key has one (addendum 18): a screen-lit costume has the screen's
+  // chromaticity and would otherwise darken the clean plate where it stands in most frames.
+  const without = (m: Uint8Array, k: number): Uint8Array => {
+    const ex = excludes?.[k];
+    if (!ex) return m;
+    const out = m.slice();
+    for (let i = 0; i < out.length; i += 1) if (ex[i]) out[i] = 0;
+    return out;
+  };
+  const first = fitGrid(frames, frames.map((im, k) => without(screenCandidates(im, screen, null), k)), gw, gh, 0.75);
+  const masks = frames.map((im, k) => without(screenCandidates(im, screen, evalScreenModel(first, im.width, im.height)), k));
   const second = fitGrid(frames, masks, gw, gh);
   return second.observed > 0 ? second : first.observed > 0 ? first : flatScreenModel(screen.rgb);
 }
@@ -243,7 +306,7 @@ export function buildScreenModel(frames: readonly LinearImage[], screen: ScreenR
  * `maxKey` solid is not taken (see below), so a light shadow on the screen
  * keys out and a deep one (darker than about half the screen) stays.
  */
-export function localScreen(img: LinearImage, model: Float32Array, kind: ScreenKind, options: { cell?: number; tol?: number; erode?: number; maxKey?: number } = {}): Float32Array {
+export function localScreen(img: LinearImage, model: Float32Array, kind: ScreenKind, options: { cell?: number; tol?: number; erode?: number; maxKey?: number; exclude?: Uint8Array | null } = {}): Float32Array {
   const { width: w, height: h, data } = img;
   const n = w * h;
   const tol = options.tol ?? 0.04;
@@ -261,6 +324,8 @@ export function localScreen(img: LinearImage, model: Float32Array, kind: ScreenK
     const s = r + g + b;
     const ms = mr + mg + mb;
     if (!(ms > 1e-6) || !(s > 0.25 * ms) || s > 2 * ms || r < 0 || g < 0 || b < 0) continue;
+    // The subject segmentation, when there is one: never screen (addendum 18).
+    if (options.exclude?.[i]) continue;
     // Not what the key against the model already calls mostly subject: a costume the screen's
     // bounce has made screen-coloured is darker than the screen and must not become screen here.
     const dS = model[q + sc]! - 0.5 * (model[q + ac]! + model[q + cc]!);

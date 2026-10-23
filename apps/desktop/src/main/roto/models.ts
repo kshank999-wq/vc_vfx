@@ -4,27 +4,29 @@ import { mkdir, open, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 /**
- * The SAM 2 model files (addendum 04): downloaded on first use into
- * `userData/models/<id>/`, never shipped in the installer, never committed.
+ * The SAM 2 model files (addendum 04, addendum 18): downloaded on first use
+ * into `userData/models/<id>/`, never shipped in the installer, never
+ * committed.
  *
- * Every file has a SHA-256 pin. **The pins below are placeholders (null) and
- * must be filled before a release**: download the files once from the
- * confirmed source, check them, and put their hashes here. A packaged build
- * refuses to download or load a file without a pin; a development build
- * downloads it, prints the hash it got (and writes it to PINS.json beside the
- * files) and uses it, so a developer can pin it.
+ * Every file is pinned by SHA-256 and size, and the source is pinned to a
+ * repository *revision* (a commit), never a moving branch. The hashes were
+ * taken from the hosting service's own metadata (Hugging Face's `lfs.sha256`
+ * and `x-linked-etag`, and for the default model also the publisher's
+ * CHECKSUMS.sha256) and match the files as downloaded (addendum 18 §1).
  *
- * Default source — TO BE CONFIRMED before release: the Hugging Face
- * repository nrl-ai/samexporter-onnx-models, which publishes SAM 2.1 Tiny in
- * samexporter's layout (the input/output names sam2.ts is written against).
- * The exact folder and file names inside it have not been checked from this
- * environment (huggingface.co was unreachable). The source can be overridden
- * with the VCVFX_SAM2_URL environment variable or `modelBaseUrl` in Settings.
+ * Default: SAM 2.1 Hiera Tiny exported by samexporter's author
+ * (Hugging Face nrl-ai/samexporter-onnx-models; its PROVENANCE.md names the
+ * official checkpoint sam2.1_hiera_tiny.pt and facebookresearch/sam2 at
+ * 2b90b9f5). Optional: SAM 2 (2.0) Hiera Base+ from the same author
+ * (vietanhdev/segment-anything-2-onnx-models), better edges, about twice as
+ * slow. Both are samexporter's layout (the tensors sam2.ts is written for).
+ * The source can be overridden with VCVFX_SAM2_URL or `modelBaseUrl` in
+ * Settings — the pins still apply.
  */
 
 export interface ModelFile {
   name: string;
-  /** Approximate size, for the "Download model (N MB)" label. */
+  /** Exact size in bytes as published (also the "Download model (N MB)" label). */
   approxBytes: number;
   /** Lowercase hex SHA-256, or null when not yet pinned. */
   sha256: string | null;
@@ -35,19 +37,47 @@ export interface ModelInfo {
   label: string;
   licence: string;
   defaultBaseUrl: string;
+  /** Where the files and their hashes come from, for the record and the download page. */
+  source?: { repository: string; revision: string; provenance: string };
   files: ModelFile[];
 }
 
 export const SAM2_MODEL: ModelInfo = {
   id: 'sam2.1_hiera_tiny',
   label: 'SAM 2.1 Hiera Tiny (ONNX, samexporter layout)',
-  licence: 'SAM 2: Apache-2.0 (Meta). ONNX export: samexporter (MIT).',
-  defaultBaseUrl: 'https://huggingface.co/nrl-ai/samexporter-onnx-models/resolve/main/sam2.1_hiera_tiny/',
+  licence: 'SAM 2.1 weights: Apache-2.0 (Meta). ONNX export: samexporter (MIT); the export folder carries the Apache-2.0 licence.',
+  defaultBaseUrl: 'https://huggingface.co/nrl-ai/samexporter-onnx-models/resolve/5050a79cd4b912dd745fff83047c4ef6fbd97be5/sam2_1_hiera_tiny/',
+  source: {
+    repository: 'https://huggingface.co/nrl-ai/samexporter-onnx-models',
+    revision: '5050a79cd4b912dd745fff83047c4ef6fbd97be5',
+    provenance: 'Exported with samexporter from the official checkpoint sam2.1_hiera_tiny.pt (facebookresearch/sam2 2b90b9f5ceec907a1c18123530e92e794ad901a4), ONNX opset 18 (the repository\'s PROVENANCE.md and CHECKSUMS.sha256).',
+  },
   files: [
-    { name: 'sam2.1_hiera_tiny.encoder.onnx', approxBytes: 135_000_000, sha256: null },
-    { name: 'sam2.1_hiera_tiny.decoder.onnx', approxBytes: 21_000_000, sha256: null },
+    { name: 'sam2.1_hiera_tiny.encoder.onnx', approxBytes: 109_471_931, sha256: '3d5ae796097a6afb1198ceea4187ecaa82736242d07f5658541829d6dfc3f871' },
+    { name: 'sam2.1_hiera_tiny.decoder.onnx', approxBytes: 16_519_561, sha256: '197f1c7c8fd070aaf6f15ffc635f4c384422ba5eaa0f8c9e543e3d4b8e0e8e87' },
   ],
 };
+
+export const SAM2_BASE_PLUS_MODEL: ModelInfo = {
+  id: 'sam2_hiera_base_plus',
+  label: 'SAM 2 Hiera Base+ (ONNX, samexporter layout; higher quality, slower)',
+  licence: 'SAM 2 weights: Apache-2.0 (Meta). ONNX export: samexporter (MIT), repository licensed Apache-2.0.',
+  defaultBaseUrl: 'https://huggingface.co/vietanhdev/segment-anything-2-onnx-models/resolve/071f58077599431edd0e5d2ac52ecca4c78f1cab/',
+  source: {
+    repository: 'https://huggingface.co/vietanhdev/segment-anything-2-onnx-models',
+    revision: '071f58077599431edd0e5d2ac52ecca4c78f1cab',
+    provenance: 'samexporter export of Meta\'s SAM 2 (2.0) sam2_hiera_base_plus checkpoint by samexporter\'s author (the repository README).',
+  },
+  files: [
+    { name: 'sam2_hiera_base_plus.encoder.onnx', approxBytes: 339_781_223, sha256: '53b79cec15f2078b3c7410f00f00950a09ef02007dccf238859fec156e42cc8d' },
+    { name: 'sam2_hiera_base_plus.decoder.onnx', approxBytes: 20_640_886, sha256: '666f00ce2664de31211a71068b6b74c3fc5aeee089ebeb2fc9c37834b9ce03b4' },
+  ],
+};
+
+export const SAM2_MODELS: readonly ModelInfo[] = [SAM2_MODEL, SAM2_BASE_PLUS_MODEL];
+export type Sam2ModelId = 'sam2.1_hiera_tiny' | 'sam2_hiera_base_plus';
+/** The model a setting names; the default for anything else. */
+export const sam2Model = (id?: string | null): ModelInfo => SAM2_MODELS.find((m) => m.id === id) ?? SAM2_MODEL;
 
 export const isPinned = (model: ModelInfo): boolean => model.files.every((f) => f.sha256 !== null && /^[0-9a-f]{64}$/.test(f.sha256));
 export const modelBytes = (model: ModelInfo): number => model.files.reduce((n, f) => n + f.approxBytes, 0);
@@ -131,6 +161,7 @@ export async function downloadModel(o: DownloadOptions): Promise<{ dir: string; 
     const part = join(dir, `${f.name}.part`);
     const handle = await open(part, 'w');
     const hash = createHash('sha256');
+    let fileBytes = 0;
     try {
       const reader = res.body.getReader();
       for (;;) {
@@ -138,6 +169,7 @@ export async function downloadModel(o: DownloadOptions): Promise<{ dir: string; 
         const { done: end, value } = await reader.read();
         if (end) break;
         hash.update(value);
+        fileBytes += value.length;
         await handle.write(value);
         done += value.length;
         o.onProgress?.(done, total, f.name);
@@ -150,9 +182,9 @@ export async function downloadModel(o: DownloadOptions): Promise<{ dir: string; 
     await handle.close();
     const got = hash.digest('hex');
     hashes[f.name] = got;
-    if (f.sha256 && got !== f.sha256) {
+    if (f.sha256 && (got !== f.sha256 || fileBytes !== f.approxBytes)) {
       await rm(part, { force: true });
-      throw new Error(`${f.name} downloaded from ${url} does not match its pinned SHA-256 (got ${got}). Nothing was installed.`);
+      throw new Error(`${f.name} downloaded from ${url} does not match its pinned SHA-256 and size (got ${got}, ${fileBytes} bytes). Nothing was installed.`);
     }
     await rename(part, join(dir, f.name));
   }

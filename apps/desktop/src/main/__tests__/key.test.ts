@@ -17,7 +17,10 @@ import {
   recordPlates,
   rotoPart,
   setKeyBackground,
+  setKeyParams,
   setKeyScreen,
+  setKeySubject,
+  recordKeySubjectRun,
   setLightWrap,
   setTaskState,
   shotState,
@@ -29,7 +32,7 @@ import { FULL_CAPS } from '../../shared/ffmpeg-args';
 import { buildExrWriteArgs, buildLinearFramesArgs, toPlanar } from '../../shared/key/ffmpeg-key';
 import { greenScreenScene, type GreenScreenScene } from '../../shared/key/synthetic';
 import { accuracy } from '../../shared/__tests__/key-helpers';
-import { keyDetect, keyExport, keyFrameView, keyMatch, keyProcess, keySample, keySeedRoto, keySession, type KeyEnv } from '../key/api';
+import { keyDetect, keyExport, keyFrameView, keyMatch, keyProcess, keySample, keySeedRoto, keySession, keySubject, type KeyEnv } from '../key/api';
 import { keyFrameSource, readLinearFrames } from '../key/frames';
 import { runKeyJob } from '../key/service';
 import { generateSequence } from '../sequence';
@@ -83,12 +86,12 @@ async function encodeLogC4(scene: GreenScreenScene, file: string): Promise<void>
   await pipeTo(['-hide_banner', '-v', 'error', '-y', '-f', 'rawvideo', '-pix_fmt', 'rgb48le', '-s', `${scene.width}x${scene.height}`, '-r', '24', '-i', 'pipe:0', '-vf', 'zscale=matrix=709:range=limited:dither=none,format=yuv444p10le', '-c:v', 'prores_ks', '-profile:v', '4', '-pix_fmt', 'yuv444p10le', '-color_primaries', 'bt709', '-color_trc', 'bt709', '-colorspace', 'bt709', file], chunks);
 }
 
-async function keyDrive(frames = 12) {
+async function keyDrive(frames = 12, sceneOptions: Parameters<typeof greenScreenScene>[0] = {}) {
   const root = await mkdtemp(join(tmpdir(), 'vcvfx-key-'));
   const drive = join(root, 'DRIVE');
   await mkdir(join(drive, 'VFX/K1'), { recursive: true });
   await mkdir(join(drive, 'VFX/BG'), { recursive: true });
-  const scene = greenScreenScene({ width: 320, height: 180, frames });
+  const scene = greenScreenScene({ width: 320, height: 180, frames, ...sceneOptions });
   await encodeLogC4(scene, join(drive, 'VFX/K1/greenscreen.mov'));
   // The background plate the handoff names: a linear ACEScg EXR.
   const n = scene.width * scene.height;
@@ -289,4 +292,104 @@ describe.skipIf(!hasFfmpeg)('keying real media', () => {
     await expect(keyExport(p, { shotId: 'K1', projectKey: 'k', operator: 'Ana', options: { foreground: false, core: false, edge: false, alphaExr: false } }, out, env)).rejects.toThrow(/approved and already written/);
     expect((await stat(join(exported.folder, 'K1_key_alpha_v001.1001.png'))).size).toBeGreaterThan(0);
   }, 120_000);
+
+  it('the hybrid key end to end: Auto subject (Track without SAM 2) from the key, the shadow pass, written as PNG and an EXR with layers', async () => {
+    // A cast shadow beside the figure. (Track cannot separate a costume the colour of the screen from
+    // the screen — that is SAM 2's job, tested on real weights in roto-sam2-real and measured in addendum 18.)
+    const { project, env, scene, out } = await keyDrive(10, { castShadow: 0.6, travel: 0.25 });
+    let p = ok(setTaskState(project, 'K1', 'sequence_conversion', 'processing', 'Ana', NOW));
+    const plates = await generateSequence({ project: p, shotId: 'K1', outputRoot: out, ffmpeg: 'ffmpeg' });
+    if (!plates.ok) throw new Error(plates.reason);
+    p = ok(recordPlates(p, 'K1', plates.record, 'Ana', NOW));
+    const detected = await keyDetect(p, { shotId: 'K1', projectKey: 'k', kind: null }, out, env);
+    p = ok(setKeyScreen(p, 'K1', { ...detected, source: 'auto' }, 'Ana', NOW));
+    const session = await keySession(p, 'K1', out, env);
+    expect(session.subjectEngines).toMatchObject({ sam2: { available: false }, track: { available: true } });
+    // Before: the deep cast shadow keys part-solid.
+    const before = await keyFrameView(p, { shotId: 'K1', projectKey: 'k', frame: 1005, maxWidth: 320, wrap: false, match: false }, out, env);
+    expect(before.subject).toBeNull();
+    const shadowAlpha = (alpha: Uint8Array) => {
+      const sh = scene.shadow(4);
+      let s = 0;
+      let c = 0;
+      for (let i = 0; i < sh.length; i += 1) if (sh[i]! > 0.4 && scene.alpha(4)[i] === 0) {
+        s += alpha[i]! / 255;
+        c += 1;
+      }
+      return s / c;
+    };
+    expect(shadowAlpha(before.alpha)).toBeGreaterThan(0.1);
+    // Auto: no SAM 2 here, so Track, seeded from the key's own solid foreground on the middle frame.
+    p = ok(setKeySubject(p, 'K1', { source: 'auto', marginPx: 4 }, 'Ana', NOW));
+    p = ok(setKeyParams(p, 'K1', { shadowPass: true }, 'Ana', NOW));
+    const progress: number[] = [];
+    const run = await keySubject(p, { shotId: 'K1', projectKey: 'k' }, out, env, { onProgress: (d) => progress.push(d) });
+    expect(run).toMatchObject({ seededBy: 'key', first: 1001, last: 1010 });
+    expect(run.engine).toMatch(/^track@/);
+    expect(run.fallback).toMatch(/SAM 2 not available/);
+    expect(run.frames).toHaveLength(10);
+    expect(progress.at(-1)).toBe(10);
+    expect(await new MaskStore(env.keyCacheRoot, 'k', 'K1').frames('subject', 1)).toHaveLength(10);
+    p = ok(recordKeySubjectRun(p, 'K1', run, 'Ana', NOW));
+    const after = await keyFrameView(p, { shotId: 'K1', projectKey: 'k', frame: 1005, maxWidth: 320, wrap: false, match: false }, out, env);
+    expect(after.subject).not.toBeNull();
+    expect(after.shadow).not.toBeNull();
+    expect(after.subjectConfidence).toBeGreaterThan(0.3);
+    // The segmentation is the figure (IoU against the truth), and the key is no worse for it.
+    const truth = scene.alpha(4);
+    let inter = 0;
+    let uni = 0;
+    for (let i = 0; i < truth.length; i += 1) {
+      const a = after.subject![i]! > 128;
+      const b = truth[i]! >= 0.5;
+      if (a && b) inter += 1;
+      if (a || b) uni += 1;
+    }
+    expect(inter / uni).toBeGreaterThan(0.7);
+    const accAfter = accuracy(Float32Array.from(after.alpha, (v) => v / 255), truth, 320, 180);
+    expect(accAfter.core).toBeGreaterThan(0.99);
+    expect(accAfter.bg).toBeLessThan(accuracy(Float32Array.from(before.alpha, (v) => v / 255), truth, 320, 180).bg + 0.002);
+    // The shadow is in the shadow pass and out of the alpha.
+    const sh = scene.shadow(4);
+    let inShadow = 0;
+    let alphaThere = 0;
+    let n = 0;
+    for (let i = 0; i < sh.length; i += 1) if (sh[i]! > 0.4 && scene.alpha(4)[i] === 0) {
+      n += 1;
+      inShadow += after.shadow![i]! / 255;
+      alphaThere += after.alpha[i]! / 255;
+    }
+    expect(inShadow / n).toBeGreaterThan(0.4);
+    // A Track segmentation only makes the core solid: it never takes anything away (what it leaves out
+    // may be a costume the colour of the screen), so the shadow is in its pass and still in the alpha.
+    expect(alphaThere / n).toBeCloseTo(shadowAlpha(before.alpha), 1);
+    // A Track mask asked for SAM 2 fails loudly instead of falling back.
+    const strict = ok(setKeySubject(p, 'K1', { engine: 'sam2' }, 'Ana', NOW));
+    await expect(keySubject(strict, { shotId: 'K1', projectKey: 'k' }, out, env)).rejects.toThrow(/SAM 2/);
+
+    p = ok(recordKeyRun(p, 'K1', await keyProcess(p, { shotId: 'K1', projectKey: 'k' }, out, env), 'Ana', NOW));
+    expect(shotState(p, 'K1')!.key!.frames[4]!.metrics).toMatchObject({ subjectConfidence: expect.any(Number), shadow: expect.any(Number) });
+    const exported = await keyExport(p, { shotId: 'K1', projectKey: 'k', operator: 'Ana', options: { foreground: true, core: false, edge: false, alphaExr: true } }, out, env, { now: NOW });
+    const names = (await readdir(exported.folder)).sort();
+    expect(names.filter((x) => x.startsWith('K1_key_shadow'))).toHaveLength(10);
+    expect(names.filter((x) => x.startsWith('K1_key_mattes'))).toHaveLength(10);
+    expect(exported.record).toMatchObject({ shadow: 'K1_key_shadow_v001.%04d.png', mattesExr: 'K1_key_mattes_v001.%04d.exr' });
+    const shadowPng = decodePng(await readFile(join(exported.folder, 'K1_key_shadow_v001.1005.png')));
+    expect([shadowPng.width, shadowPng.height, shadowPng.bitDepth]).toEqual([320, 180, 16]);
+    let dens = 0;
+    for (let i = 0; i < sh.length; i += 1) if (sh[i]! > 0.4 && scene.alpha(4)[i] === 0) dens += (shadowPng.data as Uint16Array)[i]! / 65535;
+    expect(dens / n).toBeGreaterThan(0.4);
+    // The EXR: half-float channels A and shadow.A (OpenEXR channel list), uncompressed scanlines.
+    const exr = await readFile(join(exported.folder, 'K1_key_mattes_v001.1005.exr'));
+    expect(exr.readUInt32LE(0)).toBe(20000630);
+    const header = exr.subarray(0, 400).toString('latin1');
+    expect(header).toContain('channels\0chlist');
+    expect(header).toContain('A\0');
+    expect(header).toContain('shadow.A\0');
+    expect(exr.length).toBeGreaterThan(320 * 180 * 2 * 2);
+    const meta = JSON.parse(await readFile(join(exported.folder, 'K1_key_v001.json'), 'utf8'));
+    expect(meta.settings.subject).toMatchObject({ source: 'auto', run: { seededBy: 'key' } });
+    expect(meta.shadow).toMatch(/density/);
+    expect(await readFile(join(exported.folder, 'README.txt'), 'utf8')).toMatch(/shadow pass/);
+  }, 240_000);
 });

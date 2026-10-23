@@ -15,7 +15,7 @@ import { z } from 'zod';
 
 export const KEY_FORMAT_VERSION = 1;
 /** The keyer: colour difference against a clean-plate screen model, unmixing edge refinement (addendum 09 §3). */
-export const KEY_ALGORITHM = { id: 'vcvfx-cdk', version: '1.1.0' } as const;
+export const KEY_ALGORITHM = { id: 'vcvfx-cdk', version: '1.2.0' } as const;
 
 export const SCREEN_KINDS = ['green', 'blue'] as const;
 export type ScreenKind = (typeof SCREEN_KINDS)[number];
@@ -86,6 +86,12 @@ export const KeyParamsSchema = z.object({
    * darker than about half the screen stays in the matte.
    */
   screenDetail: z.boolean().default(true),
+  /**
+   * The shadow pass (addendum 18): shadows cast on the screen, outside the
+   * subject, are taken out of the alpha and written as a matte of their own
+   * (density 0…1) for the compositor to multiply over the new background.
+   */
+  shadowPass: z.boolean().default(false),
 });
 export type KeyParams = z.infer<typeof KeyParamsSchema>;
 export const DEFAULT_KEY_PARAMS: KeyParams = KeyParamsSchema.parse({});
@@ -207,6 +213,14 @@ export type BgMatch = z.infer<typeof BgMatchSchema>;
 export type BgMatchInput = Omit<BgMatch, 'at' | 'by' | 'method' | 'strength'> & { strength?: number };
 
 export const KeyMetricsSchema = z.object({
+  /** With a subject prior: share of its solid core the key calls clean screen (the segmentation is off the subject). */
+  subjectDisagree: z.number().min(0).max(1).optional(),
+  /** With a subject prior: what the key alone calls solid outside it, relative to the subject's area (stands, a lost limb). */
+  subjectOutside: z.number().min(0).max(1).optional(),
+  /** With a subject prior: the confidence it was used with on this frame. */
+  subjectConfidence: z.number().min(0).max(1).optional(),
+  /** With the shadow pass: share of the frame that is shadow (density > 0.1). */
+  shadow: z.number().min(0).max(1).optional(),
   /** Share of pixels that keyed as clean screen. */
   screenCoverage: z.number().min(0).max(1),
   /** Share of the core whose raw key is not solid (spill or noise holes). */
@@ -260,6 +274,10 @@ export const KeyExportSchema = z.object({
   core: z.string().nullable().default(null),
   edge: z.string().nullable().default(null),
   lightWrap: z.string().nullable().default(null),
+  /** The shadow pass (16-bit PNG), when it was on. */
+  shadow: z.string().nullable().default(null),
+  /** The alpha + shadow EXR (`key_mattes`), when written. */
+  mattesExr: z.string().nullable().default(null),
   alphaExr: z.boolean().default(false),
   first: z.number().int().nonnegative(),
   last: z.number().int().nonnegative(),
@@ -281,12 +299,75 @@ export const KeyExportSchema = z.object({
 export type KeyExport = z.infer<typeof KeyExportSchema>;
 export type KeyExportInput = Omit<KeyExport, 'writtenAt' | 'by'>;
 
+export const KEY_SUBJECT_SOURCES = ['none', 'roto', 'auto'] as const;
+export type KeySubjectSource = (typeof KEY_SUBJECT_SOURCES)[number];
+/** auto: SAM 2 when its model and runtime are there, else Track. */
+export const KEY_SUBJECT_ENGINES = ['auto', 'sam2', 'track'] as const;
+export type KeySubjectEngine = (typeof KEY_SUBJECT_ENGINES)[number];
+
+/** A click on the subject (1) or off it (0), plate pixels. */
+export const KeySubjectPointSchema = z.object({ x: z.number().finite(), y: z.number().finite(), label: z.union([z.literal(0), z.literal(1)]) });
+export type KeySubjectPoint = z.infer<typeof KeySubjectPointSchema>;
+
+/** One run of the subject segmentation over the shot (Auto): which engine, from which seed, per-frame confidence. */
+export const KeySubjectRunSchema = z.object({
+  /** `sam2@sam2.1_hiera_tiny/onnx/2`, `track@1.2.0`. */
+  engine: z.string(),
+  /** The subject settings revision it was made with (`subject.revision`). */
+  revision: z.number().int().nonnegative(),
+  seedFrame: z.number().int().nonnegative(),
+  /** How the seed was found: the operator's box / clicks, or the key's own confident foreground. */
+  seededBy: z.enum(['operator', 'key']),
+  first: z.number().int().nonnegative(),
+  last: z.number().int().nonnegative(),
+  frames: z.array(z.object({ frame: z.number().int().nonnegative(), confidence: z.number().min(0).max(1) })).max(100_000),
+  meanConfidence: z.number().min(0).max(1),
+  /** Why the engine asked for was not used (SAM 2 not installed → Track). */
+  fallback: z.string().nullable().default(null),
+  taskVersion: z.number().int().positive(),
+  at: z.string(),
+  by: z.string(),
+});
+export type KeySubjectRun = z.infer<typeof KeySubjectRunSchema>;
+
+/**
+ * The subject segmentation used as the key's core prior (hybrid key,
+ * addendum 18): none, a roto part, or Auto (SAM 2 / Track run over the shot
+ * from a box or clicks, or seeded from the key's confident foreground). The
+ * masks are files in the key cache, never here.
+ */
+export const KeySubjectSchema = z.object({
+  source: z.enum(KEY_SUBJECT_SOURCES).default('none'),
+  /** For `roto`: the part (with its children). */
+  partId: z.string().min(1).max(32).nullable().default(null),
+  engine: z.enum(KEY_SUBJECT_ENGINES).default('auto'),
+  /** For `auto`: where the segmentation starts. Null frame: the shot's middle; no box or points: seeded from the key. */
+  seed: z
+    .object({
+      frame: z.number().int().nonnegative().nullable().default(null),
+      box: KeyRectSchema.nullable().default(null),
+      points: z.array(KeySubjectPointSchema).max(16).default([]),
+    })
+    .default({ frame: null, box: null, points: [] }),
+  /** Plate pixels inside the segmentation's edge where the key, not the segmentation, decides; widened where the key shows hair. */
+  marginPx: z.number().min(1).max(200).default(12),
+  /** Outside the segmentation (beyond twice the margin) acts as a soft garbage matte. */
+  outside: z.boolean().default(true),
+  /** Bumped when what the Auto segmentation is made from changes (seed, engine); a run made with an older one is stale. */
+  revision: z.number().int().nonnegative().default(0),
+  run: KeySubjectRunSchema.nullable().default(null),
+});
+export type KeySubject = z.infer<typeof KeySubjectSchema>;
+export const DEFAULT_KEY_SUBJECT: KeySubject = KeySubjectSchema.parse({});
+
 export const KeyDocumentSchema = z.object({
   formatVersion: z.literal(KEY_FORMAT_VERSION).default(KEY_FORMAT_VERSION),
   algorithm: z.object({ id: z.string(), version: z.string() }).default({ ...KEY_ALGORITHM }),
   screen: ScreenSchema.nullable().default(null),
   params: KeyParamsSchema.default(DEFAULT_KEY_PARAMS),
   links: z.array(KeyLinkSchema).max(32).default([]),
+  /** The subject segmentation as the core prior (addendum 18). */
+  subject: KeySubjectSchema.default(DEFAULT_KEY_SUBJECT),
   despill: DespillSchema.default({}),
   lightWrap: LightWrapSchema.default({}),
   match: z.object({ suggestion: BgMatchSchema.nullable().default(null), preview: z.boolean().default(false) }).default({ suggestion: null, preview: false }),

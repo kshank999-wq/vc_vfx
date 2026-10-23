@@ -41,6 +41,8 @@ export interface Settings {
   recent: string[];
   /** Where the SAM 2 model is downloaded from; empty means the default (addendum 04). */
   modelBaseUrl?: string;
+  /** Which SAM 2 model the AI engine uses: 'sam2.1_hiera_tiny' (default) or 'sam2_hiera_base_plus' (addendum 18). */
+  sam2Model?: string;
   /** Projects (by key) whose frames the AI assistant may see (addendum 07 §7). */
   aiFrames?: Record<string, boolean>;
 }

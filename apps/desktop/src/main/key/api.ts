@@ -7,6 +7,7 @@ import {
   keyMetadata,
   keyNames,
   keySettings,
+  keySubjectStale,
   keyTaskVersion,
   rotoTaskVersion,
   shotState,
@@ -14,6 +15,7 @@ import {
   type BgMatchInput,
   type KeyExportInput,
   type KeyRunResult,
+  type KeySubjectRunInput,
   type Project,
   type ScreenKind,
 } from '@vcvfx/domain';
@@ -29,7 +31,8 @@ import { outputRootProblem } from '../paths';
 import { workingSize as rotoWorkingSize } from '../roto/frames';
 import { MaskStore } from '../roto/store';
 import { backgroundSpec, keyFrameSource, keyWorkingSize, type KeySourceResult } from './frames';
-import { createKeyIO, type KeyIOJob, type RotoSource } from './io';
+import { createKeyIO, type KeyIOJob, type RotoSource, type SubjectSource } from './io';
+import type { Sam2Files } from '../roto/engines';
 import { runKeyJob } from './service';
 
 /**
@@ -48,6 +51,10 @@ export interface KeyEnv {
   /** The built worker (out/main/key-worker.js). */
   workerFile: string;
   generator: string;
+  /** SAM 2's files, checked (throws why not); absent or throwing: the Auto subject runs with Track. */
+  sam2?: () => Promise<Sam2Files>;
+  /** Whether SAM 2 can run here, for the panel. */
+  sam2Status?: () => Promise<{ available: boolean; reason: string | null; label: string }>;
 }
 
 const noFfmpeg = 'Keying reads frames with ffmpeg, and none was found. Reinstall VC VFX or set ffmpeg in Settings.';
@@ -67,8 +74,20 @@ function rotoSource(project: Project, shotId: string, projectKey: string, env: K
 function settingsOf(project: Project, shotId: string): KeySettings {
   const doc = shotState(project, shotId)?.key;
   if (!doc?.screen) throw new Error(noScreen);
-  return { screen: doc.screen, params: doc.params, links: doc.links, despill: doc.despill, lightWrap: doc.lightWrap };
+  return { screen: doc.screen, params: doc.params, links: doc.links, despill: doc.despill, lightWrap: doc.lightWrap, subject: { source: doc.subject.source, partId: doc.subject.partId, marginPx: doc.subject.marginPx, outside: doc.subject.outside } };
 }
+
+/** The Auto segmentation's masks, when it has run with the current seed (a stale run is not used). */
+function subjectSource(project: Project, shotId: string, projectKey: string, env: KeyEnv): SubjectSource | null {
+  const doc = shotState(project, shotId)?.key;
+  if (!doc || doc.subject.source !== 'auto' || !doc.subject.run || keySubjectStale(doc)) return null;
+  const confidence: Record<string, number> = {};
+  for (const f of doc.subject.run.frames) confidence[String(f.frame)] = f.confidence;
+  return { store: new MaskStore(env.keyCacheRoot, projectKey, shotId).root, version: doc.subject.run.taskVersion, confidence, removes: !doc.subject.run.engine.startsWith('track') };
+}
+
+/** The segmentation runs at most this wide (SAM 2 sees 1024² whatever it is given; Track is quicker smaller). */
+const SUBJECT_WIDTH = 1024;
 
 async function ioJob(project: Project, req: { shotId: string; projectKey: string }, outputRoot: string | null, env: KeyEnv, size: 'working' | 'plate' | { maxWidth: number }): Promise<{ job: KeyIOJob; src: Extract<KeySourceResult, { ok: true }>; pxScale: number }> {
   const src = await source(project, req.shotId, outputRoot, env);
@@ -77,7 +96,7 @@ async function ioJob(project: Project, req: { shotId: string; projectKey: string
   const workingWidth = shotState(project, req.shotId)?.key?.workingWidth ?? 1920;
   const dims = size === 'plate' ? plate : size === 'working' ? keyWorkingSize(plate, workingWidth) : keyWorkingSize(plate, Math.min(workingWidth, size.maxWidth));
   const bg = backgroundSpec(project, req.shotId, { ffmpeg: env.ffmpeg!, caps: env.caps }, src.space);
-  return { job: { frames: src.spec, size: dims, space: src.space, roto: rotoSource(project, req.shotId, req.projectKey, env), background: bg.spec }, src, pxScale: plate.width / dims.width };
+  return { job: { frames: src.spec, size: dims, space: src.space, roto: rotoSource(project, req.shotId, req.projectKey, env), background: bg.spec, subject: subjectSource(project, req.shotId, req.projectKey, env) }, src, pxScale: plate.width / dims.width };
 }
 
 export async function keySession(project: Project, shotId: string, outputRoot: string | null, env: KeyEnv): Promise<KeySessionInfo> {
@@ -90,7 +109,9 @@ export async function keySession(project: Project, shotId: string, outputRoot: s
   if (!src.ok) return { ...empty, reason: src.reason };
   const working = keyWorkingSize(src.spec.plate, state.key?.workingWidth ?? 1920);
   const bg = backgroundSpec(project, shotId, { ffmpeg: env.ffmpeg!, caps: env.caps }, src.space);
+  const sam2 = env.sam2Status ? await env.sam2Status().catch((e: Error) => ({ available: false, reason: e.message, label: 'SAM 2.1' })) : { available: false, reason: 'SAM 2 is not set up in this build.', label: 'SAM 2.1' };
   return {
+    subjectEngines: { sam2, track: { available: true } },
     available: true,
     reason: null,
     frames: src.spec.label,
@@ -181,6 +202,49 @@ export async function keyMatch(project: Project, req: { shotId: string; projectK
   return { gain: m.gain, offset: m.offset, exposureStops: Math.round(m.exposureStops * 1000) / 1000, samples: m.samples, confidence: m.confidence, frame };
 }
 
+/**
+ * The Auto subject segmentation (addendum 18): SAM 2 when it is installed and
+ * asked for (or Auto), else Track, run from the seed over the whole shot at
+ * ≤ 1024 px; the masks go to the key cache. The renderer records the result
+ * with `recordKeySubjectRun`.
+ */
+export async function keySubject(
+  project: Project,
+  req: { shotId: string; projectKey: string },
+  outputRoot: string | null,
+  env: KeyEnv,
+  o: { signal?: AbortSignal; onProgress?: (done: number, total: number, frame?: number) => void } = {},
+): Promise<KeySubjectRunInput> {
+  const state = shotState(project, req.shotId);
+  const doc = state?.key;
+  if (!state || !doc?.screen) throw new Error(noScreen);
+  if (doc.subject.source !== 'auto') throw new Error('Set the subject to Auto first.');
+  const settings = settingsOf(project, req.shotId);
+  const { job, pxScale, src } = await ioJob(project, req, outputRoot, env, { maxWidth: SUBJECT_WIDTH });
+  let engine: 'sam2' | 'track' = doc.subject.engine === 'track' ? 'track' : 'sam2';
+  let sam2: Sam2Files | undefined;
+  let fallback: string | null = null;
+  if (engine === 'sam2') {
+    try {
+      if (!env.sam2) throw new Error('SAM 2 is not set up in this build.');
+      sam2 = await env.sam2();
+    } catch (error) {
+      if (doc.subject.engine === 'sam2') throw error;
+      engine = 'track';
+      fallback = `SAM 2 not available (${(error as Error).message}); the Track engine was used`;
+    }
+  }
+  const seedFrame = doc.subject.seed.frame ?? Math.round((src.spec.first + src.spec.last) / 2);
+  const seed = doc.subject.seed.box || doc.subject.seed.points.length ? { box: doc.subject.seed.box, points: doc.subject.seed.points } : null;
+  const version = keyTaskVersion(state);
+  const out = await runKeyJob(
+    { type: 'subject', job: { io: { ...job, subject: null }, settings, engine, ...(sam2 ? { sam2 } : {}), seedFrame, seed, pxScale, cache: new MaskStore(env.keyCacheRoot, req.projectKey, req.shotId).root, version } },
+    { workerFile: env.workerFile, ...(o.signal ? { signal: o.signal } : {}), ...(o.onProgress ? { onProgress: o.onProgress } : {}) },
+  );
+  if (!out.subject) throw new Error('The segmentation produced nothing');
+  return { engine: out.subject.engine, revision: doc.subject.revision, seedFrame: Math.max(src.spec.first, Math.min(src.spec.last, seedFrame)), seededBy: out.subject.seededBy, first: src.spec.first, last: src.spec.last, frames: out.subject.frames, fallback };
+}
+
 /** "Repair with roto": the key of `frame` becomes the roto part's matte there (roto's working size). */
 export async function keySeedRoto(project: Project, req: { shotId: string; projectKey: string; partId: string; frame: number }, outputRoot: string | null, env: KeyEnv): Promise<{ confidence: number }> {
   const state = shotState(project, req.shotId);
@@ -246,6 +310,8 @@ export async function keyExport(
     core: options.core ? keyNames.corePattern(name, version) : null,
     edge: options.edge ? keyNames.edgePattern(name, version) : null,
     lightWrap: wrapWritten ? keyNames.lightWrapPattern(name, version) : null,
+    shadow: doc.params.shadowPass ? keyNames.shadowPattern(name, version) : null,
+    mattesExr: doc.params.shadowPass && options.alphaExr ? keyNames.mattesExrPattern(name, version) : null,
   };
   const meta = keyMetadata(project, req.shotId, {
     version,
@@ -276,6 +342,8 @@ export async function keyExport(
     core: files.core,
     edge: files.edge,
     lightWrap: files.lightWrap,
+    shadow: files.shadow,
+    mattesExr: files.mattesExr,
     alphaExr: options.alphaExr,
     first: plate.src.spec.first,
     last: plate.src.spec.last,
@@ -305,10 +373,13 @@ function readme(shot: string, version: number, encoding: string, files: Record<s
     files['core'] ? `  ${files['core']}   the core matte (solid inside).` : null,
     files['edge'] ? `  ${files['edge']}   the edge matte (soft edge, before the core and the garbage/holdout mattes).` : null,
     files['lightWrap'] ? `  ${files['lightWrap']}   a light-wrap layer, RGB half-float EXR: add it over your composite (it is not in the foreground).` : null,
+    files['shadow'] ? `  ${files['shadow']}   the shadow pass: 16-bit PNG, the density of shadows cast on the screen (0 none … 1 black), not in the alpha.` : null,
+    files['mattesExr'] ? `  ${files['mattesExr']}   half-float EXR with the alpha (A) and the shadow density (shadow.A) as layers.` : null,
     `  ${keyNames.metadata(shot, version)}   the screen colour, every setting, the suggested background match and per-frame confidence.`,
     '',
     'Comping it',
     '  over = foreground + (1 − alpha) × background   (the foreground is already premultiplied).',
+    files['shadow'] ? '  With the shadow pass: background × (1 − shadow) before the over (a Merge multiply in Nuke; tint or soften the shadow to taste).' : null,
     '  The suggested colour match in the JSON is a suggestion; it is not applied to these files.',
     '',
     approved ? 'This key version is approved.' : 'This key version is not approved yet: it is a prep deliverable for review.',

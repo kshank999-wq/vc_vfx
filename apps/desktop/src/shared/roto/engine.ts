@@ -40,6 +40,18 @@ export interface KeyRequest {
    */
   reference: Mask | null;
   settings: EngineSettings;
+  /**
+   * A box and/or clicked points on the subject, in working pixels (the key's
+   * subject seed, addendum 18). SAM 2 prompts with them directly; the Track
+   * engine needs strokes, so its callers turn a seed into strokes.
+   */
+  prompt?: SubjectPrompt;
+}
+
+export interface SubjectPrompt {
+  box?: { x0: number; y0: number; x1: number; y1: number } | null;
+  /** label 1: on the subject, 0: not the subject. */
+  points?: { x: number; y: number; label: 0 | 1 }[];
 }
 
 export interface StepRequest {

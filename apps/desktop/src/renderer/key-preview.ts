@@ -1,8 +1,11 @@
-import { parseProject, shotState, backgroundReferences, type KeyRunResult } from '@vcvfx/domain';
+import { parseProject, shotState, backgroundReferences, keySubjectStale, type KeyRunResult } from '@vcvfx/domain';
 import type { ApiResult, JobProgress } from '../shared/bridge';
 import type { KeyBridge, KeyFrameView, KeySessionInfo, KeyShotInput } from '../shared/key/bridge-types';
 import { analysisFrames, detectShotScreen, runKey, shotScreenModel, ShotKeyer, type KeyIO, type KeySettings } from '../shared/key/engine';
-import { lumaWeights, resizeLinear, workingSpace, type LinearImage } from '../shared/key/linear';
+import { lumaWeights, resizeLinear, toDisplay, workingSpace, type LinearImage } from '../shared/key/linear';
+import { runSubject, seedFromKey, seedFromOperator } from '../shared/key/subject-run';
+import { TrackEngine } from '../shared/roto/track';
+import { maskToPlane } from '../shared/roto/image';
 import { estimateMatch, matchSamples } from '../shared/key/look';
 import { sampleColour } from '../shared/key/screen';
 import { greenScreenScene, type GreenScreenScene } from '../shared/key/synthetic';
@@ -36,12 +39,16 @@ export interface KeyPreview extends KeyBridge {
 export function createKeyPreview(options: { desktopOnly: (what: string) => string; progress: (p: JobProgress) => void }): KeyPreview {
   let scene: GreenScreenScene | null = null;
   const sceneFor = (frames: number) => {
-    if (!scene || scene.frames !== frames) scene = greenScreenScene({ ...PREVIEW_KEY, frames, badFrame: Math.round(frames * 0.62) });
+    // The figure's trousers are a white suit lit by the screen's bounce, with a deep cast shadow beside it
+    // (the astronaut problem, addendum 18): the hybrid key's subject prior and shadow pass have work to do.
+    if (!scene || scene.frames !== frames) scene = greenScreenScene({ ...PREVIEW_KEY, frames, badFrame: Math.round(frames * 0.62), screenLitSuit: 0.4, castShadow: 0.6, travel: 0.2 });
     return scene;
   };
   const frames = new Map<number, LinearImage>();
   const jobs = new Map<string, AbortController>();
   const seeds = new Map<string, Float32Array>();
+  /** The Auto subject segmentation's masks, by shot and frame, with the run's revision. */
+  const subjects = new Map<string, { revision: number; masks: Map<number, Float32Array> }>();
   const keyers = new Map<string, ShotKeyer>();
   const space = workingSpace('acescg');
   const luma = lumaWeights('ap1');
@@ -79,6 +86,16 @@ export function createKeyPreview(options: { desktopOnly: (what: string) => strin
       if (!seed) return null;
       return w === PREVIEW_KEY.width && h === PREVIEW_KEY.height ? seed : resizePlane(seed, PREVIEW_KEY.width, PREVIEW_KEY.height, w, h);
     },
+    subject: async (f, w, h) => {
+      const doc = c.state.key;
+      if (!doc || doc.subject.source !== 'auto' || !doc.subject.run || keySubjectStale(doc)) return null;
+      const hit = subjects.get(c.state.shotId);
+      const m = hit && hit.revision === doc.subject.run.revision ? hit.masks.get(f) : undefined;
+      const conf = doc.subject.run.frames.find((r) => r.frame === f)?.confidence;
+      if (!m || conf === undefined) return null;
+      // The preview's segmentation is Track's: it only makes the core solid (see subject.ts `removes`).
+      return { matte: w === PREVIEW_KEY.width && h === PREVIEW_KEY.height ? m : resizePlane(m, PREVIEW_KEY.width, PREVIEW_KEY.height, w, h), confidence: conf, removes: !doc.subject.run.engine.startsWith('track') };
+    },
     background: async (w, h) => {
       const bg = c.state.key?.despill.background;
       if (!bg || bg.kind === 'none') return null;
@@ -90,11 +107,11 @@ export function createKeyPreview(options: { desktopOnly: (what: string) => strin
   const settingsOf = (c: Ctx): KeySettings | string => {
     const doc = c.state.key;
     if (!doc?.screen) return 'Pick the screen colour first: Auto key, or the eyedropper.';
-    return { screen: doc.screen, params: doc.params, links: doc.links, despill: doc.despill, lightWrap: doc.lightWrap };
+    return { screen: doc.screen, params: doc.params, links: doc.links, despill: doc.despill, lightWrap: doc.lightWrap, subject: { source: doc.subject.source, partId: doc.subject.partId, marginPx: doc.subject.marginPx, outside: doc.subject.outside } };
   };
 
   const keyerFor = async (c: Ctx, s: KeySettings): Promise<ShotKeyer> => {
-    const key = JSON.stringify([c.state.shotId, s, c.scene.frames]);
+    const key = JSON.stringify([c.state.shotId, s, c.scene.frames, c.state.key?.subject.run?.at ?? null]);
     let k = keyers.get(key);
     if (!k) {
       k = new ShotKeyer(s, await shotScreenModel(io(c), s, c.timeline.first, c.timeline.last));
@@ -133,6 +150,7 @@ export function createKeyPreview(options: { desktopOnly: (what: string) => strin
       first: c.timeline.first,
       last: c.timeline.last,
       references,
+      subjectEngines: { sam2: { available: false, reason: options.desktopOnly('SAM 2 runs with its model on disk.'), label: 'SAM 2.1' }, track: { available: true } },
       background: bg && bg.kind !== 'none' ? { available: true, label: bg.kind === 'frame' ? `frame ${bg.frame}` : `${bg.label || 'background'} (sample: a night street)`, reason: null } : { available: false, label: '', reason: null },
     };
   };
@@ -220,6 +238,41 @@ export function createKeyPreview(options: { desktopOnly: (what: string) => strin
       const out = await k.keyAt(i, input.frame, img, { pxScale: pxScale(c), luma, foreground: false });
       seeds.set(`${input.partId}|${input.frame}`, out.alpha);
       return ok({ confidence: Math.max(0.3, out.confidence) });
+    },
+
+    keySubject: async (input) => {
+      const c = context(input.text, input.shotId);
+      if ('error' in c) return fail(c.error ?? 'Unavailable');
+      const s = settingsOf(c);
+      if (typeof s === 'string') return fail(s);
+      const doc = c.state.key!;
+      if (doc.subject.source !== 'auto') return fail('Set the subject to Auto first.');
+      if (doc.subject.engine === 'sam2') return fail(options.desktopOnly('SAM 2 runs with its model on disk.'));
+      return job(input.jobId, `Finding the subject in ${input.shotId}`, async (signal, progress) => {
+        const { width: w, height: h } = PREVIEW_KEY;
+        const i = io(c, signal);
+        const from = Math.max(c.timeline.first, Math.min(c.timeline.last, doc.subject.seed.frame ?? Math.round((c.timeline.first + c.timeline.last) / 2)));
+        let seed = seedFromOperator(doc.subject.seed.box, doc.subject.seed.points, pxScale(c), w, h);
+        if (!seed) {
+          const plain: KeySettings = { ...s, subject: { source: 'none', partId: null, marginPx: 12, outside: true } };
+          const k = new ShotKeyer(plain, await shotScreenModel(i, plain, c.timeline.first, c.timeline.last));
+          const out = await k.keyAt(i, from, await i.frame(from), { pxScale: pxScale(c), luma, foreground: false });
+          seed = seedFromKey(out.alpha, w, h);
+          if (!seed) throw new Error(`The key finds nothing solid on frame ${from} to start the subject from. Draw a box round the subject.`);
+        }
+        const masks = new Map<number, Float32Array>();
+        const frames = await runSubject(new TrackEngine(), seed, from, { first: c.timeline.first, last: c.timeline.last }, {
+          signal,
+          frame: async (f) => {
+            const img = await i.frame(f);
+            return { width: img.width, height: img.height, data: toDisplay(img.data, img.width * img.height, space) };
+          },
+          put: async (f, m) => void masks.set(f, maskToPlane(m)),
+          progress,
+        });
+        subjects.set(c.state.shotId, { revision: doc.subject.revision, masks });
+        return { run: { engine: `track@${new TrackEngine().version}`, revision: doc.subject.revision, seedFrame: from, seededBy: seed.seededBy, first: c.timeline.first, last: c.timeline.last, frames, fallback: doc.subject.engine === 'auto' ? 'SAM 2 is the desktop app’s; the Track engine was used' : null } };
+      });
     },
 
     keyExport: async () => fail(options.desktopOnly('the key is written into the shot package on disk.')),

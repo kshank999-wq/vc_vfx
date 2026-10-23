@@ -118,6 +118,9 @@ describe('the Key workspace', () => {
       holdout: null,
       repair: null,
       spill: null,
+      subject: Uint8Array.from([0, 0, 255, 255, 0, 0, 255, 255]),
+      subjectConfidence: 0.9,
+      shadow: Uint8Array.from([200, 0, 0, 0, 0, 0, 0, 0]),
       confidence: 1,
       metrics: { screenCoverage: 0.5, coreNoise: 0, edgeActivity: 0.25, holes: 0, residual: 0 },
       screen: [0.1, 0.4, 0.1] as [number, number, number],
@@ -128,6 +131,11 @@ describe('the Key workspace', () => {
     expect(composeMode(view, 'alpha', { on: false, x: 0 })[4]).toBe(128);
     const edge = composeMode(view, 'edge', { on: false, x: 0 });
     expect(edge[4]).toBeGreaterThan(edge[8]! * 0.9); // the soft pixel is highlighted
+    // Subject: the segmentation tinted cyan; Shadow: the density white on black.
+    const subj = composeMode(view, 'subject', { on: false, x: 0 });
+    expect(subj[4 * 2 + 2]).toBeGreaterThan(subj[4 * 2]!);
+    expect(composeMode(view, 'shadow', { on: false, x: 0 })[0]).toBe(200);
+    expect(composeMode(view, 'shadow', { on: false, x: 0 })[4]).toBeLessThan(30);
     const wiped = composeMode(view, 'over', { on: true, x: 0.5 });
     expect([wiped[0], wiped[8]]).toEqual([10, 30]);
   });

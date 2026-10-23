@@ -20,14 +20,14 @@ import type { RotoEngineInfo, RotoMaskData, RotoSession, ViewerFrame } from '../
 import type { FfmpegCaps } from '../../shared/ffmpeg-args';
 import { resizeMask, type Mask } from '../../shared/roto/image';
 import { refineMatte } from '../../shared/roto/refine';
-import { SAM2_VERSION } from '../../shared/roto/sam2';
+import { sam2EngineVersion } from '../../shared/roto/sam2';
 import { TRACK_VERSION } from '../../shared/roto/track';
 import type { FrameCache } from '../frame-cache';
 import { shotFolder } from '../package-shot';
 import { outputRootProblem } from '../paths';
 import { sourceFiles } from '../package-shot';
 import { viewerFrame } from '../viewer';
-import { modelDir, modelStatus, SAM2_MODEL, verifyModel } from './models';
+import { modelDir, modelStatus, sam2Model, verifyModel } from './models';
 import { loadOrt } from './sam2-ort';
 import { rotoFrameSource, workingSize, type FrameSourceResult } from './frames';
 import { runExportJob, runRotoJob } from './service';
@@ -50,6 +50,8 @@ export interface RotoEnv {
   packaged: boolean;
   /** Where onnxruntime-node may be (sam2-ort.ts `ortCandidates`). */
   ort: string[];
+  /** The SAM 2 model chosen in Settings (models.ts `sam2Model`); empty: the default. */
+  sam2Model?: string;
   /** The built worker (out/main/roto-worker.js). */
   workerFile: string;
   generator: string;
@@ -63,19 +65,20 @@ async function source(project: Project, shotId: string, outputRoot: string | nul
 }
 
 /** Where SAM 2.1's model files are, checked (the model verified in a packaged build); throws why not. */
-export async function sam2Files(env: Pick<RotoEnv, 'userData' | 'packaged' | 'ort'>): Promise<{ ort: string[]; encoder: string; decoder: string }> {
-  const status = await modelStatus(env.userData, env.packaged);
+export async function sam2Files(env: Pick<RotoEnv, 'userData' | 'packaged' | 'ort' | 'sam2Model'>): Promise<{ ort: string[]; encoder: string; decoder: string; model: string }> {
+  const model = sam2Model(env.sam2Model);
+  const status = await modelStatus(env.userData, env.packaged, model);
   if (!status.usable) throw new Error(status.reason ?? 'The SAM 2 model is not available.');
   if (env.packaged) {
-    const verified = await verifyModel(env.userData);
+    const verified = await verifyModel(env.userData, model);
     if (!verified.ok) throw new Error(verified.reason);
   }
-  const dir = modelDir(env.userData, SAM2_MODEL);
-  return { ort: env.ort, encoder: join(dir, SAM2_MODEL.files[0]!.name), decoder: join(dir, SAM2_MODEL.files[1]!.name) };
+  const dir = modelDir(env.userData, model);
+  return { ort: env.ort, encoder: join(dir, model.files[0]!.name), decoder: join(dir, model.files[1]!.name), model: model.id };
 }
 
-export async function engineInfo(env: Pick<RotoEnv, 'userData' | 'packaged' | 'ort'>): Promise<RotoEngineInfo[]> {
-  const status = await modelStatus(env.userData, env.packaged);
+export async function engineInfo(env: Pick<RotoEnv, 'userData' | 'packaged' | 'ort' | 'sam2Model'>): Promise<RotoEngineInfo[]> {
+  const status = await modelStatus(env.userData, env.packaged, sam2Model(env.sam2Model));
   const ort = loadOrt(env.ort);
   const samReason = !ort.ok ? ort.reason : status.reason;
   return [
@@ -83,7 +86,7 @@ export async function engineInfo(env: Pick<RotoEnv, 'userData' | 'packaged' | 'o
     {
       id: 'sam2',
       label: 'SAM 2.1 (AI)',
-      version: SAM2_VERSION,
+      version: sam2EngineVersion(sam2Model(env.sam2Model).id),
       available: ort.ok && status.usable,
       reason: ort.ok && status.usable ? null : samReason,
       model: { label: status.label, approxBytes: status.approxBytes, present: status.present, pinned: status.pinned, downloadable: ort.ok && (status.pinned || !env.packaged) && !status.present },
