@@ -420,6 +420,7 @@ function triangulateNew(w: Work, frames: number[], options: { minAngle: number; 
       return { R, t, C: centreOf(R, t), u: uv[0], v: uv[1] };
     });
     const tp = triangulate(w.intr, views);
+    if (process.env['VCVFX_DEBUG_SOLVE'] && options.only && made < 1000) (globalThis as unknown as { __dbg: unknown[] }).__dbg = [...(((globalThis as unknown as { __dbg?: unknown[] }).__dbg) ?? []), tp ? [Math.round(tp.rms * 100) / 100, Math.round((tp.angle * 180) / Math.PI * 100) / 100] : null];
     if (!tp || (!w.nodal && tp.angle < options.minAngle) || tp.rms > options.maxRms) continue;
     // In front of every view it is seen in.
     let front = true;
@@ -799,6 +800,7 @@ export async function solveTracks(td: TrackData, settings: SolveSettings, ctx: S
       baIterations += r0.iterations;
       rejectOutliers(w, [pair.a, pair.b], outlierPx);
       pruneTracks(w, [pair.a, pair.b]);
+      if (process.env['VCVFX_DEBUG_SOLVE']) console.log('DEBUG init pair', pair.a, pair.b, 'inliers', inlierTracks.size, 'points', Array.from(w.hasX).reduce((x, y) => x + y, 0), 'BA rms', r0.rms, 'f', w.intr.f, 'score', best.score, 't', best.t);
       kfDone.push(pair.a, pair.b);
 
       // ----- register keyframes outward -----------------------------------

@@ -3,7 +3,7 @@ import type { TextureReference, TextureRegion } from '@vcvfx/domain';
 import { lumaWeights } from '../key/linear';
 import { buildTextures } from '../texture/engine';
 import { photoIntrinsics } from '../texture/geometry';
-import { cornerAspect, desqueezeCorners, focalAspect, pinholeCorners } from '../texture/rectify';
+import { cornerAspect, desqueezeCorners, focalAspect, pinholeCorners, rectangleFocal } from '../texture/rectify';
 import { SAMPLE_PHOTOS, regionCorners, renderPhoto, truthTexture, type SynthCamera } from '../texture/synthetic';
 
 /**
@@ -67,4 +67,34 @@ describe('texture aspect from a squeezed picture', () => {
     expect(Math.abs(focal.metrics.width / focal.metrics.height / truthAspect - 1)).toBeLessThan(0.02);
     void truthTexture;
   }, 60_000);
+
+  it('finds the focal length from the rectangle itself (both vanishing points), only on de-squeezed corners', () => {
+    // A 1.6 × 1 card turned 35° about y and tilted 20° about x, 4 m away; f = 1500 de-squeezed px; stored at 2×.
+    const a = 2;
+    const f = 1500;
+    const W = 960;
+    const H = 1080;
+    const cx = (W - 1) / 2;
+    const cy = (H - 1) / 2;
+    const ry = (35 * Math.PI) / 180;
+    const rx = (20 * Math.PI) / 180;
+    const corners3d = [[-0.8, -0.5], [0.8, -0.5], [0.8, 0.5], [-0.8, 0.5]].map(([x, y]) => {
+      // rotate about y then x, push to z = 4
+      const x1 = x! * Math.cos(ry);
+      const z1 = -x! * Math.sin(ry);
+      const y2 = y! * Math.cos(rx) - z1 * Math.sin(rx);
+      const z2 = y! * Math.sin(rx) + z1 * Math.cos(rx) + 4;
+      return [x1, y2, z2] as const;
+    });
+    const stored = corners3d.map(([X, Y, Z]) => [(f * X) / Z / a + cx, (f * Y) / Z + cy] as [number, number]);
+    const phys = desqueezeCorners(stored, a);
+    const fr = rectangleFocal(phys, cx * a, cy)!;
+    expect(Math.abs(fr / f - 1)).toBeLessThan(1e-6);
+    expect(focalAspect(phys, fr, cx * a, cy)).toBeCloseTo(1.6, 6);
+    // Read as square pixels, the same corners give no consistent answer.
+    const wrong = rectangleFocal(stored, cx, cy);
+    const wrongAspect = wrong ? focalAspect(stored, wrong, cx, cy) : null;
+    console.log(`rectangle focal: de-squeezed ${fr.toFixed(2)} px (true ${f}), aspect 1.6; read squeezed: focal ${wrong?.toFixed(1) ?? 'none'}, aspect ${wrongAspect?.toFixed(3) ?? 'none'}`);
+    expect(wrongAspect === null || Math.abs(wrongAspect - 1.6) > 0.1).toBe(true);
+  });
 });
