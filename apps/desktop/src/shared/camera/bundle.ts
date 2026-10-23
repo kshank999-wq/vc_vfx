@@ -11,7 +11,8 @@ import { rodrigues, type Intrinsics } from './geometry';
  *    fixing, nodal shots hold every translation).
  *  - Points: 3 parameters each; a point can be fixed (a surveyed control
  *    point) or carry a prior (a LiDAR correspondence, σ in world units).
- *  - Intrinsics shared by the shot: f, k1, k2, k3, p1, p2, each optional.
+ *  - Intrinsics shared by the shot: f, k1, k2, k3, p1, p2, each optional;
+ *    the pixel aspect a (fx = f / a) is held — it is metadata, not solved.
  *  - Robust loss on each observation's squared residual: Huber or Cauchy
  *    (iteratively reweighted).
  *
@@ -125,7 +126,9 @@ function projectWithJacobians(
   const radial = 1 + r2 * (k1 + r2 * (k2 + r2 * k3));
   const xd = xn * radial + 2 * p1 * xn * yn + p2 * (r2 + 2 * xn * xn);
   const yd = yn * radial + p1 * (r2 + 2 * yn * yn) + 2 * p2 * xn * yn;
-  const u = f * xd + intr.cx;
+  // Pixel aspect (addendum 17): fx = f / a, fy = f.
+  const ia = 1 / (intr.a ?? 1);
+  const u = f * xd * ia + intr.cx;
   const v = f * yd + intr.cy;
   if (jc || jp || ji) {
     const dr = k1 + r2 * (2 * k2 + 3 * r2 * k3);
@@ -134,9 +137,9 @@ function projectWithJacobians(
     const d21 = d12;
     const d22 = radial + 2 * yn * yn * dr + 6 * p1 * yn + 2 * p2 * xn;
     // d(u,v)/d(Xc): f·D·[[1/Z, 0, −X/Z²], [0, 1/Z, −Y/Z²]]
-    const a11 = f * d11 * iz;
-    const a12 = f * d12 * iz;
-    const a13 = -f * (d11 * xn + d12 * yn) * iz;
+    const a11 = f * d11 * iz * ia;
+    const a12 = f * d12 * iz * ia;
+    const a13 = -f * (d11 * xn + d12 * yn) * iz * ia;
     const a21 = f * d21 * iz;
     const a22 = f * d22 * iz;
     const a23 = -f * (d21 * xn + d22 * yn) * iz;
@@ -193,7 +196,7 @@ function projectWithJacobians(
             dv = f * 2 * xn * yn;
             break;
         }
-        ji[k] = du;
+        ji[k] = du * ia;
         ji[n + k] = dv;
       });
     }

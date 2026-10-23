@@ -9,6 +9,7 @@ export * from './commerce.js';
 export { SAMPLE_HANDOFF } from './sample.js';
 export * from './vcdit.js';
 export * from './color.js';
+export * from './pixel-aspect.js';
 export * from './roto.js';
 export * from './camtrack.js';
 export * from './key.js';

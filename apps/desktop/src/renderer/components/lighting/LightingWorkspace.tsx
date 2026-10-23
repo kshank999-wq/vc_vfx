@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
+import { AspectTag, FrameBox, overlayAspect, useShotAspect, useStageSize } from '../FrameBox';
+import { fitFrame } from '../../frame-fit';
 import {
   LIGHT_ROLES,
   LIGHT_ROLE_LABELS,
@@ -790,7 +792,7 @@ function drawRgb(canvas: HTMLCanvasElement | null, w: number, h: number, rgb: Ui
 
 const rangesOf = (l: RigLight) => (l.estimate ? { azimuth: l.estimate.azimuth, elevation: l.estimate.elevation } : null);
 
-function FrameOverlay({ ctl, w, h }: { ctl: LightingController; w: number; h: number }) {
+function FrameOverlay({ ctl, w, h, fit = 'xMidYMid meet' }: { ctl: LightingController; w: number; h: number; fit?: 'none' | 'xMidYMid meet' }) {
   const a = ctl.doc?.analysis ?? null;
   const c = a?.subject.centre ?? { x: 0.5, y: 0.55 };
   const centre = { x: c.x * w, y: c.y * h };
@@ -814,7 +816,7 @@ function FrameOverlay({ ctl, w, h }: { ctl: LightingController; w: number; h: nu
     }
   });
   return (
-    <svg className="key-overlay lt-overlay" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="xMidYMid meet">
+    <svg className="key-overlay lt-overlay" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio={fit}>
       {(a?.marks ?? []).map((m, i) => {
         const x = m.x * w;
         const y = m.y * h;
@@ -990,6 +992,8 @@ export function LightingViewer({ ctl }: { ctl: LightingController }) {
   const { view, setView, frameView, refView, ref, overlays, wipe } = ctl;
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const stageRef = useRef<HTMLDivElement | null>(null);
+  const stageSize = useStageSize(stageRef);
+  const aspect = useShotAspect(ctl.props.project, ctl.props.shotId);
   const [circleDrag, setCircleDrag] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
   const showRef = view === 'reference';
   const shown = showRef ? refView : frameView;
@@ -1009,15 +1013,21 @@ export function LightingViewer({ ctl }: { ctl: LightingController }) {
 
   const vw = shown?.width ?? 1;
   const vh = shown?.height ?? 1;
+  // Pixel aspect (addendum 17): the analysis frame comes de-squeezed already ("baked"); a plate reference comes as stored;
+  // a still is square. The box is the stored shape × the display aspect, so both show alike.
+  const plate = ctl.session?.plate ?? null;
+  const baked = !showRef && plate ? vw / vh / (plate.width / plate.height) : 1;
+  const display = showRef && ref?.from !== 'plate' ? 1 : aspect.display;
+  const boxSize = { width: vw / baked, height: vh };
   const toView = (e: ReactPointerEvent) => {
     const el = stageRef.current;
     if (!el || !shown) return null;
     const rect = el.getBoundingClientRect();
-    const s = Math.min(rect.width / vw, rect.height / vh) || 1;
-    const ox = (rect.width - vw * s) / 2;
-    const oy = (rect.height - vh * s) / 2;
-    return { x: (e.clientX - rect.left - ox) / s, y: (e.clientY - rect.top - oy) / s };
+    const b = fitFrame({ width: rect.width, height: rect.height }, boxSize, display);
+    return { x: ((e.clientX - rect.left - b.left) / (b.scale * display)) * baked, y: (e.clientY - rect.top - b.top) / b.scale };
   };
+  // View pixels are de-squeezed by this much on screen (circles drawn as ellipses of rx = r / squeeze).
+  const shownSqueeze = display / baked;
   // Reference pixels per view pixel (balls are marked in their own picture's pixels).
   const refScale = ref && refView ? (ref.from === 'plate' ? (ctl.session?.plate?.width ?? refView.width) / refView.width : (ref.width ?? refView.width) / refView.width) : 1;
   const onDown = (e: ReactPointerEvent) => {
@@ -1040,7 +1050,8 @@ export function LightingViewer({ ctl }: { ctl: LightingController }) {
     if (!circleDrag || !ref) return;
     const d = circleDrag;
     setCircleDrag(null);
-    const r = Math.hypot(d.x1 - d.x0, d.y1 - d.y0) / 2;
+    // The radius measured on the picture as shown, in vertical pixels (a ball is round de-squeezed).
+    const r = Math.hypot((d.x1 - d.x0) * shownSqueeze, d.y1 - d.y0) / 2;
     if (r < 4) return;
     ctl.actions.setCircle(ref.id, { cx: ((d.x0 + d.x1) / 2) * refScale, cy: ((d.y0 + d.y1) / 2) * refScale, r: r * refScale });
   };
@@ -1069,10 +1080,11 @@ export function LightingViewer({ ctl }: { ctl: LightingController }) {
       </div>
       <div className="lt-body">
         <div ref={stageRef} className={`key-stage lt-stage${showRef && ref?.kind !== 'hdri' ? ' tool-box' : view === 'wipe' ? ' tool-wipe' : ''}`} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp}>
+          <FrameBox stage={stageSize} size={shown ? boxSize : null} pixelAspect={display}>
           {shown ? <canvas ref={canvasRef} className="key-canvas" aria-label={showRef ? `Reference ${ref?.name ?? ''}` : `Frame ${frameView?.frame ?? ''} ${LIGHTING_VIEW_LABELS[view]}`} /> : null}
-          {shown && !showRef && overlays ? <FrameOverlay ctl={ctl} w={vw} h={vh} /> : null}
+          {shown && !showRef && overlays ? <FrameOverlay ctl={ctl} w={vw} h={vh} fit={overlayAspect(stageSize)} /> : null}
           {shown && view === 'wipe' ? (
-            <svg className="key-overlay" viewBox={`0 0 ${vw} ${vh}`} preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+            <svg className="key-overlay" viewBox={`0 0 ${vw} ${vh}`} preserveAspectRatio={overlayAspect(stageSize)} aria-hidden="true">
               <line className="key-wipe" x1={wipe * vw} x2={wipe * vw} y1={0} y2={vh} />
               <text x={wipe * vw - 8} y={18} textAnchor="end" className="lt-wipe-label">
                 plate
@@ -1083,11 +1095,16 @@ export function LightingViewer({ ctl }: { ctl: LightingController }) {
             </svg>
           ) : null}
           {shown && showRef && ref && ref.kind !== 'hdri' ? (
-            <svg className="key-overlay" viewBox={`0 0 ${vw} ${vh}`} preserveAspectRatio="xMidYMid meet" aria-hidden="true">
-              {ref.circle && !circleDrag ? <circle className="lt-ball-mark" cx={ref.circle.cx / refScale} cy={ref.circle.cy / refScale} r={ref.circle.r / refScale} /> : null}
-              {circleDrag ? <circle className="lt-ball-mark drawing" cx={(circleDrag.x0 + circleDrag.x1) / 2} cy={(circleDrag.y0 + circleDrag.y1) / 2} r={Math.hypot(circleDrag.x1 - circleDrag.x0, circleDrag.y1 - circleDrag.y0) / 2} /> : null}
+            <svg className="key-overlay" viewBox={`0 0 ${vw} ${vh}`} preserveAspectRatio={overlayAspect(stageSize)} aria-hidden="true">
+              {ref.circle && !circleDrag ? <ellipse className="lt-ball-mark" cx={ref.circle.cx / refScale} cy={ref.circle.cy / refScale} rx={ref.circle.r / refScale / shownSqueeze} ry={ref.circle.r / refScale} /> : null}
+              {circleDrag ? (() => {
+                const r = Math.hypot((circleDrag.x1 - circleDrag.x0) * shownSqueeze, circleDrag.y1 - circleDrag.y0) / 2;
+                return <ellipse className="lt-ball-mark drawing" cx={(circleDrag.x0 + circleDrag.x1) / 2} cy={(circleDrag.y0 + circleDrag.y1) / 2} rx={r / shownSqueeze} ry={r} />;
+              })() : null}
             </svg>
           ) : null}
+          </FrameBox>
+          {shown && (!showRef || ref?.from === 'plate') ? <AspectTag aspect={aspect} /> : null}
           {message ? <div className="key-message">{message}</div> : null}
           {ctl.loading && !message ? <div className="key-busy" aria-live="polite">Loading…</div> : null}
           {stale ? <div className="key-hint cp-stale">Settings changed since the analysis: analyse again (step 2).</div> : null}

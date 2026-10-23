@@ -138,13 +138,15 @@ differs); the run records say which made a matte.
 
 ## 4. What remains, by how much it matters to a facility
 
-1. **Non-square pixels are not modelled anywhere.** The DVCPRO HD plates
-   (1280×1080 at 1.5, 960×720 at 1.333) — and any anamorphic camera without
-   a database mode — are solved, rectified and shown as square pixels: the
-   camera solver's focal is one value (`geometry.ts`: squeeze recorded, not
-   modelled), textures come out squeezed (aspect 0.69 on the card), the
-   viewer shows the squeezed picture. Needs a pixel aspect in the handoff /
-   shot, a separate fx, fy in the solver and every exporter's film back.
+1. ~~**Non-square pixels are not modelled anywhere.**~~ Done in
+   [addendum 17](addendum-17-pixel-aspect.md): the pixel aspect comes from the
+   shot's override, the handoff, the camera database or the clip, and is
+   modelled in the solver (fx = f / a), textures, lighting, the comp, the
+   viewer and every export. On this footage: the survey solves 146 / 146 at
+   1.05 px (was 59 / 146 at 1.48), the card's texture 1.03 (was 0.69). Still
+   open from it: the file rarely says (none of these PNGs carry `pHYs`), so
+   1280 × 1080 and 960 × 720 are flagged, not changed — someone must set 1.5;
+   brushes paint circles in stored pixels.
 2. **Keys of bright, screen-lit costumes.** The astronaut's suit, lit by the
    green floor's bounce, has the screen's chromaticity at 40 % of its
    brightness: by colour alone it is a shadow on the screen. A chromaticity

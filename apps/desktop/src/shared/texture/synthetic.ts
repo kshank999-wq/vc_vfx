@@ -43,10 +43,13 @@ export interface SynthSurface {
 export interface SynthCamera {
   eye: V3;
   target: V3;
-  /** Horizontal field of view, degrees. */
+  /** Horizontal field of view (of the de-squeezed picture), degrees. */
   fov: number;
+  /** Stored pixels. */
   width: number;
   height: number;
+  /** Stored pixel width / height (an anamorphic or DV frame); 1 when absent. */
+  pixelAspect?: number;
   k1?: number;
   k2?: number;
   roll?: number;
@@ -200,8 +203,9 @@ export function cameraOf(c: SynthCamera): { R: number[]; t: V3; intr: Intrinsics
   }
   const R = [...right, ...down, ...f];
   const t: V3 = [-dot3(right, c.eye), -dot3(down, c.eye), -dot3(f, c.eye)];
-  const fpx = c.width / 2 / Math.tan((c.fov * Math.PI) / 360);
-  return { R, t, C: c.eye, intr: { f: fpx, cx: (c.width - 1) / 2, cy: (c.height - 1) / 2, k1: c.k1 ?? 0, k2: c.k2 ?? 0, k3: 0, p1: 0, p2: 0 } };
+  const a = c.pixelAspect ?? 1;
+  const fpx = (c.width * a) / 2 / Math.tan((c.fov * Math.PI) / 360);
+  return { R, t, C: c.eye, intr: { f: fpx, cx: (c.width - 1) / 2, cy: (c.height - 1) / 2, k1: c.k1 ?? 0, k2: c.k2 ?? 0, k3: 0, p1: 0, p2: 0, ...(a !== 1 ? { a } : {}) } };
 }
 
 /** Where a canonical point is in the (distorted) photo. */
@@ -211,7 +215,7 @@ export function projectPoint(c: SynthCamera, P: ArrayLike<number>): [number, num
   const y = R[3]! * P[0]! + R[4]! * P[1]! + R[5]! * P[2]! + t[1];
   const z = R[6]! * P[0]! + R[7]! * P[1]! + R[8]! * P[2]! + t[2];
   const [xd, yd] = distort(intr, x / z, y / z);
-  return [intr.f * xd + intr.cx, intr.f * yd + intr.cy];
+  return [(intr.f * xd) / (intr.a ?? 1) + intr.cx, intr.f * yd + intr.cy];
 }
 
 const clampDisplay = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
@@ -233,7 +237,7 @@ export function renderPhoto(c: SynthCamera): LinearImage {
         for (let i = 0; i < ss; i += 1) {
           const px = x + (i + 0.5) / ss - 0.5;
           const py = y + (j + 0.5) / ss - 0.5;
-          const [rx, ry] = undistort(intr, (px - intr.cx) / intr.f, (py - intr.cy) / intr.f);
+          const [rx, ry] = undistort(intr, ((px - intr.cx) * (intr.a ?? 1)) / intr.f, (py - intr.cy) / intr.f);
           const d: V3 = [R[0]! * rx + R[3]! * ry + R[6]!, R[1]! * rx + R[4]! * ry + R[7]!, R[2]! * rx + R[5]! * ry + R[8]!];
           const hit = trace(c.eye, d);
           if (!hit) continue;

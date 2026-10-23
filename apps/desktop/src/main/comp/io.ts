@@ -39,6 +39,8 @@ export interface CompIOJob {
   /** By `${source}|${part}`. */
   sources: Record<string, CompFileSource>;
   tracks: Track2d[];
+  /** The plate's pixel aspect (addendum 17); absent = 1. */
+  pixelAspect?: number;
 }
 
 export const sourceKey = (source: CompSource, part: string) => `${source}|${part}`;
@@ -94,6 +96,7 @@ export function createCompIO(job: CompIOJob, signal?: AbortSignal): CompIO {
   const n = (w: number, h: number) => w * h;
   return {
     plate: job.plate.plate,
+    ...(job.pixelAspect && job.pixelAspect !== 1 ? { pixelAspect: job.pixelAspect } : {}),
     tracks: new Map(job.tracks.map((t) => [t.id, t])),
     sourceVersion: (source, part) => (source === 'plate' ? job.plate.label : (job.sources[sourceKey(source, part)]?.version ?? 'missing')),
     sourceStill: (source, part) => job.sources[sourceKey(source, part)]?.still ?? false,

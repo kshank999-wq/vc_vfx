@@ -41,7 +41,7 @@ export const TextureCameraSchema = z.object({
   lens: z.string().max(200).default(''),
   /** Focal length, millimetres. */
   focalMm: z.number().positive().max(2000).nullable().default(null),
-  /** The film back's width, millimetres (the sensor area the photo's width covers). */
+  /** The film back's width, millimetres: what the (de-squeezed) picture's width covers. */
   filmBackWidthMm: z.number().positive().max(200).nullable().default(null),
   /** Brown–Conrady distortion (OpenCV's model, as the lens profiles). Null: none known — not undistorted. */
   distortion: DistortionSchema.nullable().default(null),
@@ -84,6 +84,14 @@ export const TextureReferenceSchema = z.object({
   /** Pictures: how their values are read (sRGB for JPEG/PNG/TIFF, linear for EXR). */
   encoding: z.enum(COLOR_ENCODINGS).nullable().default(null),
   camera: TextureCameraSchema.nullable().default(null),
+  /**
+   * Pictures: the stored pixel's width over its height (addendum 17). A frame
+   * of an anamorphic or DV plate is not square; rectification, the focal
+   * length and the viewer de-squeeze through it. Null: square.
+   */
+  pixelAspect: z.number().min(0.25).max(4).nullable().default(null),
+  /** Where it came from: the shot (a frame of its own clip), the file's header, or the artist. */
+  pixelAspectFrom: z.enum(['shot', 'file', 'artist']).nullable().default(null),
   scan: TextureScanInfoSchema.nullable().default(null),
   panorama: TexturePanoramaInfoSchema.nullable().default(null),
   addedBy: z.string(),

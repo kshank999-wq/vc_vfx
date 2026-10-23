@@ -52,6 +52,8 @@ interface FfprobeStream {
   color_primaries?: string;
   width?: number;
   height?: number;
+  /** "3:2", "1:1"; "0:1" or absent when the file does not say. */
+  sample_aspect_ratio?: string;
   r_frame_rate?: string;
   avg_frame_rate?: string;
   nb_frames?: string;
@@ -91,6 +93,9 @@ export function parseFfprobe(json: unknown, file: string): ProbedMediaInput | nu
   };
   const width = asNumber(video.width);
   const height = asNumber(video.height);
+  // The file's own pixel aspect (QuickTime pasp, MXF, PNG pHYs, DPX/EXR header); unknown (0:1, N/A) is left out.
+  const sar = /^(\d+):(\d+)$/.exec(video.sample_aspect_ratio ?? '');
+  const sampleAspect = sar && Number(sar[1]) > 0 && Number(sar[2]) > 0 ? Number(sar[1]) / Number(sar[2]) : null;
   return {
     file,
     ...(frameCount && frameCount > 0 ? { frameCount } : {}),
@@ -98,6 +103,7 @@ export function parseFfprobe(json: unknown, file: string): ProbedMediaInput | nu
     ...(frameRate ? { frameRate } : {}),
     ...(width && height && width > 0 && height > 0 ? { resolution: { width: Math.round(width), height: Math.round(height) } } : {}),
     ...(video.codec_name ? { codec: video.codec_name } : {}),
+    ...(sampleAspect !== null && sampleAspect >= 0.25 && sampleAspect <= 4 ? { sampleAspect } : {}),
     ...colour,
   };
 }

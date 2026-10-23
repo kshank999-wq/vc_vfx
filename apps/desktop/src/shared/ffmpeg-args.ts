@@ -1,4 +1,4 @@
-import { isIdentity3, timecodeToFrames, type ColorTransform, type Matrix3, type SequenceFormat, type SequencePlan, type ViewPipeline } from '@vcvfx/domain';
+import { isIdentity3, pixelAspectRational, timecodeToFrames, type ColorTransform, type Matrix3, type SequenceFormat, type SequencePlan, type ViewPipeline } from '@vcvfx/domain';
 
 /**
  * Building ffmpeg commands: plates (master spec §4) and viewer frames (§5.2).
@@ -72,6 +72,8 @@ export interface FfmpegJob {
   color?: { transform: ColorTransform; decodeLut: string } | null;
   hints?: DecodeHints;
   caps?: FfmpegCaps;
+  /** The shot's pixel aspect, written into the plates' headers (setsar); absent leaves the source's. Never resamples. */
+  pixelAspect?: number | undefined;
 }
 
 export interface ClipRange {
@@ -271,6 +273,11 @@ export function buildFfmpegArgs(job: FfmpegJob): FfmpegCommand {
     filters.push(zscaleIn(job.hints, notes), `format=${planarFor(pix)}`);
   }
 
+  // The plates carry the shot's pixel aspect in their headers (EXR pixelAspectRatio, DPX, TIFF, PNG pHYs); the pixels are never resampled.
+  if (job.pixelAspect !== undefined) {
+    const [n, d] = pixelAspectRational(job.pixelAspect);
+    filters.push(`setsar=${n}/${d}`);
+  }
   const filter = filters.join(',');
   const args = [
     '-hide_banner',

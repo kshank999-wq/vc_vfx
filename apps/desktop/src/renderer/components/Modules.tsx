@@ -6,6 +6,8 @@ import {
   outputFor,
   planFor,
   plateColorFor,
+  formatPixelAspect,
+  shotPixelAspect,
   shotFolderSegments,
   shotState,
   shotStatus,
@@ -21,7 +23,7 @@ import { canApproveShot, canDeliver, canPackage, canReopen } from '../actions';
 import { MODULES, moduleTasks, type ModuleId } from '../modules';
 import { Icon } from './Icons';
 import { InfoSection, ModuleLayout, Stat, StepList, Stats, type StepDef } from './Layout';
-import { ActionButton, CameraColour, MODULE_OF, OutputRoot, PlateColorPanel, ReviewMarks, SequencePlan, ShotLog, SourceDetails, TaskCard, type ShotDetailProps } from './ShotDetail';
+import { ActionButton, CameraColour, MODULE_OF, OutputRoot, PixelAspectPanel, PlateColorPanel, ReviewMarks, SequencePlan, ShotLog, SourceDetails, TaskCard, type ShotDetailProps } from './ShotDetail';
 import { Viewer } from './Viewer';
 import { KeyInfo, KeyViewer, keyStepDefs, useKeyController, type KeyWorkspaceProps } from './key/KeyWorkspace';
 import { CleanPlateInfo, CleanPlateViewer, cleanPlateStepDefs, useCleanPlateController, type CleanPlateWorkspaceProps } from './cleanplate/CleanPlateWorkspace';
@@ -106,6 +108,7 @@ export function PlatesModule(props: ModuleScreenProps) {
   const plan = planFor(project, shot);
   const timing = shotTiming(project, shot);
   const decision = plateColorFor(project, shotId);
+  const par = shotPixelAspect(project, shotId);
   const output = outputFor(project.handoff, shot);
   const written = task ? state.plates.find((r) => r.version === task.version) : undefined;
   const latest = state.plates[state.plates.length - 1];
@@ -129,6 +132,7 @@ export function PlatesModule(props: ModuleScreenProps) {
         <>
           <SequencePlan {...props} />
           <PlateColorPanel {...props} bare />
+          <PixelAspectPanel {...props} bare />
         </>
       ),
     },
@@ -178,6 +182,7 @@ export function PlatesModule(props: ModuleScreenProps) {
         <Stat label="Frames" value={plan ? plan.frameCount : '—'} title={plan ? `${plan.deliveredIn}–${plan.deliveredOut}, ${plan.handles} handles` : 'Frame range unknown'} />
         <Stat label="Format" value={plan ? `${plan.format.toUpperCase()} ${plan.bitDepth}` : output.format.toUpperCase()} unit={plan ? '-bit' : undefined} />
         <Stat label="Resolution" value={timing?.resolution ? `${timing.resolution.width}×${timing.resolution.height}` : '—'} />
+        <Stat label="Pixel aspect" value={formatPixelAspect(par.value)} tone={par.warnings.length ? 'warn' : undefined} title={[par.summary, ...par.warnings].join('\n')} />
         <Stat label="Plates written" value={latest ? versionTag(latest.version) : 'none'} tone={written ? 'ok' : undefined} />
         <Stat label="Marked to fix" value={state.reviewMarks.length} tone={state.reviewMarks.length ? 'warn' : undefined} />
         <Stat label="Source check" value={VERIFY_WORDS[state.sourceVerified] ?? state.sourceVerified} tone={state.sourceVerified === 'verified' ? 'ok' : state.sourceVerified === 'unchecked' ? undefined : 'bad'} />

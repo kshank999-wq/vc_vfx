@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
+import { AspectTag, FrameBox, overlayAspect, useShotAspect, useStageSize } from '../FrameBox';
+import { clientToImage } from '../../frame-fit';
 import {
   DEFAULT_KEY_PARAMS,
   KEY_LOW_CONFIDENCE,
@@ -911,6 +913,8 @@ export function KeyViewer({ ctl }: { ctl: KeyController }) {
   const { view, mode, setMode, wipe, setWipe, tool, setTool, plate, first, last, frame, onFrame, doc, review } = ctl;
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const stageRef = useRef<HTMLDivElement | null>(null);
+  const stageSize = useStageSize(stageRef);
+  const aspect = useShotAspect(ctl.props.project, ctl.props.shotId);
   const [drag, setDrag] = useState<Drag>(null);
   const [cursor, setCursor] = useState<{ x: number; y: number } | null>(null);
 
@@ -924,17 +928,11 @@ export function KeyViewer({ ctl }: { ctl: KeyController }) {
     g.putImageData(new ImageData(composeMode(view, mode, wipe), view.width, view.height), 0, 0);
   }, [view, mode, wipe]);
 
-  /** Pointer → view pixels (the canvas is shown "contain" in its box). */
+  /** Pointer → view pixels (the frame is shown de-squeezed, "contain", in its stage). */
   const toView = (e: ReactPointerEvent): { x: number; y: number } | null => {
     const el = stageRef.current;
     if (!el || !view) return null;
-    const rect = el.getBoundingClientRect();
-    const s = Math.min(rect.width / view.width, rect.height / view.height) || 1;
-    const ox = (rect.width - view.width * s) / 2;
-    const oy = (rect.height - view.height * s) / 2;
-    const x = (e.clientX - rect.left - ox) / s;
-    const y = (e.clientY - rect.top - oy) / s;
-    return x >= 0 && y >= 0 && x <= view.width && y <= view.height ? { x, y } : null;
+    return clientToImage(el, view, aspect.display, e.clientX, e.clientY);
   };
   const toPlate = (v: { x: number; y: number }) => {
     const k = plate && view ? plate.width / view.width : 1;
@@ -1009,19 +1007,22 @@ export function KeyViewer({ ctl }: { ctl: KeyController }) {
         </button>
       </div>
       <div ref={stageRef} className={`key-stage ${cursorClass}`} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerLeave={() => setCursor(null)}>
+        <FrameBox stage={stageSize} size={view} pixelAspect={aspect.display}>
         {view ? <canvas ref={canvasRef} className="key-canvas" aria-label={`${KEY_MODE_LABELS[mode]} of frame ${view.frame}`} /> : null}
         {view ? (
-          <svg className="key-overlay" viewBox={`0 0 ${view.width} ${view.height}`} preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+          <svg className="key-overlay" viewBox={`0 0 ${view.width} ${view.height}`} preserveAspectRatio={overlayAspect(stageSize)} aria-hidden="true">
             {rects.map((l) => {
               const r = (l.source as { rect: KeyRect }).rect;
               return <rect key={l.id} className={`key-box ${l.kind}`} x={r.x0 * k} y={r.y0 * k} width={(r.x1 - r.x0) * k} height={(r.y1 - r.y0) * k} />;
             })}
             {drag ? <rect className={`key-box drawing ${tool}`} x={Math.min(drag.x0, drag.x1)} y={Math.min(drag.y0, drag.y1)} width={Math.abs(drag.x1 - drag.x0)} height={Math.abs(drag.y1 - drag.y0)} /> : null}
             {wipe.on ? <line className="key-wipe" x1={wipe.x * view.width} x2={wipe.x * view.width} y1={0} y2={view.height} /> : null}
-            {cursor && (tool === 'eyedropper' || tool === 'protect') ? <circle className="key-picker" cx={cursor.x} cy={cursor.y} r={Math.max(3, view.width / 160)} /> : null}
-            {(doc?.screen?.samples ?? []).filter((s) => s.frame === frame).map((s, i) => <circle key={i} className="key-sample" cx={s.x * k} cy={s.y * k} r={Math.max(2.5, view.width / 220)} />)}
+            {cursor && (tool === 'eyedropper' || tool === 'protect') ? <ellipse className="key-picker" cx={cursor.x} cy={cursor.y} rx={Math.max(3, view.width / 160) / aspect.display} ry={Math.max(3, view.width / 160)} /> : null}
+            {(doc?.screen?.samples ?? []).filter((s) => s.frame === frame).map((s, i) => <ellipse key={i} className="key-sample" cx={s.x * k} cy={s.y * k} rx={Math.max(2.5, view.width / 220) / aspect.display} ry={Math.max(2.5, view.width / 220)} />)}
           </svg>
         ) : null}
+        </FrameBox>
+        {view ? <AspectTag aspect={aspect} /> : null}
         {message ? <div className="key-message">{message}</div> : null}
         {ctl.loading && view ? <div className="key-busy" aria-live="polite">Keying…</div> : null}
         {mode === 'over' && view && !view.comp ? <div className="key-hint">No background reference yet: shown over the checker. Choose one in step 5.</div> : null}

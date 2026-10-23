@@ -258,7 +258,8 @@ export interface TrackViewData {
     /** Solve-world positions (NaN when not triangulated). */
     X: Float64Array;
     trackRms: Float32Array;
-    intrinsics: { f: number; cx: number; cy: number; k1: number; k2: number; k3: number; p1: number; p2: number };
+    /** `a`: the pixel aspect the solve was made at (fx = f / a). */
+    intrinsics: { f: number; cx: number; cy: number; k1: number; k2: number; k3: number; p1: number; p2: number; a?: number };
   } | null;
   /** Downsampled clouds in their files' coordinates, relative to `origin`. */
   clouds: { id: string; origin: [number, number, number]; positions: Float32Array; colors: Uint8Array | null }[];

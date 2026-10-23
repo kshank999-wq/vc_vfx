@@ -54,6 +54,14 @@ describe('parseFfprobe', () => {
     expect(parseFfprobe(MOV, 'b.mov')).toEqual({ file: 'b.mov', frameCount: 250, timecodeIn: '10:00:00:00', frameRate: 25, resolution: { width: 3840, height: 2160 }, codec: 'prores' });
   });
 
+  it('reads the file’s own pixel aspect (sample_aspect_ratio), leaving out unknown (0:1)', () => {
+    const v = (sar?: string) => ({ streams: [{ codec_type: 'video', codec_name: 'dvvideo', width: 1280, height: 1080, avg_frame_rate: '24/1', nb_frames: '10', ...(sar ? { sample_aspect_ratio: sar } : {}) }] });
+    expect(parseFfprobe(v('3:2'), 'a.mov')).toMatchObject({ sampleAspect: 1.5 });
+    expect(parseFfprobe(v('1:1'), 'a.mov')).toMatchObject({ sampleAspect: 1 });
+    expect(parseFfprobe(v('0:1'), 'a.mov')).not.toHaveProperty('sampleAspect');
+    expect(parseFfprobe(v(), 'a.mov')).not.toHaveProperty('sampleAspect');
+  });
+
   it('keeps what it can and refuses what is not a picture', () => {
     expect(parseFfprobe({ streams: [{ codec_type: 'video', codec_name: 'dng', r_frame_rate: '0/0' }] }, 'f.dng')).toEqual({ file: 'f.dng', codec: 'dng' });
     expect(parseFfprobe({ streams: [{ codec_type: 'audio' }] }, 'x.wav')).toBeNull();

@@ -1,6 +1,6 @@
 import type { TrackViewData } from '../bridge';
 import { decodeCloud, decodeSolve, decodeTracks } from './codec';
-import { Track2dDocumentSchema, camtrackLocked, camtrackTaskVersion, handoffShot, newCamTrackDocument, shotState, track2dLocked, track2dTaskVersion, type CamTrackDocument, type Project } from '@vcvfx/domain';
+import { Track2dDocumentSchema, pixelAspectOf, camtrackLocked, camtrackTaskVersion, handoffShot, newCamTrackDocument, shotState, track2dLocked, track2dTaskVersion, type CamTrackDocument, type Project } from '@vcvfx/domain';
 import type { CameraSession, CameraStore } from './commands';
 
 /**
@@ -32,6 +32,7 @@ export function sessionBase(p: Project, shotId: string, timing: { first: number;
     last: timing.last,
     fps: timing.fps,
     plate,
+    pixelAspect: pixelAspectOf(p, shotId),
     working: working ?? trackWorkingSize(plate, camtrack.trackSettings.workingWidth),
     camtrack,
     track2d: s.track2d ?? Track2dDocumentSchema.parse({}),

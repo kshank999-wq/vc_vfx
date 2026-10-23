@@ -125,7 +125,7 @@ export async function rotoFrameSource(
 }
 
 /** A file's frame size, from ffmpeg's own banner (ffprobe may not be beside a Settings ffmpeg). */
-export async function probeSize(ffmpeg: string, file: string): Promise<{ width: number; height: number }> {
+export async function probeSize(ffmpeg: string, file: string): Promise<{ width: number; height: number; sampleAspect?: number }> {
   const text = await new Promise<string>((resolvePromise) => {
     const child = spawn(ffmpeg, ['-hide_banner', '-nostdin', '-i', file], { windowsHide: true, stdio: ['ignore', 'ignore', 'pipe'] });
     let err = '';
@@ -135,7 +135,10 @@ export async function probeSize(ffmpeg: string, file: string): Promise<{ width: 
   });
   const m = /Video:.*?(\d{2,5})x(\d{2,5})/.exec(text);
   if (!m) throw new Error(`Could not read the frame size of ${file}`);
-  return { width: Number(m[1]), height: Number(m[2]) };
+  // "[SAR 3:2 DAR 16:9]": the file's own pixel aspect (PNG pHYs, DPX/EXR header, QuickTime pasp); 0:1 = unknown.
+  const sar = /Video:.*?\d{2,5}x\d{2,5}[^\n]*?\bSAR (\d+):(\d+)/.exec(text);
+  const sampleAspect = sar && Number(sar[1]) > 0 && Number(sar[2]) > 0 ? Number(sar[1]) / Number(sar[2]) : null;
+  return { width: Number(m[1]), height: Number(m[2]), ...(sampleAspect && sampleAspect >= 0.25 && sampleAspect <= 4 ? { sampleAspect } : {}) };
 }
 
 /**

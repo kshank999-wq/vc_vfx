@@ -71,6 +71,15 @@ describe('buildFfmpegArgs', () => {
     expect(cmd.args[cmd.args.length - 1]).toBe('/out/01_PLATES/010_plate_v001.%04d.exr');
   });
 
+  it('states a non-square pixel aspect in the plate headers (setsar, last; never a scale)', () => {
+    const c = buildFfmpegArgs({ source: { kind: 'clip', path: '/drive/VFX/clip.mxf' }, output: '/o/p.%04d.exr', plan, frameRate: 24, frameIn: 100, pixelAspect: 4 / 3 });
+    // The same graph as a square shot's, with only the header stamp added: no pixel is resampled.
+    expect(c.filter).toBe(`${cmd.filter},setsar=4/3`);
+    expect(c.filter).not.toMatch(/(^|,)scale=/);
+    expect(buildFfmpegArgs({ source: { kind: 'clip', path: '/c.mov' }, output: '/o/p.%04d.exr', plan, frameRate: 24, frameIn: 100, pixelAspect: 10 / 11 }).filter).toContain('setsar=10/11');
+    expect(cmd.filter).not.toContain('setsar');
+  });
+
   it('applies no LUT or colour transform as shot: only an exact conversion to float', () => {
     const filters = arg(cmd.args, '-vf') ?? '';
     for (const forbidden of ['lut', 'colorspace', 'colorchannelmixer', 'tonemap', 'colormatrix', 'eq=', 'transfer', 'primaries']) expect(filters).not.toContain(forbidden);

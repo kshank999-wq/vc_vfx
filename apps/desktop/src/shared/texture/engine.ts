@@ -18,7 +18,7 @@ import { estimateHeading, estimatePanoramaPose, matchToPanorama, panoramaGrey, p
 import { directionTo, placeRegion, planeMap, type PlaneMap, type RegionPlacement, type RegionTemplate } from './placement';
 import { firstHit, fitPlanes, hitPlane, type FittedPlane } from './planes';
 import { photoProblems, photoWhite, specularShare } from './problems';
-import { cornerAspect, focalAspect, pinholeCorners, rectifyRegion } from './rectify';
+import { cornerAspect, desqueezeCorners, focalAspect, pinholeCorners, rectangleFocal, rectifyRegion } from './rectify';
 import { makeTileable } from './seamless';
 
 /**
@@ -258,7 +258,8 @@ export async function buildTextures(io: TextureIO, inputs: TextureInputs, o: Tex
     const own = regions.filter((r) => r.photoId === ph.id);
     const fullW = ph.width ?? 1;
     const fullH = ph.height ?? 1;
-    const intr = photoIntrinsics(ph.camera, fullW, fullH);
+    const par = ph.pixelAspect ?? 1;
+    const intr = photoIntrinsics(ph.camera, fullW, fullH, null, par);
     const decided = inputs.placements.find((x) => x.photoId === ph.id);
     if (!own.length) {
       step();
@@ -270,16 +271,18 @@ export async function buildTextures(io: TextureIO, inputs: TextureInputs, o: Tex
     let fov: number | null = intr ? fovOf(intr, fullW) : null;
     const directionMatch = () => {
       if (!match && grey && heading) {
-        match = matchToPanorama(grey, photoGrey(small, o.luma, 160, intr, fullW), fov, { ...(signal ? { signal } : {}) });
+        match = matchToPanorama(grey, photoGrey(small, o.luma, 160, intr, fullW, par), fov, { ...(signal ? { signal } : {}) });
         fov = fov ?? match.fov;
       }
       return match;
     };
-    const lensFor = (): Intrinsics | null => intr ?? (fov ? photoIntrinsics(null, fullW, fullH, fov) : null);
+    const lensFor = (): Intrinsics | null => intr ?? (fov ? photoIntrinsics(null, fullW, fullH, fov, par) : null);
     let best: { region: TextureRegion; placement: RegionPlacement } | null = null;
     for (const region of own) {
       check();
       const pinhole = pinholeCorners(region.corners, intr);
+      // Shape is measured on the de-squeezed picture (addendum 17).
+      const physical = desqueezeCorners(pinhole, par);
       const m = textureSizeMetres(region.size);
       // The aspect: the real size, else the focal length, else the corners.
       let aspect: number;
@@ -288,13 +291,18 @@ export async function buildTextures(io: TextureIO, inputs: TextureInputs, o: Tex
         aspect = m.width / m.height;
         aspectFrom = 'size';
       } else {
-        const fa = intr ? focalAspect(pinhole, intr.f, intr.cx, intr.cy) : null;
-        aspect = fa ?? cornerAspect(pinhole);
+        // The focal length: the lens's, else the one at which these corners are a rectangle (both vanishing points finite).
+        const cxp = ((fullW - 1) / 2) * par;
+        const cyp = (fullH - 1) / 2;
+        const fRect = intr ? null : rectangleFocal(physical, cxp, cyp);
+        const fUse = intr ? intr.f : fRect && fRect > 0.25 * fullW * par && fRect < 20 * fullW * par ? fRect : null;
+        const fa = fUse ? focalAspect(physical, fUse, intr ? intr.cx * par : cxp, intr ? intr.cy : cyp) : null;
+        aspect = fa ?? cornerAspect(physical);
         aspectFrom = fa ? 'focal' : 'corners';
       }
       if (!region.settings.rectify) {
-        const xs = pinhole.map((p) => p[0]);
-        const ys = pinhole.map((p) => p[1]);
+        const xs = physical.map((p) => p[0]);
+        const ys = physical.map((p) => p[1]);
         aspect = (Math.max(...xs) - Math.min(...xs)) / Math.max(1, Math.max(...ys) - Math.min(...ys));
         aspectFrom = 'corners';
       }
@@ -440,7 +448,7 @@ export async function buildTextures(io: TextureIO, inputs: TextureInputs, o: Tex
     check();
     const fullW = ph.width ?? 1;
     const fullH = ph.height ?? 1;
-    const intr = photoIntrinsics(ph.camera, fullW, fullH);
+    const intr = photoIntrinsics(ph.camera, fullW, fullH, null, ph.pixelAspect ?? 1);
     const photo = await io.picture(ph.id, o.maxPhoto);
     const displayReferred = !ph.encoding || ph.encoding === 'srgb' || ph.encoding === 'rec709';
     const whiteHere = photoWhite(photo, displayReferred, white);

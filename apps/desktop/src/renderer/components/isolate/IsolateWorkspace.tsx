@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
+import { AspectTag, FrameBox, overlayAspect, useShotAspect, useStageSize } from '../FrameBox';
+import { clientToImage } from '../../frame-fit';
 import {
   DEFAULT_ISOLATE_PARAMS,
   ISOLATE_LOW_CONFIDENCE,
@@ -719,6 +721,8 @@ export function IsolateViewer({ ctl }: { ctl: IsolateController }) {
   const { view, mode, setMode, wipe, setWipe, tool, setTool, plate, first, last, frame, onFrame, doc, review, target } = ctl;
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const stageRef = useRef<HTMLDivElement | null>(null);
+  const stageSize = useStageSize(stageRef);
+  const aspect = useShotAspect(ctl.props.project, ctl.props.shotId);
   const [drag, setDrag] = useState<Drag>(null);
   const [stroke, setStroke] = useState<[number, number][] | null>(null);
 
@@ -732,16 +736,11 @@ export function IsolateViewer({ ctl }: { ctl: IsolateController }) {
     g.putImageData(new ImageData(composeIsolate(view, mode, wipe), view.width, view.height), 0, 0);
   }, [view, mode, wipe]);
 
+  /** Pointer → view pixels (the frame is shown de-squeezed, "contain", in its stage). */
   const toView = (e: ReactPointerEvent): { x: number; y: number } | null => {
     const el = stageRef.current;
     if (!el || !view) return null;
-    const rect = el.getBoundingClientRect();
-    const s = Math.min(rect.width / view.width, rect.height / view.height) || 1;
-    const ox = (rect.width - view.width * s) / 2;
-    const oy = (rect.height - view.height * s) / 2;
-    const x = (e.clientX - rect.left - ox) / s;
-    const y = (e.clientY - rect.top - oy) / s;
-    return x >= 0 && y >= 0 && x <= view.width && y <= view.height ? { x, y } : null;
+    return clientToImage(el, view, aspect.display, e.clientX, e.clientY);
   };
   const kPlate = plate && view ? plate.width / view.width : 1;
   const onDown = (e: ReactPointerEvent) => {
@@ -820,9 +819,10 @@ export function IsolateViewer({ ctl }: { ctl: IsolateController }) {
         </button>
       </div>
       <div ref={stageRef} className={`key-stage ${cursorClass}`} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp}>
+        <FrameBox stage={stageSize} size={view} pixelAspect={aspect.display}>
         {view ? <canvas ref={canvasRef} className="key-canvas" aria-label={`${isolateViewLabel(mode, target)} of frame ${view.frame}`} /> : null}
         {view ? (
-          <svg className="key-overlay" viewBox={`0 0 ${view.width} ${view.height}`} preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+          <svg className="key-overlay" viewBox={`0 0 ${view.width} ${view.height}`} preserveAspectRatio={overlayAspect(stageSize)} aria-hidden="true">
             {seedRect ? <rect className="key-box iso-box" x={seedRect.x0 * k} y={seedRect.y0 * k} width={(seedRect.x1 - seedRect.x0) * k} height={(seedRect.y1 - seedRect.y0) * k} /> : null}
             {strokes.map((s) => (
               <polyline key={s.id} className={`iso-stroke ${s.mode}`} points={s.points.map(([x, y]) => `${x * k},${y * k}`).join(' ')} strokeWidth={Math.max(1, 2 * s.radius * k)} />
@@ -832,6 +832,8 @@ export function IsolateViewer({ ctl }: { ctl: IsolateController }) {
             {wipe.on ? <line className="key-wipe" x1={wipe.x * view.width} x2={wipe.x * view.width} y1={0} y2={view.height} /> : null}
           </svg>
         ) : null}
+        </FrameBox>
+        {view ? <AspectTag aspect={aspect} /> : null}
         {message ? <div className="key-message">{message}</div> : null}
         {ctl.loading && view ? <div className="key-busy" aria-live="polite">Loading…</div> : null}
         {view?.matte && view.built === 'stale' && mode !== 'source' && !tool ? <div className="key-hint cp-stale">Settings changed since this was built: build again (step 3).</div> : null}

@@ -1,4 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
+import { useContext } from 'react';
+import { FrameBox, PixelAspectViewContext, overlayAspect, useStageSize } from '../FrameBox';
+import { fitFrame } from '../../frame-fit';
 import {
   COLOR_ENCODINGS,
   DEFAULT_TEXTURE_SETTINGS,
@@ -511,6 +514,23 @@ function ReferenceSettings({ ctl }: { ctl: TextureController }) {
               <input type="number" aria-label="Lens distortion k1" value={k1} step={0.01} disabled={!canChange} onChange={(e) => setK1(e.target.value)} onBlur={commitLens} />
             </label>
           </div>
+          <label className="key-field" title="The stored pixel's width over its height. A frame of a DVCPRO HD plate is 1.5, a 2× anamorphic frame kept squeezed is 2; stills are 1. Shapes and the focal length are measured de-squeezed.">
+            <span>Pixel aspect{photo.pixelAspectFrom ? ` (${photo.pixelAspectFrom === 'shot' ? 'the shot' : photo.pixelAspectFrom === 'file' ? 'the file' : 'set'})` : ''}</span>
+            <input
+              type="number"
+              aria-label="Photo pixel aspect"
+              key={`${photo.id}|${photo.pixelAspect ?? 1}`}
+              defaultValue={photo.pixelAspect ?? 1}
+              min={0.25}
+              max={4}
+              step={0.01}
+              disabled={!canChange}
+              onBlur={(e) => {
+                const v = Number(e.target.value);
+                if (Number.isFinite(v) && v >= 0.25 && v <= 4 && v !== (photo.pixelAspect ?? 1)) actions.setReference(photo.id, { pixelAspect: v === 1 ? null : v });
+              }}
+            />
+          </label>
           <label className="key-field">
             <span>Read as</span>
             <select className="tex-select" aria-label="Photo colour encoding" value={photo.encoding ?? 'srgb'} disabled={!canChange} onChange={(e) => actions.setReference(photo.id, { encoding: e.target.value as ColorEncodingId })}>
@@ -1009,8 +1029,13 @@ export function TextureViewer({ ctl }: { ctl: TextureController }) {
   const { mode, setMode, wipe, setWipe, tool, setTool, photoView, textureView, wipeView, panoView, photo, region, regions, doc } = ctl;
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const stageRef = useRef<HTMLDivElement | null>(null);
+  const stageSize = useStageSize(stageRef);
+  const { squeezed, setSqueezed } = useContext(PixelAspectViewContext);
   const [drag, setDrag] = useState<Drag>(null);
   const shown: TextureImageView | null = mode === 'photo' ? photoView : mode === 'panorama' ? panoView : mode === 'scan' ? null : textureView;
+  // A reference photo is shown at its own pixel aspect (a frame of an anamorphic or DV plate); textures and panoramas are square.
+  const photoAspect = mode === 'photo' ? (photo?.pixelAspect ?? 1) : 1;
+  const display = squeezed ? 1 : photoAspect;
   const tile = mode === 'tiled' && textureView ? 3 : 1;
 
   useEffect(() => {
@@ -1030,10 +1055,8 @@ export function TextureViewer({ ctl }: { ctl: TextureController }) {
     const el = stageRef.current;
     if (!el || !shown) return null;
     const rect = el.getBoundingClientRect();
-    const s = Math.min(rect.width / vw, rect.height / vh) || 1;
-    const ox = (rect.width - vw * s) / 2;
-    const oy = (rect.height - vh * s) / 2;
-    return { x: (e.clientX - rect.left - ox) / s, y: (e.clientY - rect.top - oy) / s, s } as { x: number; y: number };
+    const b = fitFrame({ width: rect.width, height: rect.height }, { width: vw, height: vh }, display);
+    return { x: (e.clientX - rect.left - b.left) / (b.scale * display), y: (e.clientY - rect.top - b.top) / b.scale };
   };
   // Photo pixels per view pixel.
   const k = photo && photoView ? photo.width! / photoView.width : 1;
@@ -1052,8 +1075,8 @@ export function TextureViewer({ ctl }: { ctl: TextureController }) {
       // A corner of the selected region, within a few screen pixels.
       if (region && region.photoId === photo?.id && ctl.canChange) {
         const el = stageRef.current!.getBoundingClientRect();
-        const s = Math.min(el.width / vw, el.height / vh) || 1;
-        const hit = region.corners.findIndex(([x, y]) => Math.hypot(x / k - v.x, y / k - v.y) * s < 14);
+        const s = fitFrame({ width: el.width, height: el.height }, { width: vw, height: vh }, display).scale;
+        const hit = region.corners.findIndex(([x, y]) => Math.hypot((x / k - v.x) * display, y / k - v.y) * s < 14);
         if (hit >= 0) {
           (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
           setDrag({ kind: 'corner', index: hit, corners: region.corners.map((c) => [c[0], c[1]]) as unknown as Corners });
@@ -1134,16 +1157,17 @@ export function TextureViewer({ ctl }: { ctl: TextureController }) {
         </div>
       ) : (
         <div ref={stageRef} className={`key-stage ${cursorClass}`} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp}>
+          <FrameBox stage={stageSize} size={shown} pixelAspect={display}>
           {shown ? <canvas ref={canvasRef} className="key-canvas" aria-label={`${TEXTURE_VIEW_LABELS[mode]}${mode === 'photo' ? ` of ${photo?.name ?? ''}` : region ? ` of ${region.name}` : ''}`} /> : null}
           {shown && mode === 'photo' ? (
-            <svg className="key-overlay" viewBox={`0 0 ${vw} ${vh}`} preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+            <svg className="key-overlay" viewBox={`0 0 ${vw} ${vh}`} preserveAspectRatio={overlayAspect(stageSize)} aria-hidden="true">
               {own.map((r) => {
                 const c = cornersOf(r);
                 const on = r.id === region?.id;
                 return (
                   <g key={r.id} className={`tex-quad${on ? ' on' : ''}${r.enabled ? '' : ' off'}`}>
                     <polygon points={c.map(([x, y]) => `${x / k},${y / k}`).join(' ')} />
-                    {on ? c.map(([x, y], i) => <circle key={i} cx={x / k} cy={y / k} r={Math.max(3, vw / 160)} className="tex-handle" />) : null}
+                    {on ? c.map(([x, y], i) => <ellipse key={i} cx={x / k} cy={y / k} rx={Math.max(3, vw / 160) / display} ry={Math.max(3, vw / 160)} className="tex-handle" />) : null}
                     <text x={c[0][0] / k + 4} y={c[0][1] / k - vw / 160} className="tex-quad-label" style={{ fontSize: Math.max(12, vw / 52) }}>
                       {r.name}
                     </text>
@@ -1154,7 +1178,7 @@ export function TextureViewer({ ctl }: { ctl: TextureController }) {
             </svg>
           ) : null}
           {shown && mode === 'panorama' ? (
-            <svg className="key-overlay" viewBox={`0 0 ${vw} ${vh}`} preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+            <svg className="key-overlay" viewBox={`0 0 ${vw} ${vh}`} preserveAspectRatio={overlayAspect(stageSize)} aria-hidden="true">
               {placements.map((x) => {
                 const dir = x.decision === 'edited' ? x.edited?.direction : x.suggested?.direction;
                 if (!dir || x.decision === 'rejected') return null;
@@ -1174,9 +1198,15 @@ export function TextureViewer({ ctl }: { ctl: TextureController }) {
             </svg>
           ) : null}
           {wipe.on && mode === 'delit' && shown ? (
-            <svg className="key-overlay" viewBox={`0 0 ${vw} ${vh}`} preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+            <svg className="key-overlay" viewBox={`0 0 ${vw} ${vh}`} preserveAspectRatio={overlayAspect(stageSize)} aria-hidden="true">
               <line className="key-wipe" x1={wipe.x * vw} x2={wipe.x * vw} y1={0} y2={vh} />
             </svg>
+          ) : null}
+          </FrameBox>
+          {mode === 'photo' && photoAspect !== 1 ? (
+            <button type="button" className={`aspect-tag${squeezed ? ' squeezed' : ''}`} aria-pressed={squeezed} title={`This picture's pixel aspect is ${+photoAspect.toFixed(4)} (${photo?.pixelAspectFrom === 'shot' ? 'a frame of the shot' : photo?.pixelAspectFrom === 'file' ? 'from the file' : 'set by hand'}). Corners are kept in its stored pixels; shapes are measured de-squeezed. Click to show it ${squeezed ? 'de-squeezed' : 'squeezed'}.`} onPointerDown={(e) => e.stopPropagation()} onClick={() => setSqueezed(!squeezed)}>
+              PAR {+photoAspect.toFixed(3)} · {squeezed ? 'squeezed' : 'de-squeezed'}
+            </button>
           ) : null}
           {message ? <div className="key-message">{message}</div> : null}
           {ctl.loading && !message ? <div className="key-busy" aria-live="polite">Loading…</div> : null}

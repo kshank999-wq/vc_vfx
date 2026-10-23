@@ -342,13 +342,15 @@ behind `CameraSolver` is the obvious speed-up.
 - LiDAR files are read whole; LAZ and image-only E57 are not read.
 - The camera database's unverified figures must be checked against the
   camera's spec sheet before relying on them (§13).
-- Anamorphic squeeze is recorded (and set from an anamorphic mode) but the
-  solver models square pixels.
+- Pixel aspect is modelled since [addendum 17](addendum-17-pixel-aspect.md):
+  fx = f / a, fy = f, distortion on de-squeezed coordinates, every exporter's
+  film back de-squeezed and its pixel aspect declared.
 
 - On real footage ([addendum 16](addendum-16-real-footage.md)): a nodal telephoto pan (ProRes, runner excluded by
   its roto part) solved 129 / 129 frames at 0.64 px. A soft, compressed,
   handheld DVCPRO HD survey registered 59 / 146 frames at 300 features
-  (109 / 146 at 600); its 1.5 pixel aspect is not modelled (above). Planar dot
+  (109 / 146 at 600) as square pixels; solved at its 1.5 pixel aspect it
+  registers 146 / 146 at 1.05 px ([addendum 17](addendum-17-pixel-aspect.md)). Planar dot
   sheets moved by hand are object tracks, degenerate for a camera solve.
 
 ## 13. Camera database

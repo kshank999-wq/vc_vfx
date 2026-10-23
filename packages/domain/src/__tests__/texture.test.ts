@@ -311,13 +311,13 @@ describe('the texture document', () => {
   });
 
   it('is project format 7 (now 9): projects of formats 3 to 6 open with no textures, and textures survive a round trip', () => {
-    expect(PROJECT_VERSION).toBe(9);
+    expect(PROJECT_VERSION).toBe(10);
     const v6 = JSON.parse(serializeProject(sample()));
     v6.version = 6;
     for (const s of v6.shots) delete s.texture;
     const opened6 = parseProject(JSON.stringify(v6));
     if (!opened6.ok) throw new Error(opened6.reason);
-    expect(opened6.project.version).toBe(9);
+    expect(opened6.project.version).toBe(10);
     expect(shotState(opened6.project, SHOT)!.texture).toBeNull();
     const v5 = JSON.parse(JSON.stringify(v6));
     v5.version = 5;
@@ -331,7 +331,7 @@ describe('the texture document', () => {
     for (const old of [v5, v4, v3]) {
       const opened = parseProject(JSON.stringify(old));
       if (!opened.ok) throw new Error(opened.reason);
-      expect(opened.project.version).toBe(9);
+      expect(opened.project.version).toBe(10);
       expect(shotState(opened.project, SHOT)!.texture).toBeNull();
     }
     let p = withRegion();

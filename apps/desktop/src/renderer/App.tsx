@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { PixelAspectViewProvider } from './components/FrameBox';
 import { createPortal } from 'react-dom';
 import {
   PREP_TASKS,
@@ -19,6 +20,7 @@ import {
   setPlateColorDefault,
   setProbedMedia,
   setShotPlateColor,
+  setShotPixelAspect,
   setShotNotes,
   setSourceVerified,
   setVfxShotId,
@@ -617,6 +619,7 @@ export function App({ api, now = () => new Date() }: { api: VcvfxApi; now?: () =
     onChangeOutputRoot: () => void chooseOutputRoot(),
     onRevealOutput: () => outputRoot && void api.revealPath(outputRoot),
     onPlateColor: (change) => apply((x) => setShotPlateColor(x, shotId, change, actor, now())),
+    onPixelAspect: (change) => apply((x) => setShotPixelAspect(x, shotId, change, actor, now())),
     onOpenModule: (id) => openModule(id, shotId),
   });
 
@@ -673,6 +676,7 @@ export function App({ api, now = () => new Date() }: { api: VcvfxApi; now?: () =
   // --- render ---------------------------------------------------------------
   const mod = modKey();
   return (
+    <PixelAspectViewProvider>
     <NoticeDock.Provider value={setNoticeDock}>
     <div className="app">
       <header className="topbar">
@@ -863,6 +867,7 @@ export function App({ api, now = () => new Date() }: { api: VcvfxApi; now?: () =
       ) : null}
     </div>
     </NoticeDock.Provider>
+    </PixelAspectViewProvider>
   );
 }
 

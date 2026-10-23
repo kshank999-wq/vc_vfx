@@ -447,5 +447,7 @@ written; exporting says it is the desktop app's.
 - Lens distortion is Brown–Conrady (k1, k2, k3, p1, p2); fisheye stills are
   not modelled.
 - On real footage ([addendum 16](addendum-16-real-footage.md)): a frame of an anamorphic DVCPRO HD plate used as a
-  photo rectifies to the squeezed aspect (0.69 for a square card): photos have
-  no pixel aspect. A 10000×5000 EXR panorama loads in about a second.
+  photo rectified to the squeezed aspect (0.69) before photos had a pixel aspect;
+  with it ([addendum 17](addendum-17-pixel-aspect.md)) the same region comes out
+  1.03 and its square markers 0.90 square (0.60 before). A 10000×5000 EXR
+  panorama loads in about a second.

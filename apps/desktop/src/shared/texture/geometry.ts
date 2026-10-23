@@ -117,32 +117,36 @@ export function equirectDir(u: number, v: number, width: number, height: number)
  * when known. Resolution independent (normalised coordinates), so a photo
  * read smaller keeps its lens.
  */
-export function photoIntrinsics(camera: TextureCamera | null | undefined, width: number, height: number, fallbackFovDeg: number | null = null): Intrinsics | null {
+export function photoIntrinsics(camera: TextureCamera | null | undefined, width: number, height: number, fallbackFovDeg: number | null = null, pixelAspect = 1): Intrinsics | null {
+  // Focal lengths are in de-squeezed (square) pixels: the picture is width × pixelAspect wide (addendum 17).
+  const shown = width * pixelAspect;
   let f: number | null = null;
-  if (camera?.focalMm && camera.filmBackWidthMm) f = (camera.focalMm / camera.filmBackWidthMm) * width;
-  else if (fallbackFovDeg) f = width / 2 / Math.tan(rad(fallbackFovDeg) / 2);
+  if (camera?.focalMm && camera.filmBackWidthMm) f = (camera.focalMm / camera.filmBackWidthMm) * shown;
+  else if (fallbackFovDeg) f = shown / 2 / Math.tan(rad(fallbackFovDeg) / 2);
   if (!f) return null;
   const k = camera?.distortion ?? { k1: 0, k2: 0, k3: 0, p1: 0, p2: 0 };
-  return { f, cx: (width - 1) / 2, cy: (height - 1) / 2, k1: k.k1, k2: k.k2, k3: k.k3, p1: k.p1, p2: k.p2 };
+  return { f, cx: (width - 1) / 2, cy: (height - 1) / 2, k1: k.k1, k2: k.k2, k3: k.k3, p1: k.p1, p2: k.p2, ...(pixelAspect !== 1 ? { a: pixelAspect } : {}) };
 }
 
-/** Horizontal field of view of intrinsics, degrees. */
-export const fovOf = (k: Intrinsics, width: number) => deg(2 * Math.atan(width / 2 / k.f));
+/** Horizontal field of view of intrinsics (of the de-squeezed picture), degrees. */
+export const fovOf = (k: Intrinsics, width: number) => deg(2 * Math.atan((width * (k.a ?? 1)) / 2 / k.f));
 
-/** A distorted photo pixel → the undistorted (ideal pinhole) pixel of the same intrinsics. */
+/** A distorted photo pixel → the undistorted (ideal pinhole) pixel of the same intrinsics (stored pixels; fx = f / a). */
 export function undistortPixel(k: Intrinsics, u: number, v: number): [number, number] {
-  const [x, y] = undistort(k, (u - k.cx) / k.f, (v - k.cy) / k.f);
-  return [k.f * x + k.cx, k.f * y + k.cy];
+  const a = k.a ?? 1;
+  const [x, y] = undistort(k, ((u - k.cx) * a) / k.f, (v - k.cy) / k.f);
+  return [(k.f * x) / a + k.cx, k.f * y + k.cy];
 }
 
 /** An undistorted pixel → where it is in the distorted photo. */
 export function distortPixel(k: Intrinsics, u: number, v: number): [number, number] {
-  const [x, y] = distort(k, (u - k.cx) / k.f, (v - k.cy) / k.f);
-  return [k.f * x + k.cx, k.f * y + k.cy];
+  const a = k.a ?? 1;
+  const [x, y] = distort(k, ((u - k.cx) * a) / k.f, (v - k.cy) / k.f);
+  return [(k.f * x) / a + k.cx, k.f * y + k.cy];
 }
 
 /** The undistorted camera ray (z = 1) through a photo pixel. */
 export function pixelRay(k: Intrinsics, u: number, v: number): V3 {
-  const [x, y] = undistort(k, (u - k.cx) / k.f, (v - k.cy) / k.f);
+  const [x, y] = undistort(k, ((u - k.cx) * (k.a ?? 1)) / k.f, (v - k.cy) / k.f);
   return [x, y, 1];
 }

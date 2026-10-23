@@ -24,7 +24,11 @@ import { sampleCubic } from './image';
  * The texture's aspect comes, in this order, from the surface's real size,
  * its plane in the scan, the focal length (the rectangle's aspect from its
  * vanishing points: Zhang & He's whiteboard rectification), or the corners'
- * own edge lengths.
+ * own edge lengths — all measured on de-squeezed corners for a non-square
+ * picture (a frame of an anamorphic or DV plate; addendum 17). The
+ * homography itself is found in stored pixels: a pixel-aspect scaling is a
+ * homography, so the warp is the same either way and the photo is sampled as
+ * stored.
  */
 
 export type Corners = TextureRegion['corners'];
@@ -33,6 +37,11 @@ export type AspectSource = 'size' | 'plane' | 'focal' | 'corners';
 /** Corners in the undistorted (pinhole) picture, or as they are without a lens. */
 export function pinholeCorners(corners: Corners, intr: Intrinsics | null): [number, number][] {
   return corners.map((c) => (intr ? undistortPixel(intr, c[0], c[1]) : [c[0], c[1]])) as [number, number][];
+}
+
+/** Stored pixels → de-squeezed (physical) pixels: x × the pixel aspect (addendum 17). Shapes and angles are measured on these. */
+export function desqueezeCorners(q: readonly (readonly [number, number])[], pixelAspect: number): [number, number][] {
+  return q.map((p) => [p[0] * pixelAspect, p[1]] as [number, number]);
 }
 
 /** The rectangle's aspect (top edge / left edge) from the corners alone: their mean opposite edge lengths. */
@@ -69,6 +78,38 @@ export function focalAspect(q: readonly (readonly [number, number])[], f: number
   if (!(a > 0 && b > 0)) return null;
   const r = Math.sqrt(a / b);
   return Number.isFinite(r) && r > 0.01 && r < 100 ? r : null;
+}
+
+/**
+ * The focal length (pixels) at which a perspective quadrilateral is the image
+ * of a rectangle, the principal point at (cx, cy) (Zhang & He 2007, eq. 11):
+ * both vanishing points must be finite. Null when the quadrilateral is too
+ * close to a parallelogram (one side's vanishing point at infinity) or the
+ * answer is not a real focal length. Square-pixel coordinates: de-squeeze a
+ * non-square picture's corners first (addendum 17) — the same corners read
+ * squeezed give a different, wrong focal length.
+ */
+export function rectangleFocal(q: readonly (readonly [number, number])[], cx: number, cy: number): number | null {
+  const m = (p: readonly [number, number]) => [p[0] - cx, p[1] - cy, 1];
+  const m1 = m(q[0]!);
+  const m2 = m(q[1]!);
+  const m4 = m(q[2]!);
+  const m3 = m(q[3]!);
+  const crossv = (a: number[], b: number[]) => [a[1]! * b[2]! - a[2]! * b[1]!, a[2]! * b[0]! - a[0]! * b[2]!, a[0]! * b[1]! - a[1]! * b[0]!];
+  const dotv = (a: number[], b: number[]) => a[0]! * b[0]! + a[1]! * b[1]! + a[2]! * b[2]!;
+  const c14 = crossv(m1, m4);
+  const k2 = dotv(c14, m3) / dotv(crossv(m2, m4), m3);
+  const k3 = dotv(c14, m2) / dotv(crossv(m3, m4), m2);
+  if (!Number.isFinite(k2) || !Number.isFinite(k3)) return null;
+  const n2 = m2.map((v, i) => k2 * v - m1[i]!);
+  const n3 = m3.map((v, i) => k3 * v - m1[i]!);
+  // Both vanishing points finite: neither n·z vanishes (relative to the side's length in pixels, over a generous focal range).
+  const den = n2[2]! * n3[2]!;
+  if (Math.abs(n2[2]!) * 1e5 < Math.hypot(n2[0]!, n2[1]!) * 1e-3 || Math.abs(n3[2]!) * 1e5 < Math.hypot(n3[0]!, n3[1]!) * 1e-3 || den === 0) return null;
+  const f2 = -(n2[0]! * n3[0]! + n2[1]! * n3[1]!) / den;
+  if (!(f2 > 0)) return null;
+  const f = Math.sqrt(f2);
+  return Number.isFinite(f) ? f : null;
 }
 
 export interface RectifyInput {

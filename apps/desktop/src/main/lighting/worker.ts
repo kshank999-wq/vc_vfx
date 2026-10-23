@@ -1,6 +1,7 @@
 import { parentPort } from 'node:worker_threads';
 import type { CompSource, LightingAnalysisInput, LightingSubjectSource } from '@vcvfx/domain';
 import { analyseLighting, type CameraPriors } from '../../shared/lighting/analyse';
+import { plateCircleToAnalysis } from '../../shared/lighting/geometry';
 import { skyFeatures } from '../../shared/isolate/sky';
 import { workingSpace, type LinearImage } from '../../shared/key/linear';
 import { createLightingIO, readReferencePicture, type LightingIOJob, type LightingPictureSpec } from './io';
@@ -15,7 +16,11 @@ import { exportLighting, type LightingExportJob, type LightingExportResult } fro
 
 export interface LightingRefJob {
   id: string;
-  /** The ball's circle in the pixels of the picture it is in (the plate, or the still). */
+  /**
+   * The ball's circle in the pixels of the picture it is in (the plate, or the
+   * still). On a non-square plate cx, cy are stored pixels and r is the
+   * radius measured vertically (the ball is round once de-squeezed).
+   */
   circle: { cx: number; cy: number; r: number };
   /** A plate frame (a ball held up in the take), or a still. */
   frame: number | null;
@@ -26,6 +31,8 @@ export interface LightingAnalyseJob {
   io: LightingIOJob;
   frames: number[];
   plate: { width: number; height: number };
+  /** The plate's pixel aspect; width × height is the frame de-squeezed (addendum 17). */
+  pixelAspect?: number;
   width: number;
   height: number;
   subject: LightingSubjectSource;
@@ -96,9 +103,9 @@ export async function runAnalyse(job: LightingAnalyseJob, signal: AbortSignal, p
   }
   progress(2, 10);
   const enc = job.io.comp.space.encoding;
-  const k = W / job.plate.width;
   const ref = async (r: LightingRefJob) => {
-    if (r.frame !== null) return { id: r.id, image: await io.frame(r.frame, W, H), circle: { cx: r.circle.cx * k, cy: r.circle.cy * k, r: r.circle.r * k }, inPlate: true };
+    // Plate pixels → analysis pixels: the analysis frame is de-squeezed, so x and y scale differently on a non-square plate.
+    if (r.frame !== null) return { id: r.id, image: await io.frame(r.frame, W, H), circle: plateCircleToAnalysis(r.circle, job.plate, { width: W, height: H }), inPlate: true };
     const pic = await readReferencePicture(job.io.comp.ffmpeg, job.io.comp.caps, r.spec!, enc, 1024, signal);
     const s = pic.width / r.spec!.width;
     return { id: r.id, image: pic, circle: { cx: r.circle.cx * s, cy: r.circle.cy * s, r: r.circle.r * s }, inPlate: false };

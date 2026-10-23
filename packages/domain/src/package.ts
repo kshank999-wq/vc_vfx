@@ -1,6 +1,6 @@
 import { outputFor, type ChecksumRecord } from './handoff.js';
 import { framePattern, versionTag } from './frames.js';
-import { handoffShot, planFor, plateColorFor, shotState, shotStatus, shotTiming, type Project } from './project.js';
+import { handoffShot, planFor, plateColorFor, shotPixelAspect, shotState, shotStatus, shotTiming, type Project } from './project.js';
 import { partsInOrder, rotoConfidenceSummary, rotoNames } from './roto.js';
 import { camtrackManifest, track2dManifest } from './camtrack.js';
 import { keyManifest } from './key.js';
@@ -103,6 +103,7 @@ export function buildManifest(p: Project, shotId: string, input: ManifestInput) 
   const plateVersion = state.tasks.find((t) => t.kind === 'sequence_conversion')?.version ?? 1;
   const written = state.plates.find((r) => r.version === plateVersion) ?? null;
   const planned = plateColorFor(p, shotId);
+  const par = shotPixelAspect(p, shotId);
   return {
     manifestSchemaVersion: MANIFEST_SCHEMA_VERSION,
     generator: `VC VFX ${input.appVersion}`,
@@ -130,6 +131,18 @@ export function buildManifest(p: Project, shotId: string, input: ManifestInput) 
       timecodeOut: shot.timecodeOut ?? null,
       frameRate: timing?.frameRate ?? shot.frameRate,
       resolution: timing?.resolution ?? null,
+      /**
+       * The plates' pixel aspect (stored pixel width / height) and where it came
+       * from (addendum 17). Plates are the camera's pixels: never resampled; a
+       * viewer shows them `resolution.width × value` wide.
+       */
+      pixelAspect: {
+        value: par.value,
+        source: par.source,
+        summary: par.summary,
+        displayResolution: timing?.resolution ? { width: Math.round(timing.resolution.width * par.value), height: timing.resolution.height } : null,
+        warnings: par.warnings,
+      },
       /** handoff: the range the handoff gave; probe: the whole clip as ffprobe read it; null: unknown. */
       rangeFrom: timing?.from ?? null,
       probedMedia: state.probe,

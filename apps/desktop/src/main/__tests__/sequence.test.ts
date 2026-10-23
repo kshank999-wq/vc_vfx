@@ -55,4 +55,19 @@ describe.skipIf(!hasFfmpeg)('generateSequence (real ffmpeg)', () => {
     expect(pixels(join(r.folder, 'S_plate_v001.1001.png'))).toBe(pixels(join(dir, 'C_0001996.png')));
     expect(pixels(join(r.folder, 'S_plate_v001.1040.png'))).toBe(pixels(join(dir, 'C_0002035.png')));
   });
+
+  it('writes a non-square shot’s pixel aspect into the plate headers without resampling a pixel (addendum 17)', async () => {
+    // A DVCPRO HD-like clip: 64 × 54 stored, the handoff says 1.5; the file itself says nothing.
+    const { project, drive, root } = await makeDrive([{ shotId: 'P', sourcePath: 'VFX/P/p.mov', checksum: 'none', extra: { camera: { pixelAspect: 1.5 } } }]);
+    const clip = join(drive, 'VFX/P/p.mov');
+    await mkdir(dirname(clip), { recursive: true });
+    expect(spawnSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'testsrc=size=64x54:rate=24', '-t', '2', '-pix_fmt', 'yuv444p', '-c:v', 'libx264', '-qp', '0', clip]).status).toBe(0);
+    const r = await generateSequence({ project, shotId: 'P', outputRoot: join(root, 'OUT'), ffmpeg: 'ffmpeg' });
+    if (!r.ok) throw new Error(r.reason);
+    expect(r.record.pixelAspect).toBe(1.5);
+    expect(r.record.color.filter).toContain('setsar=3/2');
+    const first = join(r.folder, 'P_plate_v001.1001.png');
+    const probe = spawnSync('ffprobe', ['-v', 'error', '-show_entries', 'stream=width,height,sample_aspect_ratio', '-of', 'csv=p=0', first]).stdout.toString().trim();
+    expect(probe).toBe('64,54,3:2');
+  });
 });

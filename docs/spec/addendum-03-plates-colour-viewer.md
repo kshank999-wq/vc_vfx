@@ -243,8 +243,10 @@ covers code values 0–1.25 so super-whites survive (`VIDEO_CODE_MAX`); and when
 the handoff names no encoding (a VCDIT handoff never does), a clip tagged
 BT.709 / sRGB / linear with BT.709 primaries is read as its tags
 (`encodingFromTags`, shown as "From the clip's tags"), with a warning. Still:
-sub-black codes clamp at 0; pixel aspect (DVCPRO HD 1.5, 1.333; anamorphic) is
-not recorded or shown — the viewer shows the squeezed raster.
+sub-black codes clamp at 0. Pixel aspect (DVCPRO HD 1.5, 1.333; anamorphic) is
+now carried with the shot, written into the plates' headers (`setsar`, never a
+resample) and the viewer shows the picture de-squeezed, with "Show squeezed" to
+check the stored raster: [addendum 17](addendum-17-pixel-aspect.md).
 
 ## Open questions
 

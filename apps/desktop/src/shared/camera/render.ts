@@ -50,7 +50,8 @@ const rayCache = new Map<string, Float32Array>();
 
 /** Camera-space rays (x, y, 1) for every sample, cached per size and lens. */
 function raysFor(width: number, height: number, k: Intrinsics, ss: number): Float32Array {
-  const key = `${width}x${height}:${ss}:${k.f}:${k.cx}:${k.cy}:${k.k1}:${k.k2}:${k.k3}:${k.p1}:${k.p2}`;
+  const a = k.a ?? 1;
+  const key = `${width}x${height}:${ss}:${k.f}:${a}:${k.cx}:${k.cy}:${k.k1}:${k.k2}:${k.k3}:${k.p1}:${k.p2}`;
   const hit = rayCache.get(key);
   if (hit) return hit;
   const W = width * ss;
@@ -60,7 +61,7 @@ function raysFor(width: number, height: number, k: Intrinsics, ss: number): Floa
     const py = (y + 0.5) / ss - 0.5;
     for (let x = 0; x < W; x += 1) {
       const px = (x + 0.5) / ss - 0.5;
-      const r = undistort(k, (px - k.cx) / k.f, (py - k.cy) / k.f);
+      const r = undistort(k, ((px - k.cx) * a) / k.f, (py - k.cy) / k.f);
       out[2 * (y * W + x)] = r[0];
       out[2 * (y * W + x) + 1] = r[1];
     }
@@ -170,7 +171,7 @@ export function renderScene(quads: readonly Quad[], o: RenderOptions): RGBImage 
         behind = true;
         break;
       }
-      const px = o.intr.f * (xc / zc) + o.intr.cx;
+      const px = (o.intr.f * (xc / zc)) / (o.intr.a ?? 1) + o.intr.cx;
       const py = o.intr.f * (yc / zc) + o.intr.cy;
       x0 = Math.min(x0, px);
       y0 = Math.min(y0, py);

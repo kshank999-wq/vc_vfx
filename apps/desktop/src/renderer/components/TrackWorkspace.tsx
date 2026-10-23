@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import {
   CAMERA_DB,
+  formatPixelAspect,
   CAMERA_EXPORT_FORMATS,
   SCENE_UNITS,
   TRACK2D_EXPORT_FORMATS,
@@ -26,6 +27,7 @@ import { applyOps, type CameraCommand, type ProjectOp } from '../../shared/camer
 import { applySim, invertSim, composeSim, type Similarity } from '../../shared/camera/align';
 import { lidarToScene } from '../../shared/camera/coords';
 import { CV_TO_GL } from '../../shared/camera/geometry';
+import { AspectTag, useShotAspect } from './FrameBox';
 import { mul3 } from '../../shared/camera/linalg';
 import { homographyFromQuads } from '../../shared/camera/planar';
 import { PointCloudView, type CloudLayer } from './PointCloudView';
@@ -152,6 +154,7 @@ export function TrackWorkspace(props: TrackWorkspaceProps) {
   const camLocked = state ? camtrackLocked(state) : 'No shot';
   const t2dLocked = state ? track2dLocked(state) : 'No shot';
   const plate = session?.plate ?? null;
+  const shotAspect = useShotAspect(project, shotId);
   const first = session?.first ?? frame;
   const last = session?.last ?? frame;
   // The viewer's frame can be outside what tracks here (the preview's sample shot is shorter than the shot).
@@ -203,7 +206,8 @@ export function TrackWorkspace(props: TrackWorkspaceProps) {
     const measure = () => {
       const w = el.clientWidth;
       const h = el.clientHeight;
-      const aspect = plate.width / plate.height;
+      // De-squeezed on screen (addendum 17); tracks and corners stay in plate pixels.
+      const aspect = (plate.width * shotAspect.display) / plate.height;
       const width = Math.min(w, h * aspect);
       const height = width / aspect;
       setBox({ left: (w - width) / 2, top: (h - height) / 2, width, height });
@@ -213,7 +217,7 @@ export function TrackWorkspace(props: TrackWorkspaceProps) {
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [plate?.width, plate?.height, show3d]);
+  }, [plate?.width, plate?.height, show3d, shotAspect.display]);
   const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
   const mainWidth = sizeFor(box.width * dpr);
   const wantFrame = useCallback(
@@ -1425,6 +1429,9 @@ export function TrackWorkspace(props: TrackWorkspaceProps) {
         <Stats>
           <Stat label="RMS error" value={rms !== undefined ? rms.toFixed(2) : '—'} unit={rms !== undefined ? ' px' : undefined} tone={rms === undefined ? undefined : rms < 0.8 ? 'ok' : rms < 1.5 ? 'warn' : 'bad'} title="Average distance between the tracks and the solved points, in pixels. Under 1 px is good." />
           <Stat label="Focal length" value={solveRec ? (solveRec.intrinsics.focalMm ? solveRec.intrinsics.focalMm.toFixed(1) : solveRec.intrinsics.focalPx.toFixed(0)) : doc.lens.focalMm ? String(doc.lens.focalMm) : '—'} unit={solveRec ? (solveRec.intrinsics.focalMm ? ' mm' : ' px') : doc.lens.focalMm ? ' mm' : undefined} title={solveRec ? 'Solved' : 'From the lens settings'} />
+          {shotAspect.pixelAspect !== 1 || (solveRec && solveRec.intrinsics.pixelAspect !== 1) ? (
+            <Stat label="Pixel aspect" value={formatPixelAspect(shotAspect.pixelAspect)} tone={solveRec && Math.abs(solveRec.intrinsics.pixelAspect - shotAspect.pixelAspect) > 1e-6 ? 'warn' : undefined} title={`${shotAspect.decision?.summary ?? ''}. The solve models fx = f / ${formatPixelAspect(shotAspect.pixelAspect)}, fy = f; exports declare it.${solveRec && Math.abs(solveRec.intrinsics.pixelAspect - shotAspect.pixelAspect) > 1e-6 ? ` The active solve was made at ${formatPixelAspect(solveRec.intrinsics.pixelAspect)}: solve again.` : ''}`} />
+          ) : null}
           <Stat label="Frames solved" value={solveRec ? solveRec.stats.framesSolved : '—'} unit={solveRec ? ` / ${solveRec.stats.framesTotal}` : undefined} tone={solveRec ? (solveRec.stats.framesSolved === solveRec.stats.framesTotal ? 'ok' : 'warn') : undefined} />
           <Stat label="Confidence" value={solveRec ? (solveRec.stats.confidence * 100).toFixed(0) : '—'} unit={solveRec ? ' %' : undefined} tone={solveRec ? (solveRec.stats.confidence >= 0.7 ? 'ok' : 'warn') : undefined} />
           <Stat label="Tracks" value={solveRec ? solveRec.stats.tracksUsed : doc.trackSet ? doc.trackSet.tracks : '—'} title={solveRec ? 'Used by the solve' : 'Tracked'} />
@@ -1434,6 +1441,7 @@ export function TrackWorkspace(props: TrackWorkspaceProps) {
           <div className="info-notes">
             {doc.solves.length > 1 ? <p className="info-line">Solve {solveRec.number} of {doc.solves.length}</p> : null}
             {solveRec.stats.nodal ? <p className="info-line">Nodal (the camera only turned)</p> : null}
+            {Math.abs(solveRec.intrinsics.pixelAspect - shotAspect.pixelAspect) > 1e-6 ? <p className="info-line warn">Solved at pixel aspect {formatPixelAspect(solveRec.intrinsics.pixelAspect)}; the shot is now {formatPixelAspect(shotAspect.pixelAspect)}. Solve again.</p> : null}
             {solveRec.stats.warnings.map((w) => (
               <p key={w} className="warn">
                 ⚠ {w}
@@ -1525,6 +1533,7 @@ export function TrackWorkspace(props: TrackWorkspaceProps) {
                 <canvas ref={overlayRef} className={`track-overlay tool-${tool}`} aria-label="Tracks on the frame" onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp} />
               </div>
             ) : null}
+            {session?.available ? <AspectTag aspect={shotAspect} /> : null}
             {session?.sample ? <span className="stage-tag">sample frames</span> : null}
           </div>
           {show3d && sub === 'camera' ? (
@@ -1533,8 +1542,8 @@ export function TrackWorkspace(props: TrackWorkspaceProps) {
               tracks={tracks3d}
               cameras={cams3d}
               currentFrame={frame}
-              fovDeg={solveRec && plate ? (2 * Math.atan(plate.width / (2 * solveRec.intrinsics.focalPx)) * 180) / Math.PI : 50}
-              aspect={plate ? plate.width / plate.height : 16 / 9}
+              fovDeg={solveRec && plate ? (2 * Math.atan((plate.width * solveRec.intrinsics.pixelAspect) / (2 * solveRec.intrinsics.focalPx)) * 180) / Math.PI : 50}
+              aspect={plate ? (plate.width * shotAspect.pixelAspect) / plate.height : 16 / 9}
               marks={marks3d}
               onPick={(p) => void onPick3d(p)}
               {...(tool === 'corr' ? { pickOnly: corrFeature ? ('clouds' as const) : ('tracks' as const) } : {})}
