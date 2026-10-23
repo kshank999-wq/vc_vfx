@@ -14,6 +14,8 @@ export interface Sam2Files {
   ort: string[];
   encoder: string;
   decoder: string;
+  /** The model's id (models.ts), recorded in the engine version. */
+  model?: string;
   threads?: number;
 }
 
@@ -22,5 +24,5 @@ export async function segmentationEngine(id: 'track' | 'sam2', sam2?: Sam2Files)
   if (!sam2) throw new Error('SAM 2 needs its model files');
   const loaded = loadOrt(sam2.ort);
   if (!loaded.ok) throw new Error(`${loaded.reason} (${loaded.detail})`);
-  return new Sam2Engine(await OrtSam2Runtime.create(loaded.ort, sam2.encoder, sam2.decoder, sam2.threads));
+  return new Sam2Engine(await OrtSam2Runtime.create(loaded.ort, sam2.encoder, sam2.decoder, sam2.threads), sam2.model);
 }

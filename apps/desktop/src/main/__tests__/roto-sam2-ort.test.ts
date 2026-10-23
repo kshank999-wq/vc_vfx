@@ -55,7 +55,7 @@ describe.skipIf(!ort.ok)('SAM 2 through onnxruntime-node (stand-in models)', () 
     await copyFile(join(fixtures, 'standin.encoder.onnx'), join(dir, SAM2_MODEL.files[0]!.name));
     await copyFile(join(fixtures, 'standin.decoder.onnx'), join(dir, SAM2_MODEL.files[1]!.name));
     const session = await rotoSession(project, 'R1', null, env);
-    expect(session.engines.find((e) => e.id === 'sam2')).toMatchObject({ available: true, model: { present: true, pinned: false } });
+    expect(session.engines.find((e) => e.id === 'sam2')).toMatchObject({ available: true, model: { present: true, pinned: true } });
     let p = ok(addStroke(project, 'R1', 'subject', 1001, { mode: 'include', radius: 5, points: [[75, 108], [85, 108]] }, 'Ana', new Date()));
     p = ok(setPartSettings(p, 'R1', 'subject', { engine: { id: 'sam2' } }, 'Ana', new Date()));
     expect(shotState(p, 'R1')!.roto!.parts[0]!.engine.id).toBe('sam2');

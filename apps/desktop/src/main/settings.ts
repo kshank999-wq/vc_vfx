@@ -20,6 +20,7 @@ const SettingsSchema = z.object({
   outputRoots: z.record(z.string()).default({}),
   recent: z.array(z.string()).default([]),
   modelBaseUrl: z.string().default(''),
+  sam2Model: z.string().default(''),
   aiFrames: z.record(z.boolean()).default({}),
 });
 

@@ -3,7 +3,7 @@ import type { ApiResult, JobProgress, RotoEngineInfo, RotoMaskData, RotoRunReque
 import { CancelledError, runRoto } from '../shared/roto/engine';
 import { resizeMask, type Mask, type RGBImage } from '../shared/roto/image';
 import { refineMatte } from '../shared/roto/refine';
-import { SAM2_VERSION } from '../shared/roto/sam2';
+import { sam2EngineVersion } from '../shared/roto/sam2';
 import { figureScene, type SyntheticScene } from '../shared/roto/synthetic';
 import { TRACK_VERSION, TrackEngine } from '../shared/roto/track';
 import { viewerTimeline } from '../shared/viewer';
@@ -54,7 +54,7 @@ export function createRotoPreview(options: { desktopOnly: (what: string) => stri
     {
       id: 'sam2',
       label: 'SAM 2.1 (AI)',
-      version: SAM2_VERSION,
+      version: sam2EngineVersion('sam2.1_hiera_tiny'),
       available: false,
       reason: options.desktopOnly('the SAM 2 model is downloaded and runs on your computer.'),
       model: { label: 'SAM 2.1 Hiera Tiny (ONNX)', approxBytes: 156_000_000, present: false, pinned: false, downloadable: false },

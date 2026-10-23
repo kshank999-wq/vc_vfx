@@ -27,7 +27,7 @@ import { packageShot } from '../package-shot';
 import { generateSequence } from '../sequence';
 import { rotoExport, rotoMask, rotoRun, rotoSession, type RotoEnv } from '../roto/api';
 import { readFrames, rotoFrameSource, workingSize } from '../roto/frames';
-import { downloadModel, isPinned, modelStatus, SAM2_MODEL, UNPINNED_REFUSAL, type FetchLike, type ModelInfo } from '../roto/models';
+import { downloadModel, isPinned, modelStatus, SAM2_MODEL, SAM2_MODELS, sam2Model, UNPINNED_REFUSAL, verifyModel, type FetchLike, type ModelInfo } from '../roto/models';
 import { decodePng, encodePng } from '../roto/png';
 import { checkSessions } from '../roto/sam2-ort';
 import { runRotoJob } from '../roto/service';
@@ -92,25 +92,44 @@ describe('SAM 2 model files', () => {
   };
   const files = { 'sam2.1_hiera_tiny.encoder.onnx': new Uint8Array([1, 2, 3]), 'sam2.1_hiera_tiny.decoder.onnx': new Uint8Array([4, 5]) };
 
-  it('ships unpinned: a packaged build refuses to download or use the model', async () => {
-    expect(isPinned(SAM2_MODEL)).toBe(false);
-    const userData = await mkdtemp(join(tmpdir(), 'vcvfx-models-'));
-    await expect(downloadModel({ userData, packaged: true, fetch: fakeFetch(files) })).rejects.toThrow(UNPINNED_REFUSAL);
-    const status = await modelStatus(userData, true);
-    expect(status).toMatchObject({ present: false, pinned: false, usable: false, reason: UNPINNED_REFUSAL });
+  it('ships pinned: every model names a fixed revision, an exact size and a SHA-256 per file', () => {
+    for (const m of SAM2_MODELS) {
+      expect(isPinned(m)).toBe(true);
+      expect(m.defaultBaseUrl).toMatch(/^https:\/\/huggingface\.co\/[\w.-]+\/[\w.-]+\/resolve\/[0-9a-f]{40}\//);
+      expect(m.defaultBaseUrl).not.toMatch(/\/resolve\/main\//);
+      expect(m.source?.revision).toMatch(/^[0-9a-f]{40}$/);
+      expect(m.defaultBaseUrl).toContain(m.source!.revision);
+      expect(m.licence).toMatch(/Apache-2\.0/);
+      for (const f of m.files) {
+        expect(f.sha256).toMatch(/^[0-9a-f]{64}$/);
+        expect(Number.isInteger(f.approxBytes) && f.approxBytes > 1_000_000).toBe(true);
+      }
+    }
+    expect(SAM2_MODEL.id).toBe('sam2.1_hiera_tiny');
+    expect(sam2Model('sam2_hiera_base_plus').id).toBe('sam2_hiera_base_plus');
+    expect(sam2Model('').id).toBe('sam2.1_hiera_tiny');
+    expect(sam2Model('nonsense').id).toBe('sam2.1_hiera_tiny');
   });
 
-  it('downloads in development, records the hashes to pin, and checks pins when there are some', async () => {
+  it('refuses files that do not match their pins, and an unpinned model in a packaged build', async () => {
     const userData = await mkdtemp(join(tmpdir(), 'vcvfx-models-'));
-    const got = await downloadModel({ userData, packaged: false, fetch: fakeFetch(files), baseUrl: 'https://example.test/models' });
+    await expect(downloadModel({ userData, packaged: true, fetch: fakeFetch(files) })).rejects.toThrow(/does not match its pinned SHA-256 and size/);
+    expect((await modelStatus(userData, true)).present).toBe(false);
+    const unpinned: ModelInfo = { ...SAM2_MODEL, id: 'unpinned', files: SAM2_MODEL.files.map((f) => ({ ...f, sha256: null })) };
+    await expect(downloadModel({ userData, packaged: true, fetch: fakeFetch(files), model: unpinned })).rejects.toThrow(UNPINNED_REFUSAL);
+    expect(await modelStatus(userData, true, unpinned)).toMatchObject({ present: false, pinned: false, usable: false, reason: UNPINNED_REFUSAL });
+  });
+
+  it('downloads an unpinned model in development and records the hashes to pin', async () => {
+    const userData = await mkdtemp(join(tmpdir(), 'vcvfx-models-'));
+    const unpinned: ModelInfo = { ...SAM2_MODEL, id: 'unpinned', files: SAM2_MODEL.files.map((f) => ({ ...f, sha256: null })) };
+    const got = await downloadModel({ userData, packaged: false, fetch: fakeFetch(files), baseUrl: 'https://example.test/models', model: unpinned });
     expect(got.unpinned).toBe(true);
     expect(got.hashes['sam2.1_hiera_tiny.encoder.onnx']).toBe('039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81');
     expect(JSON.parse(await readFile(join(got.dir, 'PINS.json'), 'utf8')).hashes).toEqual(got.hashes);
-    expect((await modelStatus(userData, false)).usable).toBe(true);
-    // Pinned, with a wrong pin: nothing is installed.
-    const pinned: ModelInfo = { ...SAM2_MODEL, id: 'pinned', files: SAM2_MODEL.files.map((f) => ({ ...f, sha256: '0'.repeat(64) })) };
-    await expect(downloadModel({ userData, packaged: true, fetch: fakeFetch(files), model: pinned, baseUrl: 'https://example.test/m/' })).rejects.toThrow(/does not match its pinned SHA-256/);
-    expect((await modelStatus(userData, true, pinned)).present).toBe(false);
+    expect((await modelStatus(userData, false, unpinned)).usable).toBe(true);
+    // A packaged build checks the files on disk against the pins before every run.
+    expect(await verifyModel(userData, { ...unpinned, files: SAM2_MODEL.files })).toMatchObject({ ok: false });
     await expect(downloadModel({ userData, packaged: false, fetch: fakeFetch(files), baseUrl: 'http://insecure.test/' })).rejects.toThrow(/https/);
   });
 

@@ -22,7 +22,7 @@ import type { FfmpegInfo } from '../shared/bridge';
 import { noteRecent, readSettings, updateSettings } from './settings';
 import { join } from 'node:path';
 import { engineInfo, rotoExport, sam2Files, rotoFrame, rotoMask, rotoRun, rotoSession, type RotoEnv } from './roto/api';
-import { downloadModel, type FetchLike } from './roto/models';
+import { downloadModel, sam2Model, type FetchLike } from './roto/models';
 import { ortCandidates } from './roto/sam2-ort';
 import { verifyProject } from './verify';
 import { registerKeyHandlers } from './key/ipc-key';
@@ -202,7 +202,7 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null, isDev
   });
 
   handle('settings:get', none, async () => readSettings());
-  handle('settings:set', z.object({ operatorName: z.string().max(200).optional(), ffmpegPath: z.string().max(4096).optional(), modelBaseUrl: z.union([z.literal(''), z.string().url().max(2048).startsWith('https://')]).optional() }).strict(), async (_e, patch) => {
+  handle('settings:set', z.object({ operatorName: z.string().max(200).optional(), ffmpegPath: z.string().max(4096).optional(), modelBaseUrl: z.union([z.literal(''), z.string().url().max(2048).startsWith('https://')]).optional(), sam2Model: z.enum(['', 'sam2.1_hiera_tiny', 'sam2_hiera_base_plus']).optional() }).strict(), async (_e, patch) => {
     if (patch.ffmpegPath !== undefined) tools.reset();
     return updateSettings((s) => ({ ...s, ...patch }));
   });
@@ -379,6 +379,7 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null, isDev
       userData: app.getPath('userData'),
       packaged: app.isPackaged,
       ort: ortCandidates(loc),
+      sam2Model: process.env['VCVFX_SAM2_MODEL'] || (await readSettings()).sam2Model || '',
       workerFile: join(__dirname, 'roto-worker.js'),
       generator: `VC VFX ${app.getVersion()}`,
     };
@@ -452,6 +453,7 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null, isDev
             userData: env.userData,
             packaged: env.packaged,
             baseUrl: process.env['VCVFX_SAM2_URL'] || settings.modelBaseUrl || undefined,
+            model: sam2Model(env.sam2Model),
             fetch: ((url: string, init?: { signal?: AbortSignal }) => net.fetch(url, init)) as unknown as FetchLike,
             signal,
             onProgress: (done, total, file) => progress(done, total, file),

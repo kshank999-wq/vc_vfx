@@ -1,5 +1,6 @@
-import type { EngineResult, KeyRequest, SegmentationEngine, StepRequest } from './engine';
-import { bbox, binarize, iou, maskArea, resizePlane, squaredDistance, type Mask, type RGBImage } from './image';
+import type { EngineResult, KeyRequest, SegmentationEngine, StepRequest, SubjectPrompt } from './engine';
+import { buildPyramid, maskedTranslation } from './flow';
+import { areaDownscale, bbox, binarize, iou, maskArea, resizeMask, resizePlane, squaredDistance, toGray, type Mask, type RGBImage } from './image';
 import { samplePoints, type EngineStroke } from './strokes';
 
 /**
@@ -28,11 +29,13 @@ import { samplePoints, type EngineStroke } from './strokes';
  *
  * Everything here is pure; inference is behind `Sam2Runtime`, which the
  * desktop implements with onnxruntime-node (main/roto/sam2-ort.ts). The
- * pre- and post-processing are unit-tested; inference against real weights
- * has NOT been verified in this repository (see addendum 04).
+ * pre- and post-processing are unit-tested; inference on real weights runs
+ * in an integration test when the model is on disk (addendum 18).
  */
 
-export const SAM2_VERSION = '2.1-tiny-onnx/1';
+/** The engine's version; the model it runs is appended (`sam2.1_hiera_tiny`). /2: box and point prompts (addendum 18). */
+export const SAM2_VERSION = 'onnx/2';
+export const sam2EngineVersion = (model: string) => `${model}/${SAM2_VERSION}`;
 export const SAM2_INPUT = 1024;
 export const SAM2_LOWRES = 256;
 export const SAM2_MEAN = [0.485, 0.456, 0.406] as const;
@@ -123,6 +126,22 @@ export function promptFromStrokes(strokes: readonly EngineStroke[], w: number, h
   return { coords: toModelCoords(pts, w, h), labels: Float32Array.from([...pos.map(() => 1), ...neg.map(() => 0)]), maskInput: null };
 }
 
+/** A subject prompt (box corners labelled 2 / 3, points 1 / 0) in image pixels → model input. */
+export function promptFromSubject(p: SubjectPrompt, w: number, h: number): Sam2Prompt | null {
+  const pts: [number, number][] = [];
+  const labels: number[] = [];
+  for (const q of p.points ?? []) {
+    pts.push([q.x, q.y]);
+    labels.push(q.label);
+  }
+  if (p.box && p.box.x1 > p.box.x0 && p.box.y1 > p.box.y0) {
+    pts.push([p.box.x0, p.box.y0], [p.box.x1, p.box.y1]);
+    labels.push(2, 3);
+  }
+  if (!pts.length) return null;
+  return { coords: toModelCoords(pts, w, h), labels: Float32Array.from(labels), maskInput: null };
+}
+
 /**
  * Prompts from the previous frame's matte: its box (corners labelled 2 and 3),
  * up to `interior` positive points at the deepest interior pixels (spread
@@ -193,6 +212,46 @@ export function pickBest(ious: Float32Array): number {
   return best;
 }
 
+/** A matte moved by (dx, dy) pixels (whole pixels; what leaves the frame is lost). */
+export function shiftMask(m: Mask, dx: number, dy: number): Mask {
+  const { width: w, height: h } = m;
+  const ix = Math.round(dx);
+  const iy = Math.round(dy);
+  if (!ix && !iy) return m;
+  const out = new Uint8Array(w * h);
+  for (let y = 0; y < h; y += 1) {
+    const sy = y - iy;
+    if (sy < 0 || sy >= h) continue;
+    for (let x = 0; x < w; x += 1) {
+      const sx = x - ix;
+      if (sx >= 0 && sx < w) out[y * w + x] = m.data[sy * w + sx]!;
+    }
+  }
+  return { width: w, height: h, data: out };
+}
+
+/**
+ * How far the subject moved between two frames: masked block matching on the
+ * previous matte's pixels (flow.ts), on a copy at most 480 px wide. Per-frame
+ * prompting from where the subject *was* fails on fast movers (a runner
+ * moves a quarter of his width a frame): the box and interior points must be
+ * where it *is*.
+ */
+export function subjectShift(prev: RGBImage, next: RGBImage, prevMask: Mask): [number, number] {
+  const f = Math.min(1, 480 / prev.width);
+  const fw = Math.max(16, Math.round(prev.width * f));
+  const fh = Math.max(16, Math.round(prev.height * f));
+  const gray = (img: RGBImage) => {
+    const g = toGray(img);
+    return fw === img.width ? g : areaDownscale(g, img.width, img.height, fw, fh);
+  };
+  const m = fw === prevMask.width ? prevMask : resizeMask(prevMask, fw, fh);
+  const bin = binarize(m);
+  if (!maskArea(bin)) return [0, 0];
+  const t = maskedTranslation(buildPyramid(gray(prev), fw, fh, 4), buildPyramid(gray(next), fw, fh, 4), bin, Math.max(8, Math.round(fw / 6)));
+  return [t.dx / f, t.dy / f];
+}
+
 /** Decoder IoU blended with temporal IoU against the previous matte (when there is one). */
 export function sam2Confidence(predictedIou: number, temporalIou: number | null): number {
   const p = Math.min(1, Math.max(0, predictedIou));
@@ -202,11 +261,17 @@ export function sam2Confidence(predictedIou: number, temporalIou: number | null)
 
 export class Sam2Engine implements SegmentationEngine {
   readonly id = 'sam2' as const;
-  readonly version = SAM2_VERSION;
-  readonly label = 'SAM 2.1 (AI)';
+  readonly version: string;
+  readonly label: string;
   private lastLogits: Float32Array | null = null;
 
-  constructor(private readonly runtime: Sam2Runtime) {}
+  constructor(
+    private readonly runtime: Sam2Runtime,
+    readonly model = 'sam2.1_hiera_tiny',
+  ) {
+    this.version = sam2EngineVersion(model);
+    this.label = model.startsWith('sam2.1') ? 'SAM 2.1 (AI)' : 'SAM 2 (AI)';
+  }
 
   private async run(image: RGBImage, prompt: Sam2Prompt): Promise<{ mask: Mask; iou: number; logits: Float32Array }> {
     const embedding = await this.runtime.encode(sam2Preprocess(image));
@@ -218,6 +283,15 @@ export class Sam2Engine implements SegmentationEngine {
   }
 
   async key(req: KeyRequest): Promise<EngineResult> {
+    const seeded = req.prompt ? promptFromSubject(req.prompt, req.image.width, req.image.height) : null;
+    if (seeded) {
+      // A box / clicks on the subject (the key's subject seed): with paint as well, both prompt.
+      const paint = req.strokes.length ? promptFromStrokes(req.strokes, req.image.width, req.image.height) : null;
+      const prompt = paint ? { coords: Float32Array.from([...paint.coords, ...seeded.coords]), labels: Float32Array.from([...paint.labels, ...seeded.labels]), maskInput: null } : seeded;
+      const r = await this.run(req.image, prompt);
+      this.lastLogits = r.logits;
+      return { mask: r.mask, confidence: sam2Confidence(r.iou, null), detail: { predictedIou: r.iou } };
+    }
     if (!req.strokes.length) {
       if (!req.reference) throw new Error('Nothing to segment: no strokes and no reference matte');
       this.lastLogits = maskToLogits(req.reference);
@@ -233,14 +307,18 @@ export class Sam2Engine implements SegmentationEngine {
   }
 
   async step(req: StepRequest): Promise<EngineResult> {
-    const prompt = promptFromMask(req.prevMask, this.lastLogits);
+    // Prompt where the subject is now: the previous matte moved by the subject's own motion.
+    const [dx, dy] = subjectShift(req.prev, req.next, req.prevMask);
+    const moved = Math.hypot(dx, dy) >= 1;
+    const expected = moved ? shiftMask(req.prevMask, dx, dy) : req.prevMask;
+    const prompt = promptFromMask(expected, moved ? null : this.lastLogits);
     const { width: w, height: h } = req.next;
     if (!prompt) return { mask: { width: w, height: h, data: new Uint8Array(w * h) }, confidence: 0, detail: { area: 0 } };
     const r = await this.run(req.next, prompt);
     this.lastLogits = r.logits;
-    const temporal = iou(binarize(req.prevMask), binarize(r.mask));
+    const temporal = iou(binarize(expected), binarize(r.mask));
     const area = maskArea(r.mask);
-    return { mask: r.mask, confidence: area ? sam2Confidence(r.iou, temporal) : 0, detail: { predictedIou: r.iou, temporal } };
+    return { mask: r.mask, confidence: area ? sam2Confidence(r.iou, temporal) : 0, detail: { predictedIou: r.iou, temporal, dx, dy } };
   }
 
   dispose(): void {
