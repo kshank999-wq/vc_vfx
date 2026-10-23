@@ -19,6 +19,8 @@ export interface SubjectSeed {
   strokes: EngineStroke[];
   /** Where it came from. */
   seededBy: 'operator' | 'key';
+  /** From the key: what the key joins to the subject on the seed frame (working pixels), to check the engine's mask against. */
+  region?: Uint8Array;
 }
 
 /** The operator's box / clicks (plate pixels) as a seed at working size. */
@@ -156,11 +158,14 @@ export function seedFromKey(alpha: Float32Array, w: number, h: number): SubjectS
   const r = Math.max(2, w / 160);
   const strokes: EngineStroke[] = pts.map(([x, y, d]) => ({ mode: 'include' as const, radius: Math.max(r, 0.6 * d), points: [[x, y] as const] }));
   if (ring.length) strokes.push({ mode: 'exclude', radius: r, points: ring });
+  // A foreground that fills the frame (a small card of screen in a scene) is not a subject to find.
+  if ((box.x1 - box.x0 + 1) * (box.y1 - box.y0 + 1) > 0.8 * n) return null;
   const pad = Math.max(2, 0.02 * Math.max(box.x1 - box.x0, box.y1 - box.y0));
   return {
     prompt: { box: { x0: Math.max(0, box.x0 - pad), y0: Math.max(0, box.y0 - pad), x1: Math.min(w, box.x1 + 1 + pad), y1: Math.min(h, box.y1 + 1 + pad) }, points: pts.map(([x, y]) => ({ x, y, label: 1 as const })) },
     strokes,
     seededBy: 'key',
+    region: mine,
   };
 }
 
@@ -185,6 +190,31 @@ export async function runSubject(engine: SegmentationEngine, seed: SubjectSeed, 
   };
   check();
   const first = await key();
+  // The seed's clicks are on the subject: an engine whose mask leaves some of them out has missed part
+  // of it (Track cannot separate a costume the colour of the screen from the screen), and every frame
+  // it makes is trusted that much less.
+  const pos = (seed.prompt.points ?? []).filter((q) => q.label === 1);
+  let hit = 0;
+  for (const q of pos) {
+    const x = Math.min(first.r.mask.width - 1, Math.max(0, Math.floor(q.x)));
+    const y = Math.min(first.r.mask.height - 1, Math.max(0, Math.floor(q.y)));
+    if (first.r.mask.data[y * first.r.mask.width + x]! >= 128) hit += 1;
+  }
+  let trust = pos.length ? hit / pos.length : 1;
+  // And what the key joins to the subject should mostly be in the mask (a little of it is cast shadow).
+  if (seed.region) {
+    let all = 0;
+    let inside = 0;
+    for (let i = 0; i < seed.region.length; i += 1)
+      if (seed.region[i]) {
+        all += 1;
+        if (first.r.mask.data[i]! >= 128) inside += 1;
+      }
+    const coverage = all ? inside / all : 1;
+    (globalThis as { __subjectCoverage?: number }).__subjectCoverage = coverage;
+    trust *= Math.min(1, coverage / 0.8);
+  }
+  first.r.confidence *= trust;
   await io.put(from, first.r.mask, first.r.confidence);
   out.push({ frame: from, confidence: first.r.confidence });
   io.progress?.(out.length, total, from);
@@ -201,8 +231,8 @@ export async function runSubject(engine: SegmentationEngine, seed: SubjectSeed, 
       check();
       const next = await io.frame(f);
       const r = maskArea(prevMask) === 0 ? { mask: { width: next.width, height: next.height, data: new Uint8Array(next.width * next.height) }, confidence: 0 } : await engine.step({ prevFrame: f - dir, nextFrame: f, prev, next, prevMask, smoothing: 0, settings: {} });
-      await io.put(f, r.mask, r.confidence);
-      out.push({ frame: f, confidence: Math.round(r.confidence * 1000) / 1000 });
+      await io.put(f, r.mask, r.confidence * trust);
+      out.push({ frame: f, confidence: Math.round(r.confidence * trust * 1000) / 1000 });
       io.progress?.(out.length, total, f);
       prev = next;
       prevMask = r.mask;

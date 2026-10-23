@@ -258,4 +258,14 @@ export async function runKey(
 }
 
 const r4 = (v: number) => Math.round(v * 10_000) / 10_000;
-export const roundMetrics = (m: KeyMetrics): KeyMetrics => ({ screenCoverage: r4(m.screenCoverage), coreNoise: r4(m.coreNoise), edgeActivity: r4(m.edgeActivity), holes: r4(m.holes), residual: r4(m.residual) });
+export const roundMetrics = (m: KeyMetrics): KeyMetrics => ({
+  screenCoverage: r4(m.screenCoverage),
+  coreNoise: r4(m.coreNoise),
+  edgeActivity: r4(m.edgeActivity),
+  holes: r4(m.holes),
+  residual: r4(m.residual),
+  ...(m.subjectDisagree !== undefined ? { subjectDisagree: r4(m.subjectDisagree) } : {}),
+  ...(m.subjectOutside !== undefined ? { subjectOutside: r4(m.subjectOutside) } : {}),
+  ...(m.subjectConfidence !== undefined ? { subjectConfidence: r4(m.subjectConfidence) } : {}),
+  ...(m.shadow !== undefined ? { shadow: r4(m.shadow) } : {}),
+});

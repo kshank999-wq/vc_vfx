@@ -59,6 +59,8 @@ export interface SubjectPrior {
   outsideDistance: Float32Array;
   /** Confidence actually used (the input's, lowered when the segmentation covers clean screen). */
   confidence: number;
+  /** 0…1: how far the outside garbage and the shadow's removal act (confidence 0.5 → 0, 0.8 → 1). */
+  outsideWeight: number;
   /** Share of the solid core the key calls clean screen: segmentation over the screen. */
   disagree: number;
   /** Pixels of the segmentation. */
@@ -106,7 +108,7 @@ export function subjectPrior(input: SubjectInput, raw: Float32Array, w: number, 
   const keep = new Float32Array(n).fill(1);
   const outsideDistance = new Float32Array(n);
   const depth = new Float32Array(n);
-  if (!area) return { inside, core, deep, texture: new Float32Array(n), keep, depth, outsideDistance, confidence: 0, disagree: 0, area };
+  if (!area) return { inside, core, deep, texture: new Float32Array(n), keep, depth, outsideDistance, confidence: 0, outsideWeight: 0, disagree: 0, area };
   const dIn = squaredDistance(outsideMask, w, h);
   const dOut = squaredDistance(inside, w, h);
   const tex = keyTexture(raw, w, h, m);
@@ -143,6 +145,9 @@ export function subjectPrior(input: SubjectInput, raw: Float32Array, w: number, 
   const disagree = coreN ? coreClean / coreN : 0;
   // Segmentation over clean screen is a segmentation error: trust it less.
   const confidence = clamp01(input.confidence) * (1 - clamp01((disagree - 0.01) / 0.09));
+  // Throwing things away on the segmentation's word needs a surer one than keeping them solid does:
+  // the outside garbage (and the shadow's removal) fade in between confidence 0.5 and 0.8.
+  const outsideWeight = clamp01((confidence - 0.5) / 0.3);
   for (let i = 0; i < n; i += 1) core[i] = core[i]! * confidence;
   if (input.outside) {
     // What the key itself joins to the subject — hair, a motion-blur tail, beyond a segmentation that
@@ -151,6 +156,7 @@ export function subjectPrior(input: SubjectInput, raw: Float32Array, w: number, 
     // (an off-screen light stand) are not reached.
     // (Hair reaches further: the reach widens with the key's fine structure, and with the subject's size.)
     const reach = Math.max(6 * m, 0.2 * Math.sqrt(area));
+    const solidReach = Math.max(reach, 0.75 * Math.sqrt(area));
     const joined = new Uint8Array(n);
     const queue = new Int32Array(n);
     let head = 0;
@@ -160,6 +166,11 @@ export function subjectPrior(input: SubjectInput, raw: Float32Array, w: number, 
       queue[tail++] = i;
     }
     const floor = 0.5 * clipBlack;
+    // Solid things a little apart from the subject (a gap of up to the margin: a head over a thin neck,
+    // a hand past a gap of screen) are reached across that gap.
+    const solid = new Uint8Array(n);
+    for (let i = 0; i < n; i += 1) solid[i] = raw[i]! >= 0.8 ? 1 : 0;
+    const bridge = morph(solid, w, h, Math.max(1, Math.round(m)));
     while (head < tail) {
       const i = queue[head++]!;
       const x = i % w;
@@ -170,7 +181,10 @@ export function subjectPrior(input: SubjectInput, raw: Float32Array, w: number, 
           const yy = y + dy;
           if (xx < 0 || yy < 0 || xx >= w || yy >= h) continue;
           const j = yy * w + xx;
-          if (joined[j] || raw[j]! <= floor || outsideDistance[j]! > reach * (1 + 2 * tex[j]!)) continue;
+          if (joined[j] || (raw[j]! <= floor && !bridge[j])) continue;
+          // What the key calls solid and touches the subject is the subject (a limb, a head the
+          // segmentation missed), as far as a subject reaches; what it keys only softly, within `reach`.
+          if (outsideDistance[j]! > (bridge[j] ? solidReach : reach * (1 + 2 * tex[j]!))) continue;
           joined[j] = 1;
           queue[tail++] = j;
         }
@@ -180,10 +194,10 @@ export function subjectPrior(input: SubjectInput, raw: Float32Array, w: number, 
       if (inside[i] || joinedNear[i]) continue;
       const need = 2 * m * (1 + 2 * tex[i]!);
       const fall = clamp01((outsideDistance[i]! - need) / m);
-      keep[i] = 1 - confidence * fall;
+      keep[i] = 1 - outsideWeight * fall;
     }
   }
-  return { inside, core, deep, texture: tex, keep, depth, outsideDistance, confidence, disagree, area };
+  return { inside, core, deep, texture: tex, keep, depth, outsideDistance, confidence, outsideWeight, disagree, area };
 }
 
 /** Chromaticity and luminance helpers. */

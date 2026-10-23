@@ -452,7 +452,7 @@ export function keyFrame(input: KeyFrameInput): KeyFrameOutput {
     shadow = shadowPass(P, input.clean ?? input.model ?? screen, w, h, { kind: k.kind, allowed, anchor, touch });
     // Taken out of the alpha only beside a segmented subject: without one, a screen-lit costume away
     // from the key's core reads exactly as a shadow, and the matte keeps it (the pass is still written).
-    if (prior && prior.area) for (let i = 0; i < n; i += 1) if (shadow[i]! > 0) alpha[i] = alpha[i]! * (1 - clamp01(shadow[i]! / 0.12));
+    if (prior && prior.area && prior.outsideWeight > 0) for (let i = 0; i < n; i += 1) if (shadow[i]! > 0) alpha[i] = alpha[i]! * (1 - prior.outsideWeight * clamp01(shadow[i]! / 0.12));
   }
   if (input.links?.length) alpha = combineMattes(alpha, input.links);
 

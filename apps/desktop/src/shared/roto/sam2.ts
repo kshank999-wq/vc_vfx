@@ -155,9 +155,9 @@ export function promptFromMask(mask: Mask, previousLogits: Float32Array | null, 
   const inv = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i += 1) inv[i] = bin[i] ? 0 : 1;
   const depth = squaredDistance(inv, w, h);
-  const want = options.interior ?? 3;
+  const want = options.interior ?? 5;
   const chosen: [number, number][] = [];
-  const minApart = 0.25 * Math.max(box.x1 - box.x0, box.y1 - box.y0);
+  const minApart = 0.2 * Math.max(box.x1 - box.x0, box.y1 - box.y0);
   // The deepest pixel, then the deepest one far enough from those chosen; one pass each.
   for (let k = 0; k < want; k += 1) {
     let best = -1;
@@ -252,6 +252,34 @@ export function subjectShift(prev: RGBImage, next: RGBImage, prevMask: Mask): [n
   return [t.dx / f, t.dy / f];
 }
 
+/** Of the multimask outputs, the best blend of predicted IoU and IoU with the expected mask (both at 256²). */
+export function pickTemporal(masks: Float32Array, ious: Float32Array, expected: Float32Array): { index: number; temporal: number } {
+  const plane = SAM2_LOWRES * SAM2_LOWRES;
+  let best = 0;
+  let score = -1;
+  let bestT = 0;
+  let maxT = 0;
+  for (let k = 0; k < ious.length; k += 1) {
+    let inter = 0;
+    let uni = 0;
+    for (let i = 0; i < plane; i += 1) {
+      const a = masks[k * plane + i]! > 0;
+      const b = expected[i]! > 0;
+      if (a && b) inter += 1;
+      if (a || b) uni += 1;
+    }
+    const t = uni ? inter / uni : 0;
+    maxT = Math.max(maxT, t);
+    const sc = 0.4 * Math.min(1, Math.max(0, ious[k]!)) + 0.6 * t;
+    if (sc > score) {
+      score = sc;
+      best = k;
+      bestT = t;
+    }
+  }
+  return { index: best, temporal: Math.max(bestT, maxT >= 0.15 ? bestT : maxT) };
+}
+
 /** Of the multimask outputs, the largest whose predicted IoU is within 0.1 of the best. */
 export function pickWholest(masks: Float32Array, ious: Float32Array): number {
   const best = pickBest(ious);
@@ -291,13 +319,21 @@ export class Sam2Engine implements SegmentationEngine {
     this.label = model.startsWith('sam2.1') ? 'SAM 2.1 (AI)' : 'SAM 2 (AI)';
   }
 
-  private async run(image: RGBImage, prompt: Sam2Prompt, wholest = false): Promise<{ mask: Mask; iou: number; logits: Float32Array }> {
+  private async run(image: RGBImage, prompt: Sam2Prompt, wholest = false, expected: Float32Array | null = null): Promise<{ mask: Mask; iou: number; logits: Float32Array; temporal: number | null }> {
     const embedding = await this.runtime.encode(sam2Preprocess(image));
     const out = await this.runtime.decode(embedding, prompt);
     const plane = SAM2_LOWRES * SAM2_LOWRES;
-    const best = wholest ? pickWholest(out.masks, out.ious.subarray(0, out.count)) : pickBest(out.ious.subarray(0, out.count));
+    let temporal: number | null = null;
+    let best: number;
+    if (expected) {
+      // Propagating: of the three masks, the one most like where the subject should be (its shifted
+      // previous matte) and most sure of itself — not the hoodie alone because SAM rates it a little higher.
+      const picked = pickTemporal(out.masks, out.ious.subarray(0, out.count), expected);
+      best = picked.index;
+      temporal = picked.temporal;
+    } else best = wholest ? pickWholest(out.masks, out.ious.subarray(0, out.count)) : pickBest(out.ious.subarray(0, out.count));
     const logits = out.masks.slice(best * plane, (best + 1) * plane);
-    return { mask: logitsToMask(upsampleLogits(logits, image.width, image.height), image.width, image.height), iou: out.ious[best]!, logits };
+    return { mask: logitsToMask(upsampleLogits(logits, image.width, image.height), image.width, image.height), iou: out.ious[best]!, logits, temporal };
   }
 
   async key(req: KeyRequest): Promise<EngineResult> {
@@ -331,10 +367,21 @@ export class Sam2Engine implements SegmentationEngine {
     const [dx, dy] = subjectShift(req.prev, req.next, req.prevMask);
     const moved = Math.hypot(dx, dy) >= 1;
     const expected = moved ? shiftMask(req.prevMask, dx, dy) : req.prevMask;
-    const prompt = promptFromMask(expected, moved ? null : this.lastLogits);
     const { width: w, height: h } = req.next;
-    if (!prompt) return { mask: { width: w, height: h, data: new Uint8Array(w * h) }, confidence: 0, detail: { area: 0 } };
-    const r = await this.run(req.next, prompt);
+    const empty = (why: number) => ({ mask: { width: w, height: h, data: new Uint8Array(w * h) }, confidence: 0, detail: { area: 0, lost: why, dx, dy } });
+    // Lost: the subject has left the frame (most of where it should be is outside it).
+    if (moved && maskArea(expected) < 0.25 * maskArea(req.prevMask)) {
+      this.lastLogits = null;
+      return empty(1);
+    }
+    const prompt = promptFromMask(expected, moved ? null : this.lastLogits);
+    if (!prompt) return empty(2);
+    const r = await this.run(req.next, prompt, false, maskToLogits(expected));
+    // Lost: nothing SAM offers is where the subject should be (it latched onto something else).
+    if (r.temporal !== null && r.temporal < 0.15) {
+      this.lastLogits = null;
+      return empty(3);
+    }
     this.lastLogits = r.logits;
     const temporal = iou(binarize(expected), binarize(r.mask));
     const area = maskArea(r.mask);
