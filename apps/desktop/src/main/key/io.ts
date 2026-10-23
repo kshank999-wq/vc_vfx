@@ -26,6 +26,8 @@ export interface SubjectSource {
   version: number;
   /** Frame → engine confidence. A frame not listed has no segmentation. */
   confidence: Record<string, number>;
+  /** False when Track made it: it then only makes the core solid (subject.ts `removes`). */
+  removes?: boolean;
 }
 
 export interface KeyIOJob {
@@ -63,7 +65,7 @@ export function createKeyIO(job: KeyIOJob, signal?: AbortSignal): KeyIO & { read
       const full = width === plate.width && height === plate.height && (m.width !== width || m.height !== height);
       // At plate resolution the segmentation's edge is snapped to the frame, as roto's mattes are.
       const matte = full ? upscaleAlpha(m, width, height, guideAt(frame, width, height), { featherPx: 0, shrinkGrowPx: 0, temporalSmoothing: 0, edgeSnap: true }).data : m.width === width && m.height === height ? maskToPlane(m) : resizePlane(maskToPlane(m), m.width, m.height, width, height);
-      return { matte, confidence };
+      return { matte, confidence, removes: job.subject.removes ?? true };
     },
     async roto(partId, frame, width, height) {
       if (!job.roto || !store) return null;

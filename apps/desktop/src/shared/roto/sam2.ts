@@ -47,6 +47,8 @@ export interface Sam2Embedding {
   highRes1: Float32Array;
   /** Tensor shapes as the encoder gave them. */
   dims?: { imageEmbed: number[]; highRes0: number[]; highRes1: number[] };
+  /** Set when the embedding stays in the inference process (main/roto/sam2-ort.ts HostedSam2Runtime); the arrays are then empty. */
+  handle?: number;
 }
 
 export interface Sam2Prompt {

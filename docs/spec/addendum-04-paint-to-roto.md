@@ -219,19 +219,15 @@ confidence summary; the PNGs are checksummed with everything else.
 The model is never shipped. **Download model (≈ 156 MB)** fetches the encoder
 and decoder into `userData/models/sam2.1_hiera_tiny/`, hashing as it streams.
 
-- **Default source — to be confirmed before release:**
-  `https://huggingface.co/nrl-ai/samexporter-onnx-models/resolve/main/sam2.1_hiera_tiny/`
-  with `sam2.1_hiera_tiny.encoder.onnx` and `…decoder.onnx`. samexporter's
-  README names this repository as publishing SAM 2.1 Tiny with checksums; the
-  folder and file names inside it could not be checked from the build
-  environment (huggingface.co unreachable). Override: `VCVFX_SAM2_URL`, or
-  `modelBaseUrl` in Settings.
-- **SHA-256 pins are placeholders (`null`) in `SAM2_MODEL`
-  (`main/roto/models.ts`) and must be filled before a release.** A packaged
-  build refuses to download or run an unpinned model ("This build of VC VFX has
-  no pinned checksum for the SAM 2 model…"), and checks the files against
-  their pins before every run. A development build downloads, writes the
-  hashes it got to `PINS.json` beside the files, and runs.
+- **Source and pins ([addendum 18](addendum-18-hybrid-key.md) §1):** SAM 2.1
+  Tiny from `nrl-ai/samexporter-onnx-models` (samexporter's author) at revision
+  `5050a79c…`, folder `sam2_1_hiera_tiny/`; optional SAM 2 Base+ from
+  `vietanhdev/segment-anything-2-onnx-models` at `071f5807…`. Every file is
+  pinned by size and SHA-256 taken from the host's own metadata (and the
+  publisher's CHECKSUMS) and the URL names the revision, never `main`. The
+  download checks both before installing; a packaged build checks the pins
+  before every run. Override the host with `VCVFX_SAM2_URL` or `modelBaseUrl`,
+  the model with `sam2Model` / `VCVFX_SAM2_MODEL`; the pins always apply.
 - Licence: SAM 2 weights Apache-2.0 (Meta); samexporter MIT. Put both on the
   download page with the ffmpeg notices.
 
@@ -303,12 +299,16 @@ ground truth mean 0.990, min 0.946.
 
 - End to end ([addendum 15](addendum-15-verification.md)) the Track engine ran
   in the real app (28 frames, lowest confidence 0.99) and its PNG + EXR
-  mattes were exported and read by OpenEXR. SAM 2.1 could not: huggingface.co
-  is blocked here and the files are unpinned, so the app refuses the
-  download; onnxruntime itself loads in Electron.
-- **SAM 2 on real weights.** No SAM 2 inference has run here; the model source,
-  file names and the actual segmentation quality are unconfirmed. Pins are
-  placeholders.
+  mattes were exported and read by OpenEXR.
+- ~~SAM 2 on real weights~~: done in [addendum 18](addendum-18-hybrid-key.md).
+  The model downloads in the app and matches its pins. Running it in the
+  roto worker **crashed Electron** (onnxruntime-node's output tensors in a
+  worker isolate); inference now runs in a child process of the app's own
+  binary (`HostedSam2Runtime`). Propagation now prompts where the subject
+  has moved to (masked block matching), picks the mask that agrees with it,
+  and declares the subject lost when it leaves. On the runner SAM 2.1 Tiny
+  keeps his hoodie but drops his jeans, and holds a patch of road after he
+  exits (addendum 18 §4).
 - onnxruntime-node packaged on **Windows and macOS** (and its signing and
   notarisation inside the app bundle, and whether 1.20.1's macOS binaries
   meet `minimumSystemVersion: 11.0`); only Linux x64 was run. Both macOS
@@ -351,8 +351,8 @@ an easy next step.
 
 ## Open questions
 
-- Confirm the SAM 2.1 ONNX source and pin it; decide whether to host the files
-  on the release bucket instead.
+- ~~Confirm the SAM 2.1 ONNX source and pin it~~ (addendum 18); whether to host
+  the files on the release bucket instead is still open.
 - SAM 2 memory-attention video propagation (needs the memory encoder and
   memory attention exported).
 - Per-frame colour-model adaptation for lighting changes; a matting refiner for

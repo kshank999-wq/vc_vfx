@@ -93,7 +93,8 @@ export function createKeyPreview(options: { desktopOnly: (what: string) => strin
       const m = hit && hit.revision === doc.subject.run.revision ? hit.masks.get(f) : undefined;
       const conf = doc.subject.run.frames.find((r) => r.frame === f)?.confidence;
       if (!m || conf === undefined) return null;
-      return { matte: w === PREVIEW_KEY.width && h === PREVIEW_KEY.height ? m : resizePlane(m, PREVIEW_KEY.width, PREVIEW_KEY.height, w, h), confidence: conf };
+      // The preview's segmentation is Track's: it only makes the core solid (see subject.ts `removes`).
+      return { matte: w === PREVIEW_KEY.width && h === PREVIEW_KEY.height ? m : resizePlane(m, PREVIEW_KEY.width, PREVIEW_KEY.height, w, h), confidence: conf, removes: !doc.subject.run.engine.startsWith('track') };
     },
     background: async (w, h) => {
       const bg = c.state.key?.despill.background;

@@ -26,7 +26,7 @@ export interface KeyIO {
   /** The background plate at w × h (linear working RGB), or null. */
   background(width: number, height: number): Promise<LinearImage | null>;
   /** The Auto subject segmentation on a frame (0…1 at w × h) and its confidence, or null where there is none. */
-  subject?(frame: number, width: number, height: number): Promise<{ matte: Float32Array; confidence: number } | null>;
+  subject?(frame: number, width: number, height: number): Promise<{ matte: Float32Array; confidence: number; removes?: boolean } | null>;
   signal?: AbortSignal;
   progress?(done: number, total: number, frame: number): void;
 }
@@ -195,14 +195,14 @@ export class ShotKeyer {
     const sub = s.subject;
     let subject: SubjectInput | null = null;
     if (sub && sub.source !== 'none') {
-      let got: { matte: Float32Array; confidence: number } | null = null;
+      let got: { matte: Float32Array; confidence: number; removes?: boolean } | null = null;
       if (sub.source === 'roto' && sub.partId) {
         const m = await io.roto(sub.partId, frame, img.width, img.height);
         rotoCache.set(sub.partId, m);
         // The artist's own roto is trusted as drawn.
         got = m ? { matte: m, confidence: 1 } : null;
       } else if (sub.source === 'auto' && io.subject) got = await io.subject(frame, img.width, img.height);
-      if (got) subject = { matte: got.matte, confidence: got.confidence, margin: Math.max(1, sub.marginPx / o.pxScale), outside: sub.outside };
+      if (got) subject = { matte: got.matte, confidence: got.confidence, margin: Math.max(1, sub.marginPx / o.pxScale), outside: sub.outside, removes: got.removes ?? true };
     }
     let exclude: Uint8Array | null = null;
     if (subject) {

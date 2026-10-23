@@ -5,7 +5,7 @@ import { despill, type DespillOptions } from './despill';
 import type { LinearImage } from './linear';
 import { blurRgb, lightWrap, type LightWrapOptions } from './look';
 import { combineMattes, type ResolvedLink } from './mattes';
-import { shadowPass, subjectPrior, type SubjectInput, type SubjectPrior } from './subject';
+import { blurCoarse, shadowPass, subjectPrior, type SubjectInput, type SubjectPrior } from './subject';
 
 /**
  * The keyer (master spec §6; addendum 09 §3.3–3.5). Pure TypeScript on
@@ -372,8 +372,14 @@ export function keyFrame(input: KeyFrameInput): KeyFrameOutput {
             pc[3 * i + 1] = P[3 * i + 1]!;
             pc[3 * i + 2] = P[3 * i + 2]!;
           }
-        const den = gaussianBlur(wc, w, h, sig);
-        const num = blurRgb(pc, w, h, sig);
+        const den = blurCoarse(wc, w, h, sig);
+        const num = new Float32Array(n * 3);
+        const ch = new Float32Array(n);
+        for (let c = 0; c < 3; c += 1) {
+          for (let i = 0; i < n; i += 1) ch[i] = pc[3 * i + c]!;
+          const b2 = blurCoarse(ch, w, h, sig);
+          for (let i = 0; i < n; i += 1) num[3 * i + c] = b2[i]!;
+        }
         for (let i = 0; i < n; i += 1) {
           if (!band[i] || !prior.inside[i] || !(den[i]! > 1e-3)) continue;
           // Not in hair (the nearest solid colour is right there), and only for a costume that leads the

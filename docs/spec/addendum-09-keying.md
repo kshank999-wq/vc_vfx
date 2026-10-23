@@ -46,6 +46,13 @@ viewer in the centre, the numbers on the right.
    light-wrap layer when asked, into `03_KEYS`. Approval is the existing
    per-task approval, which needs an export of that version.
 
+Since [addendum 18](addendum-18-hybrid-key.md) a **Subject** step (after
+*Key*) sets the subject prior — None, a roto part, or Auto (SAM 2 or Track,
+from a box, clicks, or the key's own foreground) — its edge band, whether
+outside the subject is garbage, and the **shadow pass**; the viewer gains
+**Subject** and **Shadow** modes, and the export a shadow PNG sequence and an
+alpha + shadow EXR.
+
 Viewer review modes (§6): **Source, Alpha, Premultiplied** (over a neutral
 checker), **Over background** (light wrap and match only when asked),
 **Edge** (the soft edge highlighted), **Core / edge / garbage** (core green,
@@ -335,8 +342,11 @@ desktop (the preview's Roto tab has its own demo shot).
   follows the screen per frame (*Screen detail*, on by default: light shadows
   on the screen key out, a deep one stays), and the per-frame gain is measured only where the
   model saw the screen. A costume lit by the screen's bounce to the screen's
-  chromaticity (the astronaut's suit) still keys part-transparent: holdout or
-  repair from roto. A processed key is not marked stale when the engine
+  chromaticity (the astronaut's suit) still keys part-transparent without a
+  subject: the **hybrid key** ([addendum 18](addendum-18-hybrid-key.md)) takes a
+  subject segmentation (a roto part, or SAM 2 / Track run from the key) as the
+  core prior, and the **shadow pass** takes cast shadows out of the alpha into
+  a matte of their own. Key engine 1.2.0. A processed key is not marked stale when the engine
   version changes (*Process again*).
 - Packaged Electron with the worker entry, Windows and macOS; a signed build.
 - Alpha EXR channel is named Y by ffmpeg's encoder (as roto's).

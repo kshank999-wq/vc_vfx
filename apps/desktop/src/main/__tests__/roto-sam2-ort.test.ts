@@ -9,7 +9,7 @@ import { Sam2Engine } from '../../shared/roto/sam2';
 import { discScene } from '../../shared/roto/synthetic';
 import { rotoRun, rotoSession } from '../roto/api';
 import { modelDir, SAM2_MODEL } from '../roto/models';
-import { loadOrt, ortCandidates, OrtSam2Runtime } from '../roto/sam2-ort';
+import { HostedSam2Runtime, loadOrt, ortCandidates, OrtSam2Runtime } from '../roto/sam2-ort';
 import { MaskStore } from '../roto/store';
 
 /**
@@ -45,6 +45,22 @@ describe.skipIf(!ort.ok)('SAM 2 through onnxruntime-node (stand-in models)', () 
     for (let f = 0; f < 6; f += 1) expect(iou(masks.get(f)!, scene.truth(f))).toBeGreaterThan(0.85);
     expect(conf.get(0)).toBeCloseTo(0.9, 5);
     runtime.dispose();
+  });
+
+  it('runs the same in a process of its own (as it must inside Electron, where a worker thread crashes)', async () => {
+    if (!ort.ok) return;
+    const path = ort.from.includes('/') ? ort.from : require.resolve(ort.from);
+    const runtime = await HostedSam2Runtime.create(path, join(fixtures, 'standin.encoder.onnx'), join(fixtures, 'standin.decoder.onnx'));
+    const scene = discScene({ frames: 4 });
+    const masks = new Map<number, Mask>();
+    await runRoto(
+      new Sam2Engine(runtime),
+      { partId: 'subject', from: 0, directions: ['key', 'forward'], first: 0, last: 3, keyFrames: [{ frame: 0, strokes: [{ id: 's', mode: 'include', radius: 5, points: [[75, 108], [85, 108]], by: '', at: '' }] }], scale: 1, smoothing: 0, settings: {} },
+      { frame: async (f) => scene.render(f), getMask: async (f) => masks.get(f) ?? null, putMask: async (f, m) => void masks.set(f, m) },
+    );
+    for (let f = 0; f < 4; f += 1) expect(iou(masks.get(f)!, scene.truth(f))).toBeGreaterThan(0.85);
+    runtime.dispose();
+    await expect(HostedSam2Runtime.create(path, join(fixtures, 'standin.decoder.onnx'), join(fixtures, 'standin.encoder.onnx'))).rejects.toThrow(/not a samexporter SAM 2 export/);
   });
 
   it.skipIf(!hasFfmpeg)('runs in the roto worker thread when the model files are present', async () => {

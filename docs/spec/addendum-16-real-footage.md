@@ -147,14 +147,23 @@ differs); the run records say which made a matte.
    open from it: the file rarely says (none of these PNGs carry `pHYs`), so
    1280 × 1080 and 960 × 720 are flagged, not changed — someone must set 1.5;
    brushes paint circles in stored pixels.
-2. **Keys of bright, screen-lit costumes.** The astronaut's suit, lit by the
+2. ~~**Keys of bright, screen-lit costumes.**~~ Answered in
+   [addendum 18](addendum-18-hybrid-key.md): with an Auto subject (SAM 2.1,
+   seeded from the key) and the shadow pass the astronaut's whole shot keys at
+   mean confidence 0.735 (was 0.05), clean screen 89 % (was 77 %), 19 problem
+   frames (was 112); the suit is solid, the stands go, the cast shadow is a
+   matte of its own. What follows is the problem as found:
+   **Keys of bright, screen-lit costumes.** The astronaut's suit, lit by the
    green floor's bounce, has the screen's chromaticity at 40 % of its
    brightness: by colour alone it is a shadow on the screen. A chromaticity
    core was tried and dropped (it made motion blur and hair solid: synthetic
    edge error 0.022 → 0.095). Today: holdout or repair from roto. A learned
    matte (or a subject segmentation as a prior) is the real answer. Deep cast
    shadows stay in the matte too; there is no separate shadow pass.
-3. **Roto on fast movers with the Track engine** sticks to background it
+3. (SAM 2.1 now runs — [addendum 18](addendum-18-hybrid-key.md): on the runner
+   it holds his hoodie but drops his jeans and, with no memory, keeps a patch
+   of road after he leaves; Track with key frames stays the better roto here.)
+   **Roto on fast movers with the Track engine** sticks to background it
    passes (wall, bushes), loses feet, and keeps blobs after the subject has
    left frame (no "lost" detection); SAM 2.1 could not be tried (the model
    download is blocked here). Plan a key frame every ~10 frames.

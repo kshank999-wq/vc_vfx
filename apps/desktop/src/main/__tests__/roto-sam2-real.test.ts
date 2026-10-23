@@ -6,7 +6,7 @@ import { binarize, iou, type Mask } from '../../shared/roto/image';
 import { Sam2Engine } from '../../shared/roto/sam2';
 import { figureScene } from '../../shared/roto/synthetic';
 import { SAM2_MODEL, sha256OfFile } from '../roto/models';
-import { loadOrt, ortCandidates, OrtSam2Runtime } from '../roto/sam2-ort';
+import { HostedSam2Runtime, loadOrt, ortCandidates, OrtSam2Runtime } from '../roto/sam2-ort';
 
 /**
  * SAM 2.1 on its real, pinned weights (addendum 18). Runs only when the model
@@ -55,5 +55,18 @@ describe.skipIf(!present)('SAM 2.1 Tiny on its real weights', () => {
     );
     for (const f of [4, 8, 11]) expect(iou(binarize(masks.get(f)!), scene.truth(f))).toBeGreaterThan(0.8);
     engine.dispose();
+  }, 120_000);
+
+  it('gives the same mask from its own process (the Electron path)', async () => {
+    if (!ort.ok) throw new Error(ort.reason);
+    const scene = figureScene({ frames: 1 });
+    const prompt = { box: { x0: 110, y0: 20, x1: 215, y1: 338 } };
+    const direct = new Sam2Engine(await OrtSam2Runtime.create(ort.ort, enc, dec));
+    const hosted = new Sam2Engine(await HostedSam2Runtime.create(ort.from.includes('/') ? ort.from : require.resolve(ort.from), enc, dec));
+    const a = await direct.key({ frame: 0, image: scene.render(0), strokes: [], reference: null, settings: {}, prompt });
+    const b = await hosted.key({ frame: 0, image: scene.render(0), strokes: [], reference: null, settings: {}, prompt });
+    expect(iou(binarize(a.mask), binarize(b.mask))).toBeGreaterThan(0.99);
+    direct.dispose();
+    hosted.dispose();
   }, 120_000);
 });

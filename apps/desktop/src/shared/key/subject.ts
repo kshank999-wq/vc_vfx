@@ -1,5 +1,5 @@
 import type { ScreenKind } from '@vcvfx/domain';
-import { components, gaussianBlur, morph, squaredDistance } from '../roto/image';
+import { areaDownscale, components, gaussianBlur, morph, resizePlane, squaredDistance } from '../roto/image';
 
 /**
  * The subject prior and the shadow pass of the hybrid key (master spec §6
@@ -40,6 +40,13 @@ export interface SubjectInput {
   margin: number;
   /** Whether outside the segmentation acts as a garbage matte. */
   outside: boolean;
+  /**
+   * Whether the segmentation may take things away (the outside garbage, the
+   * shadow's removal). False for one made by Track: its colour models cannot
+   * separate a costume the colour of the screen from the screen, so what it
+   * leaves out may be the subject; it then only makes the core solid.
+   */
+  removes?: boolean;
 }
 
 export interface SubjectPrior {
@@ -70,6 +77,21 @@ export interface SubjectPrior {
 const clamp01 = (v: number) => (v <= 0 ? 0 : v >= 1 ? 1 : v);
 
 /**
+ * A wide Gaussian blur worked on a smaller copy (area-averaged by `f`, blurred
+ * by σ/f, scaled back up bilinearly) — for smooth fields (how hairy the key is
+ * nearby, a costume's colour) where a full-resolution wide blur would cost
+ * seconds a frame at 2K for nothing visible.
+ */
+export function blurCoarse(src: Float32Array, w: number, h: number, sigma: number): Float32Array {
+  const f = Math.max(1, Math.min(8, Math.floor(sigma / 2)));
+  if (f <= 1) return gaussianBlur(src, w, h, sigma);
+  const sw = Math.max(1, Math.round(w / f));
+  const sh = Math.max(1, Math.round(h / f));
+  const small = gaussianBlur(areaDownscale(src, w, h, sw, sh), sw, sh, sigma / f);
+  return resizePlane(small, sw, sh, w, h);
+}
+
+/**
  * How much fine structure the key has near each pixel (0 flat … 1 hair): the
  * high-frequency part of the raw key, averaged over about the margin. Hair and
  * fly-aways are a fine alternation of key values; a suit, a shadow or a smooth
@@ -82,7 +104,7 @@ export function keyTexture(raw: Float32Array, w: number, h: number, margin: numb
   const low = gaussianBlur(clipped, w, h, 1.2);
   const hf = new Float32Array(n);
   for (let i = 0; i < n; i += 1) hf[i] = Math.abs(clipped[i]! - low[i]!);
-  const t = gaussianBlur(hf, w, h, Math.max(1.5, margin));
+  const t = blurCoarse(hf, w, h, Math.max(1.5, margin));
   for (let i = 0; i < n; i += 1) t[i] = clamp01(t[i]! / 0.04);
   return t;
 }
@@ -147,7 +169,7 @@ export function subjectPrior(input: SubjectInput, raw: Float32Array, w: number, 
   const confidence = clamp01(input.confidence) * (1 - clamp01((disagree - 0.01) / 0.09));
   // Throwing things away on the segmentation's word needs a surer one than keeping them solid does:
   // the outside garbage (and the shadow's removal) fade in between confidence 0.5 and 0.8.
-  const outsideWeight = clamp01((confidence - 0.5) / 0.3);
+  const outsideWeight = input.removes === false ? 0 : clamp01((confidence - 0.5) / 0.3);
   for (let i = 0; i < n; i += 1) core[i] = core[i]! * confidence;
   if (input.outside) {
     // What the key itself joins to the subject — hair, a motion-blur tail, beyond a segmentation that
@@ -171,6 +193,14 @@ export function subjectPrior(input: SubjectInput, raw: Float32Array, w: number, 
     const solid = new Uint8Array(n);
     for (let i = 0; i < n; i += 1) solid[i] = raw[i]! >= 0.8 ? 1 : 0;
     const bridge = morph(solid, w, h, Math.max(1, Math.round(m)));
+    // Solid parts close to the subject (within a third of its size) are taken as its own even across
+    // a wider gap — a hand or a head the segmentation left out — and what the key joins to them too.
+    const near = Math.max(2 * m, 0.35 * Math.sqrt(area));
+    for (let i = 0; i < n; i += 1)
+      if (!joined[i] && solid[i] && outsideDistance[i]! <= near) {
+        joined[i] = 1;
+        queue[tail++] = i;
+      }
     while (head < tail) {
       const i = queue[head++]!;
       const x = i % w;

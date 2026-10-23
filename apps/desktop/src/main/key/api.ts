@@ -83,7 +83,7 @@ function subjectSource(project: Project, shotId: string, projectKey: string, env
   if (!doc || doc.subject.source !== 'auto' || !doc.subject.run || keySubjectStale(doc)) return null;
   const confidence: Record<string, number> = {};
   for (const f of doc.subject.run.frames) confidence[String(f.frame)] = f.confidence;
-  return { store: new MaskStore(env.keyCacheRoot, projectKey, shotId).root, version: doc.subject.run.taskVersion, confidence };
+  return { store: new MaskStore(env.keyCacheRoot, projectKey, shotId).root, version: doc.subject.run.taskVersion, confidence, removes: !doc.subject.run.engine.startsWith('track') };
 }
 
 /** The segmentation runs at most this wide (SAM 2 sees 1024² whatever it is given; Track is quicker smaller). */
