@@ -61,11 +61,15 @@ export const PROJECT_FORMAT = 'vcvfx-project';
  *    (`key.subject`: none / roto part / Auto with its seed and run), the
  *    shadow pass switch (`key.params.shadowPass`), per-frame subject and
  *    shadow measurements, and exports may name a shadow pass.
+ * 12: the VFX status for VC Film Studio (addendum 19): a package records the
+ *    task versions it was made from (`packagedTaskVersions`), a delivery may
+ *    name who it went to (`deliveredTo`), and the project may name the Film
+ *    Studio production it reports to (`filmStudioProduction`).
  * An older project opens (the new fields empty) and is saved as the current
  * version; an older VC VFX refuses a newer project rather than silently
  * dropping what it does not know about.
  */
-export const PROJECT_VERSION = 11;
+export const PROJECT_VERSION = 12;
 export const PROJECT_EXTENSION = 'vcvfx';
 
 export const ApprovalSchema = z.object({ by: z.string().min(1), at: z.string() });
@@ -199,6 +203,14 @@ export const ShotStateSchema = z.object({
   lighting: LightingDocumentSchema.nullable().default(null),
   /** The artist's pixel aspect for the shot, over every other source (addendum 17). Null: decided from the handoff, camera and clip. */
   pixelAspect: PixelAspectOverrideSchema.nullable().default(null),
+  /**
+   * Each task's version when the latest package was written, by kind (addendum
+   * 19). Null: never packaged, or packaged before format 12 (unknown). Kept
+   * when the shot is reopened, so a stale package can be told from a fresh one.
+   */
+  packagedTaskVersions: z.record(z.number().int().positive()).nullable().default(null),
+  /** Who the shot was delivered to (the VFX vendor), when the operator said. Null: not said, or not delivered. */
+  deliveredTo: z.string().nullable().default(null),
 });
 export type ShotState = z.infer<typeof ShotStateSchema>;
 
@@ -226,6 +238,8 @@ export const ProjectSchema = z.object({
   lensProfiles: z.array(LensProfileSchema).default([]),
   /** Cameras the production added to the built-in database. */
   customCameras: z.array(CameraBodySchema).default([]),
+  /** The VC Film Studio production this project reports its VFX status to (addendum 19). Empty: not said; Film Studio then matches by the project name. */
+  filmStudioProduction: z.string().default(''),
   log: z.array(LogEntrySchema),
 });
 export type Project = z.infer<typeof ProjectSchema>;
@@ -268,9 +282,11 @@ export function createProject(handoff: Handoff, handoffPath: string, actor: stri
     comp: null,
     lighting: null,
     pixelAspect: null,
+    packagedTaskVersions: null,
+    deliveredTo: null,
   }));
   return log(
-    { format: PROJECT_FORMAT, version: PROJECT_VERSION, createdAt: at, updatedAt: at, handoffPath, handoff, plateColorDefault: 'acescg', shots, lensProfiles: [], customCameras: [], log: [] },
+    { format: PROJECT_FORMAT, version: PROJECT_VERSION, createdAt: at, updatedAt: at, handoffPath, handoff, plateColorDefault: 'acescg', shots, lensProfiles: [], customCameras: [], filmStudioProduction: '', log: [] },
     { at, actor, shotId: null, action: 'project.created', detail: `${shots.length} shots from ${handoffPath}` },
   );
 }
@@ -289,7 +305,8 @@ export function parseProject(text: string): { ok: true; project: Project } | { o
 /**
  * Bring an older project up to `PROJECT_VERSION`. The schema's defaults have
  * already filled what an older project lacks (`roto`, `camtrack`, `track2d`,
- * `key`, `cleanPlate`, `texture`, `comp`, `lighting` null, no `isolate` documents; no lens profiles); this records the version it is now saved as.
+ * `key`, `cleanPlate`, `texture`, `comp`, `lighting` null, no `isolate` documents; no lens profiles; no packaged task versions, which stay
+ * unknown rather than guessed); this records the version it is now saved as.
  */
 export function migrateProject(p: Project): Project {
   return p.version === PROJECT_VERSION ? p : { ...p, version: PROJECT_VERSION };
@@ -490,18 +507,23 @@ export function approveShot(p: Project, shotId: string, approver: string, now: D
 export function markPackaged(p: Project, shotId: string, actor: string, now: Date): Result {
   const at = now.toISOString();
   let version = 0;
+  let taskVersions = '';
   const r = updateShot(p, shotId, (s) => {
     if (!s.approval) return `${shotId} must be prep approved before it is packaged`;
     version = s.packageVersion + 1;
-    return { ...s, stage: 'packaged', packageVersion: version };
+    // The task versions this package is made from (addendum 19): what "ready to hand off" is checked against.
+    taskVersions = s.tasks.map((t) => `${t.kind} v${String(t.version).padStart(3, '0')}`).join(', ');
+    return { ...s, stage: 'packaged', packageVersion: version, packagedTaskVersions: Object.fromEntries(s.tasks.map((t) => [t.kind, t.version])) };
   });
-  return chain(r, (proj) => log(proj, { at, actor, shotId, action: 'shot.packaged', detail: `package v${String(version).padStart(3, '0')}` }));
+  return chain(r, (proj) => log(proj, { at, actor, shotId, action: 'shot.packaged', detail: `package v${String(version).padStart(3, '0')}${taskVersions ? ` from ${taskVersions}` : ''}` }));
 }
 
-export function markDelivered(p: Project, shotId: string, actor: string, now: Date): Result {
+/** Record that the packaged shot was handed to the VFX vendor; `to` names them when the operator says. */
+export function markDelivered(p: Project, shotId: string, actor: string, now: Date, to?: string): Result {
   const at = now.toISOString();
-  const r = updateShot(p, shotId, (s) => (s.stage !== 'packaged' ? `${shotId} must be packaged before it is delivered` : { ...s, stage: 'delivered' }));
-  return chain(r, (proj) => log(proj, { at, actor, shotId, action: 'shot.delivered' }));
+  const vendor = to?.trim() || null;
+  const r = updateShot(p, shotId, (s) => (s.stage !== 'packaged' ? `${shotId} must be packaged before it is delivered` : { ...s, stage: 'delivered', deliveredTo: vendor }));
+  return chain(r, (proj) => log(proj, { at, actor, shotId, action: 'shot.delivered', ...(vendor ? { detail: `to ${vendor}` } : {}) }));
 }
 
 /** Take a packaged or delivered shot back into prep (e.g. a note came back). */

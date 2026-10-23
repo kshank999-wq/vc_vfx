@@ -357,7 +357,7 @@ describe('exports, approval and the project format', () => {
   });
 
   it('is project format 9: projects of formats 3 to 8 open with no lighting, and lighting survives a round trip', () => {
-    expect(PROJECT_VERSION).toBe(11);
+    expect(PROJECT_VERSION).toBe(12);
     const v8 = JSON.parse(serializeProject(sample()));
     v8.version = 8;
     for (const s of v8.shots) delete s.lighting;
@@ -379,7 +379,7 @@ describe('exports, approval and the project format', () => {
     for (const old of [v8, v7, v6, v5, v4, v3]) {
       const opened = parseProject(JSON.stringify(old));
       if (!opened.ok) throw new Error(opened.reason);
-      expect(opened.project.version).toBe(11);
+      expect(opened.project.version).toBe(12);
       expect(shotState(opened.project, SHOT)!.lighting).toBeNull();
     }
     let p = withTask();

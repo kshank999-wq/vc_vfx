@@ -276,7 +276,7 @@ describe('the isolation documents', () => {
   });
 
   it('since project format 6: projects of formats 3, 4 and 5 open with no isolation, and isolations survive a round trip', () => {
-    expect(PROJECT_VERSION).toBe(11);
+    expect(PROJECT_VERSION).toBe(12);
     const v5 = JSON.parse(serializeProject(sample()));
     v5.version = 5;
     for (const s of v5.shots) delete s.isolate;
