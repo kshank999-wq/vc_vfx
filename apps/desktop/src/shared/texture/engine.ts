@@ -18,7 +18,7 @@ import { estimateHeading, estimatePanoramaPose, matchToPanorama, panoramaGrey, p
 import { directionTo, placeRegion, planeMap, type PlaneMap, type RegionPlacement, type RegionTemplate } from './placement';
 import { firstHit, fitPlanes, hitPlane, type FittedPlane } from './planes';
 import { photoProblems, photoWhite, specularShare } from './problems';
-import { cornerAspect, desqueezeCorners, focalAspect, pinholeCorners, rectifyRegion } from './rectify';
+import { cornerAspect, desqueezeCorners, focalAspect, pinholeCorners, rectangleFocal, rectifyRegion } from './rectify';
 import { makeTileable } from './seamless';
 
 /**
@@ -291,7 +291,12 @@ export async function buildTextures(io: TextureIO, inputs: TextureInputs, o: Tex
         aspect = m.width / m.height;
         aspectFrom = 'size';
       } else {
-        const fa = intr ? focalAspect(physical, intr.f, intr.cx * par, intr.cy) : null;
+        // The focal length: the lens's, else the one at which these corners are a rectangle (both vanishing points finite).
+        const cxp = ((fullW - 1) / 2) * par;
+        const cyp = (fullH - 1) / 2;
+        const fRect = intr ? null : rectangleFocal(physical, cxp, cyp);
+        const fUse = intr ? intr.f : fRect && fRect > 0.25 * fullW * par && fRect < 20 * fullW * par ? fRect : null;
+        const fa = fUse ? focalAspect(physical, fUse, intr ? intr.cx * par : cxp, intr ? intr.cy : cyp) : null;
         aspect = fa ?? cornerAspect(physical);
         aspectFrom = fa ? 'focal' : 'corners';
       }
