@@ -1,4 +1,5 @@
 import {
+  shotPixelAspect,
   CAMERA_DB,
   CAMERA_EXPORT_FORMATS,
   SCENE_UNITS,
@@ -518,6 +519,11 @@ const EXECUTORS: Record<string, Executor> = {
         roto: task('roto') && { ...task('roto'), locked: rotoLocked(s) },
       },
       handoffCamera: cam ? { body: cam.body, sensorMode: cam.sensorMode, filmBackMm: cam.filmBackMm, lens: cam.lens, focalMm: cam.focalLengthMm } : null,
+      // Addendum 17: the plate's pixel aspect, which the solve models (fx = f / a) and every export declares.
+      pixelAspect: (() => {
+        const par = shotPixelAspect(p, host.shotId);
+        return { value: par.value, source: par.source, warnings: par.warnings };
+      })(),
       camera: d.camera ? { label: d.camera.label, cameraId: d.camera.cameraId, modeId: d.camera.modeId, filmBackMm: d.camera.filmBackMm, verified: d.camera.verified, source: d.camera.source } : null,
       lens: { name: d.lens.name, focalMm: d.lens.focalMm, focalMode: d.lens.focalMode, distortion: { k1: d.lens.distortion.k1, k2: d.lens.distortion.k2 }, refine: d.lens.refine, profile: d.lens.profileId },
       trackSettings: { maxFeatures: d.trackSettings.maxFeatures, workingWidth: d.trackSettings.workingWidth, minDistance: d.trackSettings.minDistance },
