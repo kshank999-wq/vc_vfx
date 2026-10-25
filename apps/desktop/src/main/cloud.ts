@@ -20,10 +20,23 @@ export const NOT_CONFIGURED =
 
 let client: SupabaseClient | null = null;
 
+/**
+ * VC VFX never opens a Realtime channel, but supabase-js builds its Realtime
+ * client up front and refuses to start without a WebSocket. Electron 33's
+ * Node 20 has none ("native WebSocket not found" at sign-in), so it gets one
+ * that says so if anything ever tries to connect.
+ */
+class NoRealtime {
+  constructor() {
+    throw new CloudError('Live updates are not used in VC VFX.');
+  }
+}
+
 const supabase = (): SupabaseClient => {
   if (!isCloudConfigured()) throw new CloudError(NOT_CONFIGURED);
   client ??= createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     auth: { persistSession: false, autoRefreshToken: true, detectSessionInUrl: false },
+    realtime: { transport: NoRealtime as never },
   });
   return client;
 };

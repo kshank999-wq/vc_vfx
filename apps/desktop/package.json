@@ -1,6 +1,6 @@
 {
   "name": "@vcvfx/desktop",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "VC VFX desktop application for Windows 10/11 and macOS",
   "main": "./out/main/index.js",
