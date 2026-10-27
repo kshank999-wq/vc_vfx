@@ -63,6 +63,8 @@ win:
   signingHashAlgorithms: [sha256]
 
 nsis:
+  # No spaces in the installer's file name either, for the same unquoted path.
+  artifactName: VC-VFX-Setup-${version}.${ext}
   oneClick: false
   allowToChangeInstallationDirectory: true
   perMachine: false
