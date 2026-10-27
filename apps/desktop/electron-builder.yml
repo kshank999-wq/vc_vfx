@@ -53,6 +53,10 @@ fileAssociations:
     role: Editor
 
 win:
+  # No space in the program file's name: electron-builder 25 hands Azure
+  # Artifact Signing the path unquoted, so "VC VFX.exe" is read as two files
+  # ("File not found ...\VC"). Shortcuts and the installer still say VC VFX.
+  executableName: VC-VFX
   target:
     - target: nsis
       arch: [x64]

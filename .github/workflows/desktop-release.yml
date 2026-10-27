@@ -155,6 +155,35 @@ jobs:
       # setting it is what sends electron-builder down its own broken
       # keychain-creation path. Absent either way on a fork or a dry run, in
       # which case the artifact is unsigned and must not ship as stable.
+      # electron-builder signs four files at a time, and each Invoke-TrustedSigning
+      # downloads Azure's signing client on first use: four at once collide
+      # ("being used by another process") and the build fails. Signing one
+      # throwaway file first puts the client in place, and checks the Azure
+      # credentials before a two-minute package.
+      - name: Prepare Azure Artifact Signing
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        env:
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_SIGNING_ENDPOINT: ${{ secrets.AZURE_SIGNING_ENDPOINT }}
+          AZURE_SIGNING_ACCOUNT: ${{ secrets.AZURE_SIGNING_ACCOUNT }}
+          AZURE_SIGNING_PROFILE: ${{ secrets.AZURE_SIGNING_PROFILE }}
+        run: |
+          if (-not ($env:AZURE_CLIENT_ID -and $env:AZURE_TENANT_ID -and $env:AZURE_CLIENT_SECRET -and $env:AZURE_SIGNING_PROFILE)) {
+            Write-Output "No Azure signing secrets; nothing to prepare."
+            exit 0
+          }
+          # The version electron-builder 25 installs.
+          Install-Module -Name TrustedSigning -RequiredVersion 0.4.1 -Force -Repository PSGallery -Scope CurrentUser
+          $probe = Join-Path $env:RUNNER_TEMP 'signing-probe.exe'
+          Copy-Item "$env:WINDIR\System32\whoami.exe" $probe
+          $endpoint = if ($env:AZURE_SIGNING_ENDPOINT) { $env:AZURE_SIGNING_ENDPOINT } else { 'https://wus2.codesigning.azure.net' }
+          $account = if ($env:AZURE_SIGNING_ACCOUNT) { $env:AZURE_SIGNING_ACCOUNT } else { 'vcvfx' }
+          Invoke-TrustedSigning -FileDigest SHA256 -Endpoint $endpoint -CertificateProfileName $env:AZURE_SIGNING_PROFILE -CodeSigningAccountName $account -Files $probe
+          Write-Output "Azure Artifact Signing works: a test file was signed with profile $env:AZURE_SIGNING_PROFILE."
+
       #
       # The variables are exported inside the script rather than declared in
       # `env:` because a secret that is not set arrives as an empty string, and
