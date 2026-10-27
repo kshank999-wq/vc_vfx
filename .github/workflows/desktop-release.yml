@@ -175,8 +175,18 @@ jobs:
             Write-Output "No Azure signing secrets; nothing to prepare."
             exit 0
           }
-          # The version electron-builder 25 installs.
-          Install-Module -Name TrustedSigning -RequiredVersion 0.4.1 -Force -Repository PSGallery -Scope CurrentUser
+          # The version electron-builder 25 installs. The gallery sometimes
+          # refuses a download ("Source Location ... is not valid"); try again.
+          foreach ($attempt in 1..4) {
+            try {
+              Install-Module -Name TrustedSigning -RequiredVersion 0.4.1 -Force -Repository PSGallery -Scope CurrentUser -ErrorAction Stop
+              break
+            } catch {
+              if ($attempt -eq 4) { throw }
+              Write-Output "Install-Module failed (attempt $attempt): $($_.Exception.Message). Retrying."
+              Start-Sleep -Seconds (5 * $attempt)
+            }
+          }
           $probe = Join-Path $env:RUNNER_TEMP 'signing-probe.exe'
           Copy-Item "$env:WINDIR\System32\whoami.exe" $probe
           $endpoint = if ($env:AZURE_SIGNING_ENDPOINT) { $env:AZURE_SIGNING_ENDPOINT } else { 'https://wus2.codesigning.azure.net' }
