@@ -1,6 +1,7 @@
 import { versionTag } from './frames.js';
 import { TASK_STATE_LABELS } from './tasks.js';
 import { readyForText } from './project.js';
+import { localDay, localStamp } from './local-time.js';
 import {
   STATUS_BUCKETS,
   STATUS_BUCKET_TITLES,
@@ -28,8 +29,9 @@ import {
 
 const escapeHtml = (s: string): string => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 const e = (v: unknown): string => escapeHtml(v === undefined || v === null || v === '' ? '—' : String(v));
-const day = (iso: string | undefined) => (iso ? iso.slice(0, 10) : '');
-const stamp = (iso: string) => `${iso.slice(0, 16).replace('T', ' ')} UTC`;
+// Local time, month first: the clock the crew reads (see local-time.ts).
+const day = (iso: string | undefined) => localDay(iso);
+const stamp = (iso: string) => localStamp(iso);
 
 /** The name a shot goes by: its VFX shot number once it has one, else the handoff's id. */
 export const statusShotName = (s: Pick<VfxStatusShot, 'vfxShotId' | 'handoffShotId'>): string => s.vfxShotId ?? s.handoffShotId;
@@ -211,9 +213,9 @@ export function statusCsvRow(s: VfxStatusShot): Record<string, string> {
     section: STATUS_BUCKET_TITLES[r.bucket],
     ready: r.ready ? 'Yes' : r.delivered ? 'Delivered' : 'No',
     tasks: s.tasks.map((t) => `${statusTaskShort(t)}: ${TASK_STATE_LABELS[t.state]} ${versionTag(t.version)}${t.approval ? ` (${t.approval.by})` : ''}`).join('; '),
-    approval: s.approval ? `${s.approval.by}, ${s.approval.at.slice(0, 10)}` : '',
-    package: s.packaged ? `${versionTag(s.packaged.version)} ${s.packaged.at.slice(0, 10)}` : '',
-    delivered: s.delivered ? `${s.delivered.at.slice(0, 10)}${s.delivered.to ? ` to ${s.delivered.to}` : ''}` : '',
+    approval: s.approval ? `${s.approval.by}, ${day(s.approval.at)}` : '',
+    package: s.packaged ? `${versionTag(s.packaged.version)} ${day(s.packaged.at)}` : '',
+    delivered: s.delivered ? `${day(s.delivered.at)}${s.delivered.to ? ` to ${s.delivered.to}` : ''}` : '',
     readyFor: s.readyFor ? readyForText(s.readyFor) : '',
     problems: s.problems.map((x) => `[${x.severity}] ${x.text}`).join('; '),
     why: r.why.join('; '),

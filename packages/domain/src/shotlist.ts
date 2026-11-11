@@ -3,6 +3,7 @@ import { formatRange } from './frames.js';
 import { planFor, queueRows, type Project, type QueueFilter } from './project.js';
 import { SHOT_STATUS_LABELS } from './status.js';
 import { PREP_TASKS } from './tasks.js';
+import { localStamp } from './local-time.js';
 
 /**
  * The printable DIT / VFX prep shot list (master spec §3). Columns follow the
@@ -54,7 +55,7 @@ export function shotListHtml(p: Project, generatedAt: Date, filter: QueueFilter 
     h.vfxSupervisor ? `VFX Supervisor: ${h.vfxSupervisor}` : null,
     h.ditOperator ? `DIT: ${h.ditOperator}` : null,
     `${rows.length} shot${rows.length === 1 ? '' : 's'}`,
-    `Printed ${generatedAt.toISOString().slice(0, 16).replace('T', ' ')} UTC`,
+    `Printed ${localStamp(generatedAt)}`,
   ].filter((m): m is string => Boolean(m));
   const body = rows
     .map(

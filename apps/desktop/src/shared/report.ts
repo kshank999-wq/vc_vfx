@@ -8,6 +8,7 @@ import {
   TASK_STATE_LABELS,
   formatRange,
   framePattern,
+  localStamp,
   handoffShot,
   outputFor,
   planFor,
@@ -51,13 +52,13 @@ export function prepReportHtml(p: Project, shotId: string, input: { generatedAt:
   const tasks = state.tasks
     .map(
       (t) => `<tr><td>${escapeHtml(PREP_TASKS[t.kind].label)}</td><td>${escapeHtml(TASK_STATE_LABELS[t.state])}</td><td>${versionTag(t.version)}</td><td>${
-        t.approval ? `${e(t.approval.by)}<br><small>${e(t.approval.at)}</small>` : '—'
+        t.approval ? `${e(t.approval.by)}<br><small>${e(localStamp(t.approval.at))}</small>` : '—'
       }</td><td>${e(t.notes)}</td></tr>`,
     )
     .join('\n');
   const log = p.log
     .filter((l) => l.shotId === shotId)
-    .map((l) => `<tr><td class="num">${e(l.at.replace('T', ' ').slice(0, 19))}</td><td>${e(l.actor)}</td><td>${e(l.action)}</td><td>${e(l.detail)}</td></tr>`)
+    .map((l) => `<tr><td class="num">${e(localStamp(l.at, { seconds: true }))}</td><td>${e(l.actor)}</td><td>${e(l.action)}</td><td>${e(l.detail)}</td></tr>`)
     .join('\n');
   const checksums = shot.checksums.map((c) => `<tr><td>${e(c.path)}</td><td>${e(c.algorithm)}</td><td class="mono">${e(c.value)}</td></tr>`).join('\n');
   const references = shot.references.map((r) => `<li>${e(r.kind.replace(/_/g, ' '))}: <span class="mono">${e(r.path)}</span>${r.notes ? ` — ${e(r.notes)}` : ''}</li>`).join('');
@@ -78,7 +79,7 @@ footer { margin-top: 18pt; color: #777; font-size: 8pt; }
 </style></head><body>
 <h1>${e(p.handoff.project)} — Shot ${e(name)}</h1>
 <p class="meta">Package ${versionTag(Math.max(1, state.packageVersion))} · ${e(SHOT_STATUS_LABELS[shotStatus(state)])} · Shot approval: ${
-    state.approval ? `${e(state.approval.by)} (${e(state.approval.at)})` : 'not approved'
+    state.approval ? `${e(state.approval.by)} (${e(localStamp(state.approval.at))})` : 'not approved'
   } · Source verification: ${e(state.sourceVerified)}</p>
 <div class="grid">
 <div><h2>Shot</h2><table class="kv">
@@ -125,10 +126,10 @@ ${tasks || '<tr><td colspan="5">No prep tasks</td></tr>'}
 <h2>Source checksums</h2><table><thead><tr><th>Path</th><th>Algorithm</th><th>Value</th></tr></thead><tbody>
 ${checksums || '<tr><td colspan="3">None supplied by the handoff</td></tr>'}
 </tbody></table>
-<h2>Operation log</h2><table><thead><tr><th>When (UTC)</th><th>Who</th><th>Action</th><th>Detail</th></tr></thead><tbody>
+<h2>Operation log</h2><table><thead><tr><th>When</th><th>Who</th><th>Action</th><th>Detail</th></tr></thead><tbody>
 ${log || '<tr><td colspan="4">No operations recorded</td></tr>'}
 </tbody></table>
-<footer>Generated ${e(input.generatedAt.toISOString())} by VC VFX ${e(input.appVersion)} for ${e(input.operator)}. Delivered-file checksums are in the manifest.</footer>
+<footer>Generated ${e(localStamp(input.generatedAt))} by VC VFX ${e(input.appVersion)} for ${e(input.operator)}. Delivered-file checksums are in the manifest.</footer>
 </body></html>
 `;
 }

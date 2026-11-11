@@ -1,4 +1,4 @@
-import { LIGHT_ROLE_LABELS, LIGHT_TYPE_LABELS, gamutMatrix, kelvinRgb, lightFieldText, rangeText, versionTag, type GamutId, type LightingDocument, type RigLight, type SceneUnit } from '@vcvfx/domain';
+import { LIGHT_ROLE_LABELS, LIGHT_TYPE_LABELS, gamutMatrix, kelvinRgb, lightFieldText, localStamp, rangeText, versionTag, type GamutId, type LightingDocument, type RigLight, type SceneUnit } from '@vcvfx/domain';
 import { SCENE_TO_UNREAL, unrealRotator, usdLensValue } from '../camera/export-formats';
 import { YUP_TO_ZUP } from '../camera/coords';
 import { escapeHtml } from '../html';
@@ -538,7 +538,7 @@ table{border-collapse:collapse;width:100%;font-size:13px}th,td{border-bottom:1px
 @media print{body{margin:12mm}h2{break-after:avoid}.diagrams,figure,table{break-inside:avoid}}
 </style></head><body>
 <h1>${e(title)}</h1>
-<p class="muted">${e(names.generator)} · written ${e(names.writtenAt)} · ${e(r.state)}${r.approval ? ` · approved by ${e(r.approval.by)}` : ' · not approved yet: a prep deliverable for review'}${a ? ` · ${e(a.algorithm)}, settings r${a.revision}` : ''} · rig r${doc.editRevision}</p>
+<p class="muted">${e(names.generator)} · written ${e(localStamp(names.writtenAt))} ·${e(r.state)}${r.approval ? ` · approved by ${e(r.approval.by)}` : ' · not approved yet: a prep deliverable for review'}${a ? ` · ${e(a.algorithm)}, settings r${a.revision}` : ''} · rig r${doc.editRevision}</p>
 <p>Estimates from the plate${doc.references.length ? ` and ${doc.references.map((x) => e(x.name)).join(', ')}` : ''}: every figure with the range it is believed to lie in. Fields marked <span class="lock">●</span> are the artist’s. Not measured on set.</p>
 <h2>The frame</h2>${frame}
 <h2>The rig</h2>${diagrams}

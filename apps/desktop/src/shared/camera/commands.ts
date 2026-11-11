@@ -13,6 +13,7 @@ import {
   findCamera,
   focalMillimetres,
   focalPixels,
+  localStamp,
   recordTrack2dExport,
   recordTrack2dRun,
   removeTrack2d,
@@ -1024,7 +1025,7 @@ function reportHtml(s: CameraSession, solved: { record: SolveRecord; solve: Solv
   return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(s.name)} camera track ${versionTag(s.camtrackVersion)}</title>
 <style>body{font:14px system-ui,sans-serif;margin:24px;color:#222}table{border-collapse:collapse}td,th{border:1px solid #ccc;padding:2px 8px;text-align:right}h1{font-size:20px}.warn{color:#a40}</style></head><body>
 <h1>${esc(s.name)} — camera track ${versionTag(s.camtrackVersion)} (solve ${r.number})</h1>
-<p>Written by ${esc(s.generator)} at ${esc(d.writtenAt)} by ${esc(s.actor)}. ${r.engine.id}@${r.engine.version}.</p>
+<p>Written by ${esc(s.generator)} at ${esc(localStamp(d.writtenAt))} by ${esc(s.actor)}. ${r.engine.id}@${r.engine.version}.</p>
 <p><b>RMS reprojection error ${r.stats.rms.toFixed(3)} px</b> (median ${r.stats.medianError.toFixed(3)} px) over ${r.stats.framesSolved} of ${r.stats.framesTotal} frames, ${r.stats.tracksUsed} of ${r.stats.tracksTotal} tracks, ${r.stats.keyframes} keyframes${r.stats.nodal ? ', <b>nodal</b>' : ''}. Confidence ${(r.stats.confidence * 100).toFixed(0)} %.</p>
 ${r.stats.warnings.map((w) => `<p class="warn">⚠ ${esc(w)}</p>`).join('')}
 <p>Camera: ${esc(doc.camera?.label ?? 'not set (nominal 36 mm film back)')}${doc.camera && !doc.camera.verified ? ' — film back not verified against the manufacturer' : ''}. Film back ${+d.filmBackMm.width.toFixed(3)} × ${verticalAperture(d).toFixed(3)} mm over ${d.width} × ${d.height} px${(d.pixelAspect ?? 1) !== 1 ? `, <b>pixel aspect ${+(d.pixelAspect ?? 1).toFixed(4)}</b> (shown ${Math.round(d.width * (d.pixelAspect ?? 1))} × ${d.height}; the plate is kept squeezed${d.sensorFilmBackMm && Math.abs(d.sensorFilmBackMm.width - d.filmBackMm.width) > 1e-6 ? `; sensor area ${d.sensorFilmBackMm.width} × ${d.sensorFilmBackMm.height} mm × the squeeze` : ''}; horizontal focal ${(d.focalPx / (d.pixelAspect ?? 1)).toFixed(2)} px, vertical ${d.focalPx.toFixed(2)} px in plate pixels)` : ''}.</p>
