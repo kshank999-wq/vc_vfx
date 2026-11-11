@@ -526,6 +526,7 @@ export function writeLightingReport(r: ReportInput): string {
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><title>${e(title)}</title>
 <style>
+@page{size:letter portrait;margin:14mm}
 body{font:14px/1.45 -apple-system,Segoe UI,Helvetica,Arial,sans-serif;color:#1c1f24;margin:28px;max-width:1100px}
 h1{font-size:22px;margin:0 0 4px}h2{font-size:16px;margin:26px 0 8px;border-bottom:1px solid #ddd;padding-bottom:4px}
 .muted{color:#6b7280;font-size:12px}.frame-box{position:relative;display:inline-block;max-width:100%}.frame-box img{display:block;max-width:100%}

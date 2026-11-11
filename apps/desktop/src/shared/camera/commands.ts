@@ -1023,7 +1023,7 @@ function reportHtml(s: CameraSession, solved: { record: SolveRecord; solve: Solv
   const maxRms = Math.max(0.5, ...solved.solve.frames.map((f) => f.rms));
   const bars = solved.solve.frames.map((f, i) => `<rect x="${i * 4}" y="${100 - (f.rms / maxRms) * 100}" width="3" height="${(f.rms / maxRms) * 100}" fill="${f.rms > 1.5 ? '#d33' : f.rms > 0.8 ? '#e90' : '#3a7'}"/>`).join('');
   return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(s.name)} camera track ${versionTag(s.camtrackVersion)}</title>
-<style>body{font:14px system-ui,sans-serif;margin:24px;color:#222}table{border-collapse:collapse}td,th{border:1px solid #ccc;padding:2px 8px;text-align:right}h1{font-size:20px}.warn{color:#a40}</style></head><body>
+<style>@page{size:letter portrait;margin:14mm}body{font:14px system-ui,sans-serif;margin:24px;color:#222}table{border-collapse:collapse}td,th{border:1px solid #ccc;padding:2px 8px;text-align:right}h1{font-size:20px}.warn{color:#a40}</style></head><body>
 <h1>${esc(s.name)} — camera track ${versionTag(s.camtrackVersion)} (solve ${r.number})</h1>
 <p>Written by ${esc(s.generator)} at ${esc(localStamp(d.writtenAt))} by ${esc(s.actor)}. ${r.engine.id}@${r.engine.version}.</p>
 <p><b>RMS reprojection error ${r.stats.rms.toFixed(3)} px</b> (median ${r.stats.medianError.toFixed(3)} px) over ${r.stats.framesSolved} of ${r.stats.framesTotal} frames, ${r.stats.tracksUsed} of ${r.stats.tracksTotal} tracks, ${r.stats.keyframes} keyframes${r.stats.nodal ? ', <b>nodal</b>' : ''}. Confidence ${(r.stats.confidence * 100).toFixed(0)} %.</p>

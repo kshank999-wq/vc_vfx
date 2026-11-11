@@ -24,7 +24,8 @@ import {
  * Per shot: a tick box, the shot, its slate and shoot day, its status, every
  * task with its state, version and approver, the package, and what is holding
  * it or not working. Then notes and a signature block for the VFX supervisor.
- * Landscape. No script, so it prints from the browser preview as it is.
+ * US Letter portrait, as the crew hand it in. No script, so it prints from
+ * the browser preview as it is.
  */
 
 const escapeHtml = (s: string): string => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
@@ -118,7 +119,7 @@ ${shots.map((x) => shotRow(x, new Set(lifted.keys()))).join('\n')}
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><title>${e(doc.project.name)} — VFX Status</title>
 <style>
-@page { size: landscape; margin: 11mm; }
+@page { size: letter portrait; margin: 11mm; }
 * { box-sizing: border-box; }
 body { font: 9pt/1.35 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; color: #111; margin: 0; background: #fff; }
 h1 { font-size: 15pt; margin: 0 0 2pt; }
@@ -134,7 +135,9 @@ h2 { font-size: 11pt; margin: 12pt 0 4pt; padding-bottom: 2pt; border-bottom: 1.
 h2 .count { color: #666; font-weight: 400; }
 section.empty h2 { border-bottom-color: #ccc; color: #777; } section.empty p { margin: 0 0 4pt; }
 table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-col.c-box { width: 8mm; } col.c-shot { width: 9%; } col.c-slate { width: 10%; } col.c-day { width: 11%; } col.c-status { width: 12%; } col.c-tasks { width: 22%; } col.c-pkg { width: 8%; }
+/* Portrait Letter: the shot name gets room to stay whole (SMPL_008BB_010), the rest give a little. */
+col.c-box { width: 6mm; } col.c-shot { width: 15%; } col.c-slate { width: 11%; } col.c-day { width: 10%; } col.c-status { width: 11%; } col.c-tasks { width: 20%; } col.c-pkg { width: 8%; }
+.shot b { overflow-wrap: normal; word-break: keep-all; }
 td { overflow-wrap: anywhere; }
 .lifted { margin: -4pt 0 10pt; color: #555; font-size: 8.5pt; } .lifted li { margin: 1pt 0; }
 th, td { border: 0.5pt solid #aaa; padding: 3pt 4pt; text-align: left; vertical-align: top; }

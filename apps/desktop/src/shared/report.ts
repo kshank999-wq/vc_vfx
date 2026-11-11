@@ -66,7 +66,7 @@ export function prepReportHtml(p: Project, shotId: string, input: { generatedAt:
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><title>${e(name)} — Prep Report</title>
 <style>
-@page { margin: 14mm; }
+@page { size: letter portrait; margin: 14mm; }
 body { font: 10pt/1.4 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; color: #111; margin: 24px; }
 h1 { font-size: 16pt; margin: 0; } h2 { font-size: 11pt; margin: 18pt 0 6pt; text-transform: uppercase; letter-spacing: .05em; color: #444; }
 .meta { color: #555; margin: 4pt 0 0; }

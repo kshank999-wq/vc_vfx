@@ -74,19 +74,19 @@ export function shotListHtml(p: Project, generatedAt: Date, filter: QueueFilter 
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><title>${escapeHtml(h.project)} — VFX Prep Shot List</title>
 <style>
-@page { size: landscape; margin: 12mm; }
-body { font: 10pt/1.35 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; color: #111; margin: 0; }
+@page { size: letter portrait; margin: 12mm; }
+body { font: 9pt/1.35 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; color: #111; margin: 0; }
 h1 { font-size: 15pt; margin: 0 0 2pt; }
 .meta { color: #555; margin-bottom: 10pt; }
 table { width: 100%; border-collapse: collapse; }
-th, td { border: 0.6pt solid #999; padding: 4pt 5pt; text-align: left; vertical-align: top; }
-th { background: #eee; font-size: 8.5pt; text-transform: uppercase; letter-spacing: .04em; }
+th, td { border: 0.6pt solid #999; padding: 3pt 4pt; text-align: left; vertical-align: top; }
+th { background: #eee; font-size: 7.5pt; text-transform: uppercase; letter-spacing: .04em; }
 tr { page-break-inside: avoid; }
 .num { white-space: nowrap; font-variant-numeric: tabular-nums; }
 .shot { font-weight: 600; white-space: nowrap; }
 .nw { white-space: nowrap; }
-.notes { width: 28%; }
-.box { width: 14mm; }
+.notes { width: 26%; }
+.box { width: 8mm; }
 .circ { color: #b00; font-size: 8pt; }
 footer { margin-top: 10pt; color: #777; font-size: 8pt; }
 </style></head><body>

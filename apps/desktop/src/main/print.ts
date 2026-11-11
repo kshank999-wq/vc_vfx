@@ -28,13 +28,13 @@ const withDocument = async <T>(html: string, action: (w: BrowserWindow) => Promi
   }
 };
 
-/** Print a landscape document, or save it as a PDF where the operator chooses. */
+/** Print a report on US Letter portrait, or save it as a PDF where the operator chooses. */
 async function printOrSave(parent: BrowserWindow | null, html: string, mode: 'print' | 'pdf', suggested: string): Promise<{ path: string | null } | null> {
   if (mode === 'pdf') {
     const options = { defaultPath: suggested, filters: [{ name: 'PDF', extensions: ['pdf'] }] };
     const choice = parent ? await dialog.showSaveDialog(parent, options) : await dialog.showSaveDialog(options);
     if (choice.canceled || !choice.filePath) return null;
-    const pdf = await withDocument(html, (w) => w.webContents.printToPDF({ landscape: true, printBackground: true, pageSize: 'A4', preferCSSPageSize: true }));
+    const pdf = await withDocument(html, (w) => w.webContents.printToPDF({ landscape: false, printBackground: true, pageSize: 'Letter', preferCSSPageSize: true }));
     await writeAtomic(choice.filePath, pdf);
     return { path: choice.filePath };
   }
@@ -42,7 +42,7 @@ async function printOrSave(parent: BrowserWindow | null, html: string, mode: 'pr
     html,
     (w) =>
       new Promise<void>((resolvePromise, reject) =>
-        w.webContents.print({ landscape: true, printBackground: true }, (success, reason) =>
+        w.webContents.print({ landscape: false, printBackground: true, pageSize: 'Letter' }, (success, reason) =>
           success || reason === 'cancelled' ? resolvePromise() : reject(new Error(reason)),
         ),
       ),
