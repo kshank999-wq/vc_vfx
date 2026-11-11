@@ -20,6 +20,7 @@ import {
   statusCountsOf,
   statusSays,
   SHOT_STATUS_LABELS,
+  localStamp,
   type PackageFolder,
   type PrepTaskKind,
 } from '@vcvfx/domain';
@@ -159,7 +160,7 @@ export function PlatesModule(props: ModuleScreenProps) {
           <OutputRoot {...props} />
           {written ? (
             <p className="muted small hint">
-              {versionTag(written.version)} written {written.writtenAt.replace('T', ' ').slice(0, 16)} by {written.by}.
+              {versionTag(written.version)} written {localStamp(written.writtenAt)} by {written.by}.
             </p>
           ) : null}
         </>
@@ -688,7 +689,7 @@ export function DeliverModule(props: ModuleScreenProps & { onVerify(): void; onP
           </ul>
           {state.approval ? (
             <p className="step-text">
-              Shot approved by <strong>{state.approval.by}</strong> <span className="muted">{state.approval.at.replace('T', ' ').slice(0, 16)}</span>
+              Shot approved by <strong>{state.approval.by}</strong> <span className="muted">{localStamp(state.approval.at)}</span>
             </p>
           ) : (
             <ActionButton allowed={canApproveShot(project, shotId, now)} onClick={props.onApproveShot} canEdit={canEdit} busy={busy} primary showReason className="big">
@@ -798,7 +799,7 @@ export function DeliverModule(props: ModuleScreenProps & { onVerify(): void; onP
                 )}
                 {sent ? (
                   <p className={`small last-send ${sent.action === 'filmstudio.sent' ? 'ok-text' : 'warn-text'}`}>
-                    Last {sent.action === 'filmstudio.sent' ? 'sent' : 'attempt'} {sent.at.replace('T', ' ').slice(0, 16)} by {sent.actor}: {lastSendWords(sent)}
+                    Last {sent.action === 'filmstudio.sent' ? 'sent' : 'attempt'} {localStamp(sent.at)} by {sent.actor}: {lastSendWords(sent)}
                   </p>
                 ) : null}
               </>

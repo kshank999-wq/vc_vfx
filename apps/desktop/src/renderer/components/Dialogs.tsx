@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { HandoffIssue } from '@vcvfx/domain';
-import { ENCODINGS, PROJECT_EXR_COLOR, capabilityFrom, type ProjectExrColor, type StatusSendOutcome } from '@vcvfx/domain';
+import { ENCODINGS, PROJECT_EXR_COLOR, capabilityFrom, localDay, localStamp, type ProjectExrColor, type StatusSendOutcome } from '@vcvfx/domain';
 import type { AccountStatus, AppInfo, FfmpegInfo, FilmStudioInfo, LicenceStanding, Settings, VcvfxApi } from '../../shared/bridge';
 
 export function Modal({ title, onClose, children, footer, wide }: { title: string; onClose: () => void; children: ReactNode; footer?: ReactNode; wide?: boolean }) {
@@ -454,7 +454,7 @@ export function AccountDialog({
         <strong>{capability === 'full' ? 'Full access' : 'Read-only'}</strong>
         <span className="muted">
           {standing
-            ? `Licence ${standing.status}${standing.expiresAt ? ` · renews/ends ${standing.expiresAt.slice(0, 10)}` : ''} · checked ${standing.checkedAt.slice(0, 16).replace('T', ' ')}`
+            ? `Licence ${standing.status}${standing.expiresAt ? ` · renews/ends ${localDay(standing.expiresAt)}` : ''} · checked ${localStamp(standing.checkedAt)}`
             : 'No licence on this computer yet'}
         </span>
       </div>

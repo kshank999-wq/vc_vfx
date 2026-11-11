@@ -27,6 +27,7 @@ import {
   setRotoWorkingWidth,
   shotState,
   versionTag,
+  localStamp,
   type Project,
   type Result,
   type RotoCombine,
@@ -755,7 +756,7 @@ export function RotoWorkspace(props: RotoWorkspaceProps) {
           </button>
           <p className="muted small hint">
             {exportedThis
-              ? `${versionTag(version)} written ${exportedThis.writtenAt.replace('T', ' ').slice(0, 16)} by ${exportedThis.by}: ${exportedThis.pattern}. Approve roto in Details on the right.`
+              ? `${versionTag(version)} written ${localStamp(exportedThis.writtenAt)} by ${exportedThis.by}: ${exportedThis.pattern}. Approve roto in Details on the right.`
               : `16-bit PNG sequences per part and combined, at plate resolution, into 02_MATTES_ROTO. Exporting puts roto up for review.`}
             {session && !session.exportable ? ' Exporting is done in the desktop app.' : ''}
           </p>

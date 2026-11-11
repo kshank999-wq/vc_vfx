@@ -15,6 +15,7 @@ import {
   parsePixelAspect,
   pixelAspectLabel,
   shotPixelAspect,
+  localStamp,
   type ColorEncodingId,
   type ShotPlateColor,
   formatRange,
@@ -201,7 +202,7 @@ export function TaskCard({ task, props, inModule }: { task: TaskRecord; props: T
       </div>
       {task.approval ? (
         <div className="approval-line">
-          Approved by <strong>{task.approval.by}</strong> <span className="muted">{task.approval.at.replace('T', ' ').slice(0, 16)}</span>
+          Approved by <strong>{task.approval.by}</strong> <span className="muted">{localStamp(task.approval.at)}</span>
         </div>
       ) : null}
       <div className="task-actions">
@@ -341,7 +342,7 @@ export function ApprovalPanel(props: ShotDetailProps) {
       <div className="approval-state">
         {state.approval ? (
           <>
-            Shot approved by <strong>{state.approval.by}</strong> <span className="muted">{state.approval.at.replace('T', ' ').slice(0, 16)}</span>
+            Shot approved by <strong>{state.approval.by}</strong> <span className="muted">{localStamp(state.approval.at)}</span>
           </>
         ) : (
           <span className="muted">Shot not approved</span>
@@ -536,7 +537,7 @@ export function ShotLog({ project, shotId, limit }: { project: Project; shotId: 
     <ol className="log">
       {log.map((l, i) => (
         <li key={`${l.at}-${i}`}>
-          <span className="mono muted">{l.at.replace('T', ' ').slice(0, 16)}</span>
+          <span className="mono muted">{localStamp(l.at)}</span>
           <span className="log-action">{l.action}</span>
           <span className="muted">{l.actor}</span>
           {l.detail ? <span className="log-detail">{l.detail}</span> : null}
@@ -813,7 +814,7 @@ export function PlateColorPanel(props: Pick<ShotDetailProps, 'project' | 'shotId
       ))}
       {written ? (
         <p className="muted small">
-          {versionTag(written.version)} written {written.writtenAt.replace('T', ' ').slice(0, 16)} by {written.by}
+          {versionTag(written.version)} written {localStamp(written.writtenAt)} by {written.by}
           {written.color.summary === decision.summary ? ', as above.' : `: ${written.color.summary} The next version follows the choice above.`}
         </p>
       ) : null}

@@ -15,6 +15,7 @@ import {
   track2dLocked,
   track2dTaskVersion,
   versionTag,
+  localStamp,
   type CamTrackDocument,
   type CameraExportFormat,
   type Project,
@@ -1205,7 +1206,7 @@ export function TrackWorkspace(props: TrackWorkspaceProps) {
             Export camera {versionTag(camVersion)}
           </button>
           <p className="muted small hint">
-            {exportedCam ? `${versionTag(camVersion)} written ${exportedCam.writtenAt.replace('T', ' ').slice(0, 16)} by ${exportedCam.by} into ${exportedCam.folder}. Approve the camera track in Details on the right.` : 'Into 06_CAMERA_TRACK with a report and a JSON of the camera and lens. Exporting puts the track up for review.'}
+            {exportedCam ? `${versionTag(camVersion)} written ${localStamp(exportedCam.writtenAt)} by ${exportedCam.by} into ${exportedCam.folder}. Approve the camera track in Details on the right.` : 'Into 06_CAMERA_TRACK with a report and a JSON of the camera and lens. Exporting puts the track up for review.'}
             {session && !session.exportable ? ' Exporting is done in the desktop app.' : ''}
           </p>
           {lockedNote}
