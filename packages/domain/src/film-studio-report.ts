@@ -44,6 +44,13 @@ export interface StatusReportOptions {
   supervisor?: string;
 }
 
+/**
+ * The printed status report's columns, in order. One set for VC VFX and Film
+ * Studio's VFX status log (Ken, 14 November 2026); Film Studio prints the same
+ * nine from lib/export/vfx-log.ts.
+ */
+export const STATUS_REPORT_COLUMNS = ['✓', 'VFX shot', 'Scene / setup / take', 'Shoot day', 'Status', 'Tasks', 'Shot approved', 'Package', 'Problems · what is holding it'] as const;
+
 function shotRow(s: VfxStatusShot, lifted: ReadonlySet<string>): string {
   const r = readiness(s);
   const name = statusShotName(s);
@@ -66,15 +73,16 @@ function shotRow(s: VfxStatusShot, lifted: ReadonlySet<string>): string {
   else if (r.ready) holding.push('<div class="done">Ready to hand off</div>');
   for (const w of r.why) holding.push(`<div class="why">${e(w)}</div>`);
   for (const x of s.problems.filter((p) => !lifted.has(p.text))) holding.push(`<div class="problem p-${x.severity}"><span class="sev">${x.severity === 'warn' ? 'warning' : x.severity}</span> ${e(x.text)}</div>`);
-  const approval = s.approval ? `<div class="by">Shot approved · ${e(s.approval.by)} ${e(day(s.approval.at))}</div>` : '';
+  const approval = s.approval ? `${e(s.approval.by)}<div class="muted small">${e(day(s.approval.at))}</div>` : '—';
   const notes = [s.supervisorNotes ? `Sup: ${s.supervisorNotes}` : null, s.notes ? `Prep: ${s.notes}` : null].filter(Boolean).join(' — ');
   return `<tr>
 <td class="box"></td>
 <td class="shot"><b>${e(name)}</b>${s.circled ? ' <span class="circ" title="Circle take">●</span>' : ''}${s.vfxShotId ? `<div class="muted small">${e(s.handoffShotId)}</div>` : ''}</td>
 <td class="nw">${e(statusSlate(s))}${s.cameraRoll || s.clip ? `<div class="muted small">${e([s.cameraRoll, s.clip].filter(Boolean).join(' · '))}</div>` : ''}</td>
 <td class="nw">${e(s.shootDay ?? s.shootDate)}</td>
-<td class="nw">${e(s.status.label)}${approval}</td>
+<td class="nw">${e(s.status.label)}</td>
 <td class="tasks">${tasks}</td>
+<td>${approval}</td>
 <td class="nw">${pkg}${goes}</td>
 <td class="holding">${holding.join('') || '—'}${notes ? `<div class="notes">${e(notes)}</div>` : ''}</td>
 </tr>`;
@@ -109,8 +117,8 @@ export function vfxStatusReportHtml(doc: VfxStatusDocument, options: StatusRepor
     if (!shots.length) return `<section class="empty">${head}<p class="muted">No shots.</p></section>`;
     return `<section>${head}
 <table>
-<colgroup><col class="c-box"><col class="c-shot"><col class="c-slate"><col class="c-day"><col class="c-status"><col class="c-tasks"><col class="c-pkg"><col></colgroup>
-<thead><tr><th class="box">✓</th><th>Shot</th><th>Scene / setup / take</th><th>Shoot day</th><th>Status</th><th>Tasks</th><th>Package</th><th>${b === 'ready' || b === 'delivered' ? 'Notes' : 'What is holding it'}</th></tr></thead>
+<colgroup><col class="c-box"><col class="c-shot"><col class="c-slate"><col class="c-day"><col class="c-status"><col class="c-tasks"><col class="c-appr"><col class="c-pkg"><col></colgroup>
+<thead><tr>${STATUS_REPORT_COLUMNS.map((c) => (c === '✓' ? '<th class="box">✓</th>' : `<th>${escapeHtml(c)}</th>`)).join('')}</tr></thead>
 <tbody>
 ${shots.map((x) => shotRow(x, new Set(lifted.keys()))).join('\n')}
 </tbody></table></section>`;
@@ -136,7 +144,7 @@ h2 .count { color: #666; font-weight: 400; }
 section.empty h2 { border-bottom-color: #ccc; color: #777; } section.empty p { margin: 0 0 4pt; }
 table { width: 100%; border-collapse: collapse; table-layout: fixed; }
 /* Portrait Letter: the shot name gets room to stay whole (SMPL_008BB_010), the rest give a little. */
-col.c-box { width: 6mm; } col.c-shot { width: 15%; } col.c-slate { width: 11%; } col.c-day { width: 10%; } col.c-status { width: 11%; } col.c-tasks { width: 20%; } col.c-pkg { width: 8%; }
+col.c-box { width: 6mm; } col.c-shot { width: 14%; } col.c-slate { width: 10%; } col.c-day { width: 9%; } col.c-status { width: 10%; } col.c-tasks { width: 19%; } col.c-appr { width: 10%; } col.c-pkg { width: 8%; }
 .shot b { overflow-wrap: normal; word-break: keep-all; }
 td { overflow-wrap: anywhere; }
 .lifted { margin: -4pt 0 10pt; color: #555; font-size: 8.5pt; } .lifted li { margin: 1pt 0; }

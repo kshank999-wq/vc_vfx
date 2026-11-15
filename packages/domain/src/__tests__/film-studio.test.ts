@@ -370,14 +370,21 @@ describe('the printed log and the CSV', () => {
   const doc = buildFilmStudioStatus(rich(), INPUT);
   const html = vfxStatusReportHtml(doc, { supervisor: 'M. Delgado' });
 
-  it('prints every section, in Film Studio’s order, landscape, with a signature block', () => {
+  it('prints every section, in Film Studio’s order, on US Letter portrait, with a signature block', () => {
     const positions = STATUS_BUCKETS.map((b) => html.indexOf(`<h2 class="b-${b}">${STATUS_BUCKET_TITLES[b]}`));
     expect(positions.every((x) => x > 0)).toBe(true);
     expect([...positions].sort((a, b) => a - b)).toEqual(positions);
-    expect(html).toContain('size: landscape');
+    expect(html).toContain('size: letter portrait');
+    expect(html).not.toContain('landscape');
     expect(html).toContain('VFX supervisor — M. Delgado');
     expect(html).toContain('1 shot is ready to hand off; 1 shot needs correction, 3 in review, 4 in progress, 3 not started. 1 shot has been delivered.');
     expect(html).not.toMatch(/<script/i);
+  });
+
+  it('prints the same nine columns as Film Studio’s VFX status log, in every section', () => {
+    const heads = [...html.matchAll(/<thead><tr>(.*?)<\/tr><\/thead>/g)].map((m) => [...m[1]!.matchAll(/<th[^>]*>(.*?)<\/th>/g)].map((t) => t[1]));
+    expect(heads.length).toBeGreaterThan(0);
+    for (const h of heads) expect(h).toEqual(['✓', 'VFX shot', 'Scene / setup / take', 'Shoot day', 'Status', 'Tasks', 'Shot approved', 'Package', 'Problems · what is holding it']);
   });
 
   it('lists each shot with its tasks, versions, approvers, package and what holds it', () => {
